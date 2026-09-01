@@ -25,7 +25,7 @@ function buildLoadout(pid, save) {
   if (core) for (const t of core.traits) traits.add(t);
 
   const fLv = fRec.lv || 1;
-  let maxHp = Math.round(frame.hp * (1 + 0.055 * (fLv - 1)));
+  let maxHp = Math.round(frame.hp * (1 + 0.055 * (fLv - 1)) * D.BALANCE.playerHp);
   if (traits.has('hardened')) maxHp = Math.round(maxHp * 1.25);
 
   let dr = frame.dr;
@@ -35,8 +35,11 @@ function buildLoadout(pid, save) {
   let rollCd = frame.rollCd;
   if (traits.has('inertia_cancel')) rollCd *= 0.65;
 
+  /* 積める武装の数。四足機は 1 本だけ */
+  const slots = frame.weaponSlots || 2;
   const weapons = [];
   for (const slot of ['main', 'sub']) {
+    if (weapons.length >= slots) break;
     const wid = lo[slot];
     const w = D.getWeapon(wid);
     if (!w) continue;
@@ -45,13 +48,47 @@ function buildLoadout(pid, save) {
   }
   if (!weapons.length) weapons.push(makeWeapon(D.getWeapon('ar12'), 1, traits, frame.dmgMul || 1));
 
+  /* 装着武装（前面・背面）。どちらも自動で撃つ */
+  const attachments = [];
+  for (const slot of ['front', 'back']) {
+    const aid = lo[slot];
+    const a = D.getAttach(aid);
+    if (!a || a.slot !== slot) continue;
+    const rec = save.attachments[aid] || { lv: 1, lb: 0 };
+    attachments.push(makeAttachment(a, rec.lv || 1, frame.dmgMul || 1));
+  }
+
+  /* 外装（見た目だけ）。「自分で塗る」を選んでいれば lo.custom の色を使う */
+  const skin = D.getSkin(lo.skin) || D.SKINS[0];
+  const cu = lo.custom || {};
+  const colors = skin.custom
+    ? { body: cu.body || frame.body, trim: cu.trim || frame.trim, accent: cu.accent || frame.accent }
+    : { body: skin.body || frame.body, trim: skin.trim || frame.trim, accent: skin.accent || frame.accent };
+  const decal = skin.custom ? (cu.decal || null) : (skin.decal || null);
+
   return {
     pid, frame, frameLv: fLv, core, coreLv: cRec ? cRec.lv : 1,
     traits, maxHp, dr, rollCd,
     speed: frame.speed * (traits.has('inertia_cancel') ? 1.03 : 1),
-    spMax: frame.sp, special: frame.special, weapons,
+    spMax: frame.sp, special: frame.special, weapons, attachments,
+    skin, colors, decal,
+    quad: !!frame.quad, autoFire: !!frame.autoFire,
+    manualWeapon: frame.manualWeapon || null, rateMul: frame.rateMul || 1,
     dmgMul: frame.dmgMul || 1, shape: frame.shape || 'standard',
   };
+}
+
+/* 装着武装の実効値。レベルで威力だけ伸ばす */
+function makeAttachment(def, lv, dmgMul) {
+  const a = Object.assign({}, def);
+  a.lv = lv;
+  const g = (1 + 0.062 * (lv - 1)) * (dmgMul || 1);
+  a.dmg = def.dmg * g;
+  if (def.splash) a.splash = def.splash * (1 + 0.03 * (lv - 1));
+  a.pellets = def.pellets || 1;
+  a.salvo = def.salvo || 1;
+  a.cool = 0; a.yawAng = 0; a.drones = def.drones || 0;
+  return a;
 }
 
 function makeWeapon(def, lv, traits, dmgMul) {
@@ -106,6 +143,15 @@ class Mech extends Actor {
     this.aim = 0; this.recoil = 0;
     this.shieldT = 0;               // ブレイクシールド展開中
     this.muzzle = 0;
+    /* 装着武装・ドローン・EMP 爆弾 */
+    this.attach = lo.attachments.map((a) => Object.assign({}, a));
+    this.drones = [];
+    this.droneT = 0;
+    this.bombs = D.EMP_BOMB.charges;
+    this.bombCd = 0;
+    this.decoys = D.HOLO_DECOY.charges;
+    this.decoyCd = 0;
+    this.grenCd = 0;
   }
   get weapon() { return this.lo.weapons[this.wi]; }
   get traits() { return this.lo.traits; }
@@ -118,7 +164,7 @@ class Enemy extends Actor {
     super(x, y, def.radius);
     this.def = def;
     this.team = 'foe';
-    this.maxHp = Math.round(def.hp * lvMul * (isCommander ? 3.2 : 1));
+    this.maxHp = Math.round(def.hp * lvMul * D.BALANCE.enemyHp * (isCommander ? 3.2 : 1));
     this.hp = this.maxHp;
     this.armor = def.armor;
     this.speed = def.speed * (isCommander ? 0.92 : 1);
@@ -130,6 +176,7 @@ class Enemy extends Actor {
     this.chargeT = 0; this.fuse = -1;
     this.commander = !!isCommander;
     this.dmgMul = lvMul;
+    this.disableT = 0;              // EMP 爆弾で停止している残り秒
     this.ang = rnd(TAU); this.aim = this.ang;
     this.flying = !!def.flying;
     this.target = null;
@@ -141,7 +188,7 @@ class Boss extends Actor {
   constructor(def, x, y, lvMul) {
     super(x, y, def.radius);
     this.def = def; this.team = 'foe'; this.isBoss = true;
-    this.maxHp = Math.round(def.hp * lvMul); this.hp = this.maxHp;
+    this.maxHp = Math.round(def.hp * lvMul * D.BALANCE.bossHp); this.hp = this.maxHp;
     this.armor = def.armor;
     this.speed = def.speed;
     this.phase = 1;
@@ -342,6 +389,6 @@ function collideWalls(world, a) {
   a.y = clamp(a.y, a.r, world.h - a.r);
 }
 
-window.MRField = { buildLoadout, makeWeapon, Actor, Mech, Enemy, Boss,
+window.MRField = { buildLoadout, makeWeapon, makeAttachment, Actor, Mech, Enemy, Boss,
   genWorld, genArena, wallsNear, pointBlocked, hasLOS, losScan, collideWalls, THEME };
 })();

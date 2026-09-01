@@ -37,6 +37,12 @@ function nearestPlayer(field, e) {
     if (p.has && p.has('optic_camo') && p.noHitT > 3) d *= 2.2;
     if (d < bd) { bd = d; best = p; }
   }
+  /* ホログラムは本物より魅力的に見える。相手は機械なので見分けられない */
+  for (const h of field.holos) {
+    if (h.dead) continue;
+    const d = dist2(e.x, e.y, h.x, h.y) * D.HOLO_DECOY.lure;
+    if (d < bd) { bd = d; best = h; }
+  }
   return best;
 }
 
@@ -46,6 +52,16 @@ Object.assign(Field.prototype, {
 updateEnemy(e, dt) {
   e.hitFlash = Math.max(0, e.hitFlash - dt * 4);
   e.stun = Math.max(0, e.stun - dt);
+  /* EMP 爆弾で止まっている間は反撃も索敵もしない */
+  if (e.disableT > 0) {
+    e.disableT -= dt;
+    e.vx *= 0.86; e.vy *= 0.86;
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    collideWalls(this.world, e);
+    if (Math.random() < dt * 8) this.parts.spark(e.x + rnd(-10, 10), e.y + rnd(-10, 10), 1, '#c58cff', 90, 0.4, 2);
+    if (e.disableT <= 0) this.ft.add(e.x, e.y - e.r - 8, '再起動', '#ffcf4a', 13, 1.0);
+    return;
+  }
   e.knockT = Math.max(0, (e.knockT || 0) - dt);
   if (e.burn > 0) {
     e.burnT -= dt;
@@ -627,7 +643,7 @@ checkObjectives() {
 spawnBoss() {
   const def = D.BOSSES[this.sector.boss];
   const site = this.bossSite;
-  const b = new Boss(def, site.x, site.y, 1 + (this.sector.lv - 1) * 0.2);
+  const b = new Boss(def, site.x, site.y, 1 + (this.sector.lv - 1) * D.BALANCE.lvStep * 0.7);
   this.boss = b;
   this.banner = `${def.name} ― ${def.title}`;
   this.bannerT = 4.0;
@@ -673,6 +689,7 @@ killBoss(b, src) {
   if (bo) bo.done = 1;
   this.reward.scrap += b.def.scrap;
   this.dropScrap(b.x, b.y, 200);
+  for (let i = 0; i < 3; i++) this.dropData(b.x + rnd(-40, 40), b.y + rnd(-40, 40), 'ab_command');
   if (src && src.lo) src.kills++;
 },
 
@@ -710,6 +727,7 @@ finish() {
     cleared: this.state === 'clear',
     rank, time: this.time, scrap, tickets,
     kills: this.reward.kills,
+    samples: this.reward.samples,
     players: this.players.map((p) => ({ pid: p.pid, kills: p.kills, dmg: Math.round(p.dmgDealt), frame: p.lo.frame.name })),
   });
 },

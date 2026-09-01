@@ -7,7 +7,7 @@
 const C = window.MRCore, D = window.MRData;
 const { el, clamp, fmtTime } = C;
 
-const SCREENS = ['title', 'slot', 'settings', 'hangar', 'sector', 'howto', 'result', 'pause'];
+const SCREENS = ['title', 'slot', 'settings', 'base', 'hangar', 'sector', 'howto', 'result', 'pause'];
 const DEMO_BG = ['title', 'slot', 'settings', 'howto'];
 
 class Game {
@@ -20,6 +20,9 @@ class Game {
     C.Save.migrate();
     this.save = null;
     this.hangar = null;
+    this.base = null;
+    this.hangarTab = null;
+    this.cutscene = null;
     this.numPlayers = 1;
     this.screen = null;
     this.field = null;
@@ -53,6 +56,7 @@ class Game {
     const prev = this.screen;
     this.screen = name;
     if (prev === 'hangar' && name !== 'hangar' && this.hangar) this.hangar.hide();
+    if (prev === 'base' && name !== 'base' && this.base) this.base.hide();
     el('hud').classList.add('hidden');
 
     const wantDemo = DEMO_BG.indexOf(name) >= 0;
@@ -60,6 +64,7 @@ class Game {
     if (wantDemo) this.startDemo(); else this.stopDemo();
     this.audio.setScene('menu');
 
+    if (name === 'base') { this.ensureBase(); this.base.show(); }
     if (name === 'hangar') { this.ensureHangar(); this.hangar.show(); }
     if (name === 'sector') this.renderSectors();
     if (name === 'slot') this.renderSlots();
@@ -75,6 +80,27 @@ class Game {
   ensureHangar() {
     if (!this.hangar) this.hangar = new window.MRHangar.Hangar(this);
     this.hangar.save = this.save;
+    if (!this.hangarTab) return;
+    /* 基地の部屋から直接タブを開く */
+    this.hangar.tab = this.hangarTab;
+    for (const x of document.querySelectorAll('.hg-tabs .tab')) x.classList.toggle('on', x.dataset.tab === this.hangarTab);
+    for (const p of document.querySelectorAll('.hg-pane')) p.classList.toggle('hidden', p.id !== 'pane-' + this.hangarTab);
+    this.hangarTab = null;
+  }
+
+  ensureBase() {
+    if (!this.base) this.base = new window.MRBase.Base(this);
+  }
+
+  /* 勝利後の帰投演出 */
+  playCutscene(onDone) {
+    this.field = null;
+    document.body.classList.remove('demo');
+    for (const s of SCREENS) { const n = el('screen-' + s); if (n) n.classList.add('hidden'); }
+    el('hud').classList.add('hidden');
+    this.screen = 'cutscene';
+    this.resize();
+    this.cutscene = new window.MRBase.Cutscene(this, () => { this.cutscene = null; onDone(); });
   }
 
   /* ================= UI 配線 ================= */
@@ -95,17 +121,18 @@ class Game {
     });
     this.refreshMuteLabel();
 
-    tap('btn-hangar-back', () => this.go('title'));
+    tap('btn-hangar-back', () => this.go('base'));
     tap('btn-tosector', () => { this.audio.sfx('uiBig'); this.go('sector'); });
     tap('btn-sector-back', () => this.go('hangar'));
     tap('btn-training', () => { this.audio.sfx('uiBig'); this.startMission(D.TRAINING); });
 
     tap('btn-resume', () => this.setPause(false));
     tap('btn-restart', () => { this.setPause(false); this.startMission(this.currentSector); });
-    tap('btn-abort', () => { this.setPause(false); this.field = null; this.go('hangar'); });
+    tap('btn-abort', () => { this.setPause(false); this.field = null; this.go('base'); });
 
     tap('btn-again', () => this.startMission(this.currentSector));
-    tap('btn-tohangar', () => this.go('hangar'));
+    tap('btn-tohangar', () => this.go('base'));
+    tap('btn-result-hangar', () => this.go('hangar'));
     tap('btn-tosectors', () => this.go('sector'));
 
     tap('btn-set-slots', () => { this.slotMode = 'continue'; this.go('slot'); });
@@ -157,11 +184,32 @@ class Game {
 
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && this.screen === 'play') { e.preventDefault(); this.setPause(!this.paused); }
+      if (this.cutscene && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) {
+        e.preventDefault(); this.cutscene.skip(); return;
+      }
+      this.readCheat(e);
     });
+    window.addEventListener('pointerdown', () => { if (this.cutscene) this.cutscene.skip(); });
     /* 最初のクリック/キーで音を起こす（ブラウザの制限） */
     const wake = () => { this.audio.ensure(); window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); };
     window.addEventListener('pointerdown', wake);
     window.addEventListener('keydown', wake);
+  }
+
+  /* ---- チートコード ----
+     どの画面でも "unlockall" と打つと、全装備を開放して資源を満たす。 */
+  readCheat(e) {
+    if (!e.key || e.key.length !== 1) return;
+    this._cheat = ((this._cheat || '') + e.key.toLowerCase()).slice(-12);
+    if (this._cheat.indexOf('unlockall') < 0) return;
+    this._cheat = '';
+    if (!this.save) { alert('先にセーブデータを開いてから使う。'); return; }
+    const n = window.MRHangar.unlockAll(this.save);
+    this.audio.ensure(); this.audio.sfx('reveal', 'SSR');
+    if (this.hangar && this.screen === 'hangar') this.hangar.render();
+    if (this.base && this.screen === 'base') this.base.render();
+    if (this.screen === 'sector') this.renderSectors();
+    alert(`チート発動 ― 全装備を開放した（新規 ${n} 種）。\nスクラップ 999999 / チケット 999 / 全セクター解放。`);
   }
 
   refreshMuteLabel() {
@@ -238,7 +286,7 @@ class Game {
     this.save = data;
     if (this.hangar) { this.hangar.save = data; this.hangar.pid = 1; this.hangar.tab = 'loadout'; }
     this.audio.sfx('uiBig');
-    this.go('hangar');
+    this.go('base');
   }
 
   /* ================= 設定 ================= */
@@ -279,7 +327,16 @@ class Game {
     demoSave.weapons[subW] = { lv: 8, lb: 2, n: 1 };
     const co = pick(cores);
     demoSave.cores[co] = { lv: 5, lb: 1, n: 1 };
-    demoSave.loadout[1] = { frame: fid, main: mainW, sub: subW, core: co };
+    /* デモにも装着武装と外装を載せて、見た目の幅を出す */
+    const front = D.ATTACHMENTS.filter((a) => a.slot === 'front');
+    const back = D.ATTACHMENTS.filter((a) => a.slot === 'back');
+    const fa = pick(front).id, ba = pick(back).id;
+    demoSave.attachments[fa] = { lv: 6, lb: 1, n: 1 };
+    demoSave.attachments[ba] = { lv: 6, lb: 1, n: 1 };
+    const sk = pick(D.SKINS.filter((k) => !k.custom));
+    demoSave.skins[sk.id] = { lv: 1, lb: 0, n: 1 };
+    demoSave.loadout[1] = { frame: fid, main: mainW, sub: subW, core: co,
+      front: fa, back: ba, skin: sk.id, custom: { body: '#5b7fa8', trim: '#9fd4ff', accent: '#ffd166', decal: '' } };
     this.resize();
     this.field = new window.MRBattle.Field({
       canvas: this.canvas, input: this.input, audio: this.audio,
@@ -362,10 +419,21 @@ class Game {
   }
 
   onMissionEnd(res) {
+    /* 勝ったときだけ、輸送機で基地へ運ばれる演出を挟む */
+    if (res.cleared && !this.currentSector.training) {
+      this.playCutscene(() => this.showResult(res));
+      return;
+    }
+    this.showResult(res);
+  }
+
+  showResult(res) {
     const s = this.currentSector;
     this.save.scrap += res.scrap;
     this.save.tickets += res.tickets;
     this.save.totalKills += res.kills;
+    /* 回収した能力データを基地の在庫へ */
+    for (const k in res.samples) this.save.samples[k] = (this.save.samples[k] || 0) + res.samples[k];
     if (res.cleared) {
       const order = { S: 4, A: 3, B: 2, C: 1 };
       const prev = this.save.cleared[s.id];
@@ -385,6 +453,13 @@ class Game {
     el('result-kills').textContent = res.kills;
     el('result-scrap').textContent = '⬢ ' + res.scrap.toLocaleString();
     el('result-ticket').textContent = '◆ ' + res.tickets;
+    const sam = Object.keys(res.samples);
+    el('result-samples').innerHTML = sam.length
+      ? '<div class="rs-head">回収した能力データ</div>' + sam.map((k) => {
+          const A = D.ABILITIES[k];
+          return `<span class="rs-chip" style="color:${A.color};border-color:${A.color}55">${A.name} ×${res.samples[k]}</span>`;
+        }).join('')
+      : '<div class="rs-head dim">能力データは回収できなかった</div>';
     el('result-players').innerHTML = res.players.map((p) =>
       `<div class="rp"><b>P${p.pid}　${p.frame}</b>撃破 ${p.kills} 機／与ダメージ ${p.dmg.toLocaleString()}</div>`).join('');
     this.field = null;
@@ -466,6 +541,22 @@ class Game {
       if (!w) am.textContent = '';
       else if (w.reloading > 0) { am.textContent = '再装填…'; am.classList.add('reload'); }
       else { am.classList.remove('reload'); am.textContent = w.mag > 0 ? `${Math.max(0, Math.ceil(w.ammo))} / ${w.mag}` : '∞'; }
+      const bombEl = node.querySelector('.wbomb');
+      if (bombEl) {
+        bombEl.textContent = `EMP ${m.bombs}`;
+        bombEl.classList.toggle('empty', m.bombs <= 0);
+      }
+      const dcEl = node.querySelector('.wdecoy');
+      if (dcEl) {
+        dcEl.textContent = m.decoyCd > 0 ? `デコイ ${Math.ceil(m.decoyCd)}秒` : `デコイ ${m.decoys}`;
+        dcEl.classList.toggle('empty', m.decoys <= 0 || m.decoyCd > 0);
+      }
+      const atEl = node.querySelector('.wattach');
+      if (atEl) {
+        const names = m.attach.map((a) => a.name.replace(/^[A-Z]{2}-?[0-9]?\s*/, ''));
+        const txt = names.length ? names.join(' / ') : '装着武装なし';
+        if (atEl.textContent !== txt) atEl.textContent = txt;
+      }
       node.querySelector('.rfill').style.transform =
         `scaleX(${1 - clamp(m.rollCd / Math.max(0.01, m.lo.rollCd), 0, 1)})`;
     }
@@ -476,6 +567,11 @@ class Game {
     requestAnimationFrame((n) => this.loop(n));
     const dt = clamp((t - this.lastT) / 1000 || 0, 0, 0.05);
     this.lastT = t;
+    if (this.cutscene) {
+      const c = this.cutscene;
+      c.update(dt);
+      if (this.cutscene === c) c.draw();
+    }
     const f = this.field;
     if (f && !this.paused) { f.update(dt); if (this.field === f) f.draw(); }
     else if (f && this.paused) f.draw();

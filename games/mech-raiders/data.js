@@ -43,6 +43,23 @@ const RARITY = {
 };
 
 /* =========================================================================
+   難易度の一括調整
+   数値をここだけで動かせるようにして、各所は必ずこの倍率を通す。
+   ========================================================================= */
+const BALANCE = {
+  enemyHp: 0.78,        // 敵の耐久
+  enemyDmg: 0.62,       // 自機が受けるダメージ全般
+  enemyCount: 0.75,     // セクターごとの敵数
+  bossHp: 0.72,         // ボスの耐久
+  lvStep: 0.16,         // セクター Lv による強化の伸び（旧 0.28）
+  playerHp: 1.20,       // 自機の耐久
+  killAllRatio: 0.80,   // 「殲滅」で必要になる撃破割合
+  dropRepair: 0.22,     // 撃破時に修理パックが落ちる確率（旧 0.11）
+  dropAmmo: 0.18,       // 同じく弾薬パック（旧 0.09）
+  scrap: 1.25,          // 取得スクラップ
+};
+
+/* =========================================================================
    機体（フレーム）
    hp/armorRed(被ダメ軽減)/speed/rollCd/hardpoint 数/必殺技/固有特性
    ========================================================================= */
@@ -127,6 +144,68 @@ const FRAMES = [
     trait: 'gun_mount',
     desc: '厚い装甲板をリベットで重ねた標準型タイタン。足は遅いが、火力と粘りは群を抜く。',
   },
+  {
+    id: 'lynx', name: 'QD-06 リンクス', rarity: 'SR', cls: '四足', shape: 'quad', dmgMul: 0.88,
+    hp: 176, dr: 0.02, speed: 244, rollCd: 0.48, sp: 95,
+    body: '#3f6a58', trim: '#9fffd2', accent: '#ffd166',
+    special: 'overboost',
+    trait: 'inertia_cancel',
+    /* 四足の特殊仕様 ― 武装は 1 本だけ。その 1 本は機体が自分で撃つ。
+       操縦者が手で投げられるのはグレネードだけ。 */
+    quad: true, weaponSlots: 1, autoFire: true, manualWeapon: 'grenade', rateMul: 1.45,
+    desc: '四本脚で走る自動戦闘機。武装は 1 本しか積めないが、砲は機体が自分で敵を見つけて撃つ。脚が速く、連射も速い。操縦者はグレネードを投げることに専念する。',
+  },
+  {
+    id: 'nomad', name: 'LT-02 ノマド', rarity: 'N', cls: '軽汎用', shape: 'light', dmgMul: 0.94,
+    hp: 152, dr: -0.02, speed: 196, rollCd: 0.62, sp: 92,
+    body: '#5a6f52', trim: '#c8e8a0', accent: '#ffd166',
+    special: 'burst_cannon', trait: 'tune_up',
+    desc: '哨戒用に量産された軽汎用機。速さと扱いやすさをうまく折り合わせてある。',
+  },
+  {
+    id: 'warden', name: 'HG-31 ウォーデン', rarity: 'R', cls: '防衛', shape: 'bulwark', dmgMul: 0.98,
+    hp: 268, dr: 0.22, speed: 138, rollCd: 1.15, sp: 105,
+    body: '#4a5a6e', trim: '#b8cfe8', accent: '#7cf3ff',
+    special: 'shield_burst', trait: 'gun_mount',
+    desc: '拠点防衛の据え置き機。動かずに撃つほど当たる設計になっている。',
+  },
+  {
+    id: 'pyro', name: 'BL-21 パイロ', rarity: 'R', cls: '焼却', shape: 'inferno', dmgMul: 1.02,
+    hp: 208, dr: 0.08, speed: 158, rollCd: 0.92, sp: 100,
+    body: '#8a5a2a', trim: '#ffd0a0', accent: '#ff6a2a',
+    special: 'inferno_field', trait: 'overheat',
+    desc: '焼却部隊の主力。熱がこもるほど手が速くなる荒い機体。',
+  },
+  {
+    id: 'siren', name: 'EL-44 セイレーン', rarity: 'SR', cls: '妨害', shape: 'tesla', dmgMul: 0.96,
+    hp: 184, dr: 0.04, speed: 176, rollCd: 0.78, sp: 96,
+    body: '#4a3a76', trim: '#c8b0ff', accent: '#7cf3ff',
+    special: 'emp_nova', trait: 'charged_hull',
+    desc: '電磁妨害の専用機。近づいた相手の脚を殺してから料理する。',
+  },
+  {
+    id: 'ghost', name: 'XN-52 ゴースト', rarity: 'SR', cls: '潜入', shape: 'wraith', dmgMul: 0.98,
+    hp: 158, dr: 0.00, speed: 202, rollCd: 0.56, sp: 92,
+    body: '#25303f', trim: '#8fd4c0', accent: '#9fffe8',
+    special: 'phantom', trait: 'optic_camo',
+    desc: 'レイスの量産試作。性能は一段落ちるが、扱いはこちらのほうが素直。',
+  },
+  {
+    id: 'hound', name: 'QD-02 ハウンド', rarity: 'R', cls: '四足軽量', shape: 'quad', dmgMul: 0.78,
+    hp: 132, dr: -0.04, speed: 262, rollCd: 0.42, sp: 88,
+    body: '#6a5a3a', trim: '#ffe0a0', accent: '#ff9a5c',
+    special: 'overboost', trait: 'hit_and_run',
+    quad: true, weaponSlots: 1, autoFire: true, manualWeapon: 'grenade', rateMul: 1.60,
+    desc: 'リンクスより軽い四足の先行量産型。紙のように脆いが、誰よりも速く走って自分で撃つ。',
+  },
+  {
+    id: 'behemoth', name: 'QD-90 ベヒモス', rarity: 'SSR', cls: '四足重装', shape: 'quad', dmgMul: 1.15,
+    hp: 300, dr: 0.16, speed: 186, rollCd: 0.72, sp: 120,
+    body: '#4a4a58', trim: '#dfe4ee', accent: '#ffcf4a',
+    special: 'siege', trait: 'self_repair',
+    quad: true, weaponSlots: 1, autoFire: true, manualWeapon: 'grenade', rateMul: 1.30,
+    desc: '四足の最上位。重い装甲を四本脚で押して走る。砲は自動、投擲は操縦者の担当。',
+  },
 ];
 
 /* 必殺技の表示情報 */
@@ -191,8 +270,133 @@ const CORES = [
   { id: 'core_over', name: 'OD 過負荷コア',  rarity: 'SR', traits: ['overdrive', 'detonator'],  desc: '炉心を回しきる。必殺の回転が速い。' },
   { id: 'core_seek', name: 'SK 追尾コア',    rarity: 'SR', traits: ['seeker'],                  desc: '弾に目をつける。' },
   { id: 'core_adr',  name: 'AD 危機コア',    rarity: 'SSR',traits: ['adrenaline', 'thrust_wave'], desc: '死にかけるほど動きが冴える。設計者は行方不明。' },
+  { id: 'core_mimic', name: 'MM 解析コア',  rarity: 'SSR', traits: ['seeker', 'vampiric', 'scavenger'], craft: true, desc: '倒した敵から写し取った機能を一枚に焼き直したもの。研究室でしか作れない。' },
   { id: 'core_omni', name: 'OM 総合コア',    rarity: 'SSR',traits: ['lastditch', 'vampiric', 'coolant'], desc: '旧軍の最上位管制系。三つの機能を同時に回す。' },
 ];
+
+/* =========================================================================
+   外装（スキン）: 性能は変わらない見た目だけの装い
+   body/trim/accent を上書きし、decal で胴に模様を足す。
+   ========================================================================= */
+const SKINS = [
+  { id: 'skin_std',    name: '標準塗装',       rarity: 'N',   body: null,      trim: null,      accent: null,      decal: null,      desc: '機体そのままの色。' },
+  { id: 'skin_sand',   name: '砂漠迷彩',       rarity: 'N',   body: '#9a875c', trim: '#e0d3a8', accent: '#ff9a3c', decal: 'blotch',  desc: '砂塵地帯の量産塗装。' },
+  { id: 'skin_navy',   name: '海兵ブルー',     rarity: 'N',   body: '#3a5a86', trim: '#a8ccff', accent: '#ffd166', decal: 'stripe',  desc: '沿岸部隊の制式色。' },
+  { id: 'skin_works',  name: '工廠グレー',     rarity: 'N',   body: '#6a6f76', trim: '#cfd6de', accent: '#ffb04a', decal: 'hazard',  desc: '整備班が塗り直したままの姿。' },
+  { id: 'skin_forest', name: '森林迷彩',       rarity: 'R',   body: '#4c6a44', trim: '#b6d89a', accent: '#ffe08a', decal: 'blotch',  desc: '樹林で輪郭がぼやける。' },
+  { id: 'skin_fire',   name: 'ファイアレッド', rarity: 'R',   body: '#a63a2a', trim: '#ffb08a', accent: '#ffd24a', decal: 'stripe',  desc: '消防機の払い下げ塗装。' },
+  { id: 'skin_cyber',  name: 'サイバーティール', rarity: 'R', body: '#1f5f68', trim: '#7ffbe8', accent: '#ff5fa8', decal: 'circuit', desc: '回路模様が浮く実験塗装。' },
+  { id: 'skin_snow',   name: '寒冷地ホワイト', rarity: 'R',   body: '#c3cbd4', trim: '#ffffff', accent: '#4fc3ff', decal: 'checker', desc: '凍結地帯の作業色。' },
+  { id: 'skin_gold',   name: '金縁ブラック',   rarity: 'SR',  body: '#22252c', trim: '#ffd98a', accent: '#ffcf4a', decal: 'stripe',  desc: '式典用の飾り塗り。' },
+  { id: 'skin_violet', name: '幽紫',           rarity: 'SR',  body: '#4a2f6e', trim: '#d8b0ff', accent: '#8effd2', decal: 'circuit', desc: '夜間任務のために沈めた紫。' },
+  { id: 'skin_lime',   name: 'ネオンライム',   rarity: 'SR',  body: '#2f4a1e', trim: '#c6ff5a', accent: '#ffffff', decal: 'hazard',  desc: '視認性を上げすぎた注意色。' },
+  { id: 'skin_chrome', name: 'クロムゴールド', rarity: 'SSR', body: '#8a7330', trim: '#ffe9a8', accent: '#fff6d0', decal: 'checker', desc: '磨き上げた鏡面の装甲。' },
+  { id: 'skin_abyss',  name: '深淵オーロラ',   rarity: 'SSR', body: '#16203a', trim: '#7fe8ff', accent: '#c58cff', decal: 'circuit', desc: '光の当たり方で色が変わる特殊塗膜。' },
+  { id: 'skin_proto',  name: '試作迷彩',       rarity: 'SR',  body: '#3a4a3a', trim: '#b0ffb0', accent: '#ffcf4a', decal: 'blotch', craft: true, desc: '研究室で調合した試験塗料。開発でしか手に入らない。' },
+  /* 自分で色を決める枠。3 色と模様を格納庫で選ぶ */
+  { id: 'skin_custom', name: '自分で塗る',     rarity: 'N',   body: null, trim: null, accent: null, decal: null, custom: true, desc: '装甲・縁取り・差し色と模様を自分で決める。' },
+];
+
+/* 自分で塗るときに選べる模様 */
+const DECALS = [
+  { id: '',        name: 'なし' },
+  { id: 'stripe',  name: '帯' },
+  { id: 'checker', name: '市松' },
+  { id: 'blotch',  name: '迷彩' },
+  { id: 'hazard',  name: '注意帯' },
+  { id: 'circuit', name: '回路' },
+];
+
+/* =========================================================================
+   装着武装（アタッチメント）
+   slot: front（前面）/ back（背面）。どちらも 1 個だけ。
+   照準とは無関係に、射程内の敵を自分で見つけて撃つ。
+   kind: gun / shotgun / homing / lob / drone
+   ========================================================================= */
+const ATTACHMENTS = [
+  /* ---- 前面 ---- */
+  { id: 'f_vulcan', slot: 'front', name: 'FV-1 前面バルカン', rarity: 'N', kind: 'gun', el: 'KIN',
+    dmg: 4.0, rpm: 320, range: 380, bspeed: 620, bsize: 2.6, spread: 5,
+    desc: '胸部に固定した小口径。正面の敵を黙って削り続ける。' },
+  { id: 'f_scatter', slot: 'front', name: 'FS-2 前面スキャッター', rarity: 'R', kind: 'shotgun', el: 'KIN',
+    dmg: 3.4, pellets: 5, rpm: 84, range: 250, bspeed: 520, bsize: 2.6, spread: 13,
+    desc: '至近に寄られたときだけ働く散弾。' },
+  { id: 'f_lance', slot: 'front', name: 'FL-3 前面レーザー', rarity: 'SR', kind: 'gun', el: 'ENE',
+    dmg: 8.6, rpm: 190, range: 470, bspeed: 950, bsize: 2.4, spread: 1, pierce: 1,
+    desc: '細い光条を刻む。複合装甲に刺さる。' },
+  { id: 'f_arcnode', slot: 'front', name: 'FA-4 前面アークノード', rarity: 'SR', kind: 'gun', el: 'EMP',
+    dmg: 7.4, rpm: 150, range: 330, bspeed: 520, bsize: 3.2, spread: 3, stun: 0.25,
+    desc: '電磁弾で寄ってきた相手の足を止める。' },
+  { id: 'f_gatling', slot: 'front', name: 'FG-9 前面ガトリング', rarity: 'SSR', kind: 'gun', el: 'KIN',
+    dmg: 5.4, rpm: 620, range: 420, bspeed: 700, bsize: 2.8, spread: 6,
+    desc: '正面に固定した六砲身。近づく前に溶かす。' },
+
+  /* ---- 背面 ---- */
+  { id: 'b_turret', slot: 'back', name: 'BT-1 背部ターレット', rarity: 'N', kind: 'gun', el: 'KIN',
+    dmg: 6.2, rpm: 230, range: 480, bspeed: 640, bsize: 3, spread: 2.5, yaw: true,
+    desc: '背中で独立に旋回する小砲塔。後ろの敵にも自分で向く。' },
+  { id: 'b_grenade', slot: 'back', name: 'BG-5 グレネードポッド', rarity: 'R', kind: 'lob', el: 'THR',
+    dmg: 24, splash: 86, rpm: 40, range: 520, bspeed: 400, bsize: 4.6, yaw: true,
+    desc: '低い遮蔽を越えて放り込む擲弾。重装甲によく効く。' },
+  { id: 'b_missile', slot: 'back', name: 'BM-4 ミサイルポッド', rarity: 'R', kind: 'homing', el: 'KIN',
+    dmg: 13, splash: 46, rpm: 66, salvo: 2, range: 620, bspeed: 300, turn: 3.6, bsize: 3.4, yaw: true,
+    desc: '二連で撃ち出して曲がりながら追う。' },
+  { id: 'b_rocket', slot: 'back', name: 'BR-7 ロケットランチャー', rarity: 'SR', kind: 'gun', el: 'THR',
+    dmg: 36, splash: 92, rpm: 32, range: 640, bspeed: 470, bsize: 5.4, yaw: true,
+    desc: '一発が重い。爆風で群れごと吹き飛ばす。' },
+  { id: 'b_drone', slot: 'back', name: 'DR-2 ドローンベイ', rarity: 'SR', kind: 'drone', el: 'ENE',
+    drones: 2, dmg: 5.0, rpm: 180, range: 400, bspeed: 560, bsize: 2.6, droneHp: 46,
+    desc: '随伴ドローンを 2 機出す。落とされても数秒で再射出される。' },
+  { id: 'b_hydra', slot: 'back', name: 'BH-0 ハイドラミサイル', rarity: 'SSR', kind: 'homing', el: 'KIN',
+    dmg: 15, splash: 54, rpm: 96, salvo: 3, range: 700, bspeed: 320, turn: 4.4, bsize: 3.4, yaw: true,
+    desc: '三連装の追尾弾を絶え間なく吐き出す。' },
+  { id: 'b_dronex', slot: 'back', name: 'DX-9 ドローンベイ改', rarity: 'SSR', kind: 'drone', el: 'ENE',
+    drones: 3, dmg: 6.8, rpm: 230, range: 460, bspeed: 620, bsize: 2.8, droneHp: 68,
+    desc: '三機編隊の管制型。自機の周りに常時展開する。' },
+
+  /* ---- 開発（研究室）でしか手に入らない ---- */
+  { id: 'b_arcpod', slot: 'back', name: 'BA-6 アークポッド', rarity: 'SR', kind: 'gun', el: 'EMP', craft: true,
+    dmg: 11, rpm: 140, range: 340, bspeed: 540, bsize: 3.6, spread: 2, stun: 0.4, yaw: true,
+    desc: '電磁機から写し取った放電コイル。当てた相手の足を短く止める。' },
+  { id: 'b_medipod', slot: 'back', name: 'BM-9 修復ポッド', rarity: 'SR', kind: 'gun', el: 'ENE', craft: true,
+    dmg: 7.2, rpm: 210, range: 420, bspeed: 600, bsize: 3, spread: 3, yaw: true, regen: 0.9,
+    desc: '修復機の炉を背負ったもの。撃ちながら毎秒 最大HP の 0.9% を戻す。' },
+  { id: 'b_swarmpod', slot: 'back', name: 'SW-4 群制御ベイ', rarity: 'SSR', kind: 'drone', el: 'ENE', craft: true,
+    drones: 4, dmg: 6.2, rpm: 240, range: 470, bspeed: 620, bsize: 2.8, droneHp: 74,
+    desc: '敵の編隊制御をそのまま流用した 4 機編成。開発でしか作れない。' },
+];
+
+/* =========================================================================
+   手投げグレネード
+   四足機（QD-06 リンクス）の手動攻撃。射撃キーで照準点へ放る。
+   ========================================================================= */
+const HAND_GRENADE = {
+  name: '手投げグレネード', dmg: 44, splash: 98, el: 'THR',
+  cool: 1.0, speed: 430, range: 470, bsize: 5,
+  desc: '照準した位置へ放物線で投げ込む。低い遮蔽なら越える。',
+};
+
+/* =========================================================================
+   ホログラム・デコイ
+   自分と同じ形の青い像を置く。相手は機械なので像と本物を見分けられず、
+   電池が切れるまで像を撃ち続ける。電池は撃たれるほど早く減る。
+   ========================================================================= */
+const HOLO_DECOY = {
+  name: 'ホログラム・デコイ', charges: 2, cooldown: 15, battery: 11,
+  drainPerHit: 0.30,        // 被弾 10 ダメージあたり何秒ぶん電池を食うか
+  lure: 0.30,               // 敵から見た距離の割引率（小さいほど強く釣る）
+  desc: '自分と同じ形をした青いホログラムを置く。敵はそれを本物と思って撃ち続ける。電池が切れると消える。連射はできない。',
+};
+
+/* =========================================================================
+   EMP 爆弾
+   相手が機械なので、投げ当てた 1 体だけを完全に停止させる。
+   ========================================================================= */
+const EMP_BOMB = {
+  name: 'EMP爆弾', charges: 3, cooldown: 4.5, flight: 0.85,
+  radius: 160, disable: 8, dmg: 20, el: 'EMP', bossStun: 1.6,
+  desc: '着弾点にいちばん近い敵機 1 体を 8 秒あいだ完全停止させる。ボスには短い麻痺しか効かない。',
+};
 
 /* =========================================================================
    武器
@@ -261,6 +465,53 @@ const WEAPONS = [
 ];
 
 /* =========================================================================
+   能力データ（敵から回収するサンプル）
+   撃破した敵の機能を吸い出したもの。基地の研究室で素材として使う。
+   ========================================================================= */
+const ABILITIES = {
+  ab_speed:  { id: 'ab_speed',  name: '高速機動データ', color: '#c8dd8a', line: '偵察機の脚まわりの制御。' },
+  ab_burst:  { id: 'ab_burst',  name: '三点射データ',   color: '#b9c8e8', line: '射撃機の連射制御。' },
+  ab_shield: { id: 'ab_shield', name: '前面装甲データ', color: '#e2d29a', line: '盾機の受け流し構造。' },
+  ab_mortar: { id: 'ab_mortar', name: '曲射管制データ', color: '#d8b48a', line: '砲兵機の弾道計算。' },
+  ab_swarm:  { id: 'ab_swarm',  name: '群制御データ',   color: '#a8f0f0', line: 'ドローンの編隊制御。' },
+  ab_snipe:  { id: 'ab_snipe',  name: '精密照準データ', color: '#b6a8e0', line: '狙撃機の照準補正。' },
+  ab_repair: { id: 'ab_repair', name: '修復回路データ', color: '#9fe8b8', line: '修復機のナノ炉。' },
+  ab_boom:   { id: 'ab_boom',   name: '自爆炉心データ', color: '#ffb0a0', line: '自爆機の過負荷炉。' },
+  ab_heavy:  { id: 'ab_heavy',  name: '重装甲データ',   color: '#c8c8c8', line: '重装機の積層装甲。' },
+  ab_arc:    { id: 'ab_arc',    name: '電磁放電データ', color: '#a8c0ff', line: '電磁機の放電コイル。' },
+  ab_command:{ id: 'ab_command',name: '指揮系統データ', color: '#ffcf4a', line: '指揮官機とボスからしか採れない中枢。' },
+};
+
+/* =========================================================================
+   開発（基地の研究室）
+   回収した能力データとスクラップで、装備を作る。
+   ========================================================================= */
+const RECIPES = [
+  { id: 'rc_pier',  out: 'core_pier',  scrap: 260,  cost: { ab_snipe: 3 },
+    line: '狙撃機の照準補正を弾芯に流用する。' },
+  { id: 'rc_hard',  out: 'core_hard',  scrap: 360,  cost: { ab_heavy: 3, ab_shield: 2 },
+    line: '重装機の積層装甲を自機の外殻に写す。' },
+  { id: 'rc_vamp',  out: 'core_vamp',  scrap: 620,  cost: { ab_repair: 4, ab_heavy: 2 },
+    line: '修復機のナノ炉を、敵の熱量で回す形に組み替える。' },
+  { id: 'rc_seek',  out: 'core_seek',  scrap: 640,  cost: { ab_swarm: 3, ab_snipe: 2 },
+    line: '群制御と照準補正を合わせると、弾が目を持つ。' },
+  { id: 'rc_over',  out: 'core_over',  scrap: 880,  cost: { ab_boom: 4, ab_arc: 2 },
+    line: '自爆炉心を殺さずに回し続ける、無茶な設計。' },
+  { id: 'rc_arcpod', out: 'b_arcpod',  scrap: 1100, cost: { ab_arc: 5, ab_shield: 2 },
+    line: '放電コイルを背中に載せ、寄る相手を勝手に焼く。' },
+  { id: 'rc_swarmpod', out: 'b_swarmpod', scrap: 1500, cost: { ab_swarm: 6, ab_speed: 3 },
+    line: '編隊制御を丸ごと積み、4 機を同時に飛ばす。' },
+  { id: 'rc_medipod', out: 'b_medipod', scrap: 900, cost: { ab_repair: 5, ab_swarm: 2 },
+    line: '修復機の炉を背負い、自分を直しながら戦う。' },
+  { id: 'rc_proto', out: 'skin_proto', scrap: 200,  cost: { ab_speed: 2, ab_shield: 1 },
+    line: '余った装甲片から調合した試験塗料。' },
+  { id: 'rc_mimic', out: 'core_mimic', scrap: 3000,
+    cost: { ab_speed: 2, ab_burst: 2, ab_shield: 2, ab_mortar: 2, ab_swarm: 2,
+            ab_snipe: 2, ab_repair: 2, ab_boom: 2, ab_heavy: 2, ab_arc: 2, ab_command: 1 },
+    line: '全部の敵の機能を一枚に焼き直した、写し取りの結晶。' },
+];
+
+/* =========================================================================
    敵アーキタイプ
    ========================================================================= */
 const ENEMIES = {
@@ -268,36 +519,42 @@ const ENEMIES = {
     id: 'scout', name: '偵察機 WSP', armor: 'FRAME', hp: 46, speed: 168, radius: 15,
     body: '#7d8a5c', trim: '#c8dd8a', ai: 'rusher',
     sight: 460, hearing: 300, atkRange: 190, dps: { dmg: 4.0, rpm: 420, el: 'KIN', bspeed: 520, spread: 6 },
+    ability: 'ab_speed',
     scrap: 12, spGain: 5,
   },
   gunner: {
     id: 'gunner', name: '射撃機 GNR', armor: 'FRAME', hp: 74, speed: 118, radius: 17,
     body: '#6b7690', trim: '#b9c8e8', ai: 'strafer',
     sight: 520, hearing: 340, atkRange: 380, keep: 300, dps: { dmg: 7.2, rpm: 300, burst: 3, el: 'KIN', bspeed: 560, spread: 3.4 },
+    ability: 'ab_burst',
     scrap: 18, spGain: 7,
   },
   shielder: {
     id: 'shielder', name: '盾機 BWK', armor: 'SHIELD', hp: 170, speed: 82, radius: 21,
     body: '#8a7a52', trim: '#e2d29a', ai: 'advance', frontShield: 0.22,
     sight: 440, hearing: 300, atkRange: 240, dps: { dmg: 5.6, pellets: 5, rpm: 80, el: 'KIN', bspeed: 460, spread: 11 },
+    ability: 'ab_shield',
     scrap: 30, spGain: 12,
   },
   mortar: {
     id: 'mortar', name: '砲兵機 MTR', armor: 'ARMOR', hp: 110, speed: 70, radius: 20,
     body: '#7a5f4a', trim: '#d8b48a', ai: 'artillery',
     sight: 700, hearing: 400, atkRange: 640, keep: 520, lob: { dmg: 27.2, splash: 96, rpm: 34, el: 'THR', flight: 1.35 },
+    ability: 'ab_mortar',
     scrap: 28, spGain: 12,
   },
   drone: {
     id: 'drone', name: '随伴ドローン', armor: 'FRAME', hp: 24, speed: 205, radius: 10,
     body: '#5c8a8a', trim: '#a8f0f0', ai: 'swarm', flying: true,
     sight: 520, hearing: 460, atkRange: 210, dps: { dmg: 3.2, rpm: 300, el: 'ENE', bspeed: 520, spread: 5 },
+    ability: 'ab_swarm',
     scrap: 7, spGain: 3,
   },
   sniper: {
     id: 'sniper', name: '狙撃機 LNC', armor: 'FRAME', hp: 62, speed: 96, radius: 16,
     body: '#5a5a76', trim: '#b6a8e0', ai: 'sniper',
     sight: 900, hearing: 300, atkRange: 820, keep: 640, laser: { dmg: 32.0, charge: 1.4, el: 'ENE' },
+    ability: 'ab_snipe',
     scrap: 26, spGain: 11,
   },
   mender: {
@@ -305,24 +562,28 @@ const ENEMIES = {
     body: '#4a7a5c', trim: '#9fe8b8', ai: 'mender',
     sight: 520, hearing: 380, atkRange: 260, heal: { amount: 16, rate: 1.4, range: 230 },
     dps: { dmg: 4.0, rpm: 200, el: 'ENE', bspeed: 480, spread: 5 },
+    ability: 'ab_repair',
     scrap: 32, spGain: 14,
   },
   bomber: {
     id: 'bomber', name: '自爆機 KMZ', armor: 'FRAME', hp: 40, speed: 190, radius: 15,
     body: '#8a4a4a', trim: '#ffb0a0', ai: 'bomber',
     sight: 520, hearing: 520, atkRange: 46, boom: { dmg: 41.6, splash: 118, el: 'THR' },
+    ability: 'ab_boom',
     scrap: 16, spGain: 8,
   },
   heavy: {
     id: 'heavy', name: '重装機 GRD', armor: 'ARMOR', hp: 240, speed: 92, radius: 24,
     body: '#6f6f6f', trim: '#c8c8c8', ai: 'strafer',
     sight: 520, hearing: 340, atkRange: 340, keep: 240, dps: { dmg: 9.6, rpm: 380, el: 'KIN', bspeed: 580, spread: 5.5 },
+    ability: 'ab_heavy',
     scrap: 44, spGain: 18,
   },
   arcbot: {
     id: 'arcbot', name: '電磁機 ARC', armor: 'COMP', hp: 96, speed: 138, radius: 18,
     body: '#4a5a96', trim: '#a8c0ff', ai: 'strafer',
     sight: 500, hearing: 340, atkRange: 280, keep: 210, dps: { dmg: 11.2, rpm: 150, el: 'EMP', bspeed: 460, spread: 2, stun: 0.35 },
+    ability: 'ab_arc',
     scrap: 34, spGain: 14,
   },
 };
@@ -467,9 +728,13 @@ const getFrame  = (id) => byId(FRAMES, id);
 const getWeapon = (id) => byId(WEAPONS, id);
 const getCore   = (id) => byId(CORES, id);
 const getSector = (id) => byId(SECTORS, id);
+const getSkin   = (id) => byId(SKINS, id);
+const getAttach = (id) => byId(ATTACHMENTS, id);
 
 window.MRData = {
-  ELEMENTS, ARMORS, AFFINITY, affinityOf, RARITY,
-  FRAMES, SPECIALS, TRAITS, CORES, WEAPONS, ENEMIES, BOSSES, SECTORS, TRAINING, OBJ_LABEL,
-  getFrame, getWeapon, getCore, getSector,
+  ELEMENTS, ARMORS, AFFINITY, affinityOf, RARITY, BALANCE,
+  FRAMES, SPECIALS, TRAITS, CORES, WEAPONS, SKINS, DECALS, ATTACHMENTS, ABILITIES, RECIPES,
+  EMP_BOMB, HAND_GRENADE, HOLO_DECOY,
+  ENEMIES, BOSSES, SECTORS, TRAINING, OBJ_LABEL,
+  getFrame, getWeapon, getCore, getSector, getSkin, getAttach,
 };

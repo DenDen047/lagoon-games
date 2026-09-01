@@ -8,16 +8,18 @@ const C = window.MRCore, D = window.MRData, R = window.MRRender;
 const { clamp, el, TAU } = C;
 
 /* ---------------- 所持データの操作 ---------------- */
-const BUCKET = { frame: 'frames', weapon: 'weapons', core: 'cores' };
+const BUCKET = { frame: 'frames', weapon: 'weapons', core: 'cores', attach: 'attachments', skin: 'skins' };
 
 function kindOf(id) {
   if (D.getFrame(id)) return 'frame';
   if (D.getWeapon(id)) return 'weapon';
   if (D.getCore(id)) return 'core';
+  if (D.getAttach(id)) return 'attach';
+  if (D.getSkin(id)) return 'skin';
   return null;
 }
 function defOf(id) {
-  return D.getFrame(id) || D.getWeapon(id) || D.getCore(id) || null;
+  return D.getFrame(id) || D.getWeapon(id) || D.getCore(id) || D.getAttach(id) || D.getSkin(id) || null;
 }
 function rec(save, id) {
   const k = kindOf(id); if (!k) return null;
@@ -49,7 +51,9 @@ const GACHA_POOL = () => {
   const out = { N: [], R: [], SR: [], SSR: [] };
   for (const w of D.WEAPONS) out[w.rarity].push(w.id);
   for (const f of D.FRAMES) out[f.rarity].push(f.id);
-  for (const c of D.CORES) out[c.rarity].push(c.id);
+  for (const c of D.CORES) if (!c.craft) out[c.rarity].push(c.id);
+  for (const a of D.ATTACHMENTS) if (!a.craft) out[a.rarity].push(a.id);
+  for (const k of D.SKINS) if (!k.craft && !k.custom && k.id !== 'skin_std') out[k.rarity].push(k.id);
   return out;
 };
 const POOL = GACHA_POOL();
@@ -106,6 +110,29 @@ class Hangar {
         this.render();
       });
     }
+    /* 自分で塗る */
+    const paint = (id, key) => {
+      const n = el(id); if (!n) return;
+      n.addEventListener('input', () => {
+        this.lo().custom[key] = n.value;
+        C.Save.save();
+        this.render();
+      });
+    };
+    paint('paint-body', 'body');
+    paint('paint-trim', 'trim');
+    paint('paint-accent', 'accent');
+    paint('paint-decal', 'decal');
+    el('paint-random').addEventListener('click', () => {
+      const hex = () => '#' + [0, 1, 2].map(() => Math.floor(60 + Math.random() * 190).toString(16).padStart(2, '0')).join('');
+      const cu = this.lo().custom;
+      cu.body = hex(); cu.trim = hex(); cu.accent = hex();
+      cu.decal = D.DECALS[Math.floor(Math.random() * D.DECALS.length)].id;
+      C.Save.save();
+      this.app.audio.sfx('ui');
+      this.render();
+    });
+
     el('btn-pull1').addEventListener('click', () => this.pull(1));
     el('btn-pull10').addEventListener('click', () => this.pull(10));
     el('btn-buyticket').addEventListener('click', () => {
@@ -189,8 +216,23 @@ class Hangar {
       weps.map((w) => this.cardWeapon(w, lo.sub === w.id, 'sub')).join('');
     el('list-cores').innerHTML = D.CORES.filter((c) => owned(this.save, c.id)).map((c) => this.cardCore(c, lo.core === c.id)).join('') || this.emptyNote();
 
+    /* 四足機は武装 1 本だけ。副武装の欄は閉じる */
+    const oneSlot = (frame.weaponSlots || 2) < 2;
+    el('row-sub').classList.toggle('slot-off', oneSlot);
+    el('sub-note').textContent = oneSlot
+      ? `${frame.name} は武装を 1 本しか積めない。副武装は使えない。`
+      : '（E / M で切替）';
+
+    const atts = (slot) => D.ATTACHMENTS.filter((a) => a.slot === slot && owned(this.save, a.id));
+    const noneCard = (slot, on) =>
+      `<button class="card card-empty ${on ? 'on' : ''}" data-slot="${slot}" data-id=""><div class="c-name">なし</div><div class="c-stat">この枠を空ける</div></button>`;
+    el('list-front').innerHTML = noneCard('front', !lo.front) + atts('front').map((a) => this.cardAttach(a, lo.front === a.id)).join('');
+    el('list-back').innerHTML = noneCard('back', !lo.back) + atts('back').map((a) => this.cardAttach(a, lo.back === a.id)).join('');
+    el('list-skins').innerHTML = D.SKINS.filter((k) => owned(this.save, k.id)).map((k) => this.cardSkin(k, lo.skin === k.id)).join('');
+    this.renderPaint();
+
     /* クリック割り当て */
-    for (const box of ['list-frames', 'list-main', 'list-sub', 'list-cores']) {
+    for (const box of ['list-frames', 'list-main', 'list-sub', 'list-cores', 'list-front', 'list-back', 'list-skins']) {
       const node = el(box);
       if (node._bound) continue;
       node._bound = true;
@@ -206,6 +248,26 @@ class Hangar {
         this.render();
       });
     }
+  }
+
+  /* 自分で塗る欄 */
+  renderPaint() {
+    const lo = this.lo();
+    const cu = lo.custom;
+    const on = (D.getSkin(lo.skin) || {}).custom === true;
+    el('row-custom').classList.toggle('slot-off', !on);
+    el('paint-note').textContent = on
+      ? '3 色と模様を選ぶと、その場で機体に反映される'
+      : '外装で「自分で塗る」を選ぶと使える';
+    el('paint-body').value = cu.body;
+    el('paint-trim').value = cu.trim;
+    el('paint-accent').value = cu.accent;
+    const sel = el('paint-decal');
+    if (!sel.options.length) {
+      sel.innerHTML = D.DECALS.map((d) => `<option value="${d.id}">${d.name}</option>`).join('');
+    }
+    sel.value = cu.decal || '';
+    for (const id of ['paint-body', 'paint-trim', 'paint-accent', 'paint-decal', 'paint-random']) el(id).disabled = !on;
   }
 
   emptyNote() { return `<div class="c-stat" style="padding:8px 2px">まだ持っていない。ガチャで引く。</div>`; }
@@ -234,6 +296,33 @@ class Hangar {
       <div class="c-stat">毎秒 約${dps}／射程 ${w.range || w.arc ? (w.range || 100) : '―'}${w.splash ? '・爆風' : ''}</div>
     </button>`;
   }
+  cardAttach(a, on) {
+    const r = rec(this.save, a.id);
+    const E = D.ELEMENTS[a.el];
+    const label = a.kind === 'drone'
+      ? `ドローン ${a.drones} 機／毎秒 約${Math.round(a.dmg * a.drones * a.rpm / 60)}`
+      : `毎秒 約${Math.round(a.dmg * (a.pellets || 1) * (a.salvo || 1) * a.rpm / 60)}／射程 ${a.range}${a.splash ? '・爆風' : ''}`;
+    return `<button class="card r${a.rarity} ${on ? 'on' : ''}" data-slot="${a.slot}" data-id="${a.id}">
+      <div class="c-name">${a.name}</div>
+      <div class="c-meta"><span class="c-rar r${a.rarity}">${a.rarity}</span>
+        <span class="c-el" style="color:${E.color};background:${E.color}1f">${E.icon} ${E.name}</span>
+        <span class="c-lv">Lv.${r ? r.lv : 1}${r && r.lb ? ' ★' + r.lb : ''}</span></div>
+      <div class="c-stat">${label}<br>自動で撃つ</div>
+    </button>`;
+  }
+  cardSkin(k, on) {
+    const cu = this.lo().custom || {};
+    const body = k.custom ? cu.body : k.body;
+    const trim = k.custom ? cu.trim : k.trim;
+    const sw = body
+      ? `<span class="skin-sw" style="background:${body};border-color:${trim}"></span>`
+      : '<span class="skin-sw" style="background:#2a3444;border-color:#5f7591"></span>';
+    return `<button class="card r${k.rarity} ${on ? 'on' : ''}" data-slot="skin" data-id="${k.id}">
+      <div class="c-name">${sw}${k.name}</div>
+      <div class="c-meta"><span class="c-rar r${k.rarity}">${k.rarity}</span><span class="c-lv">見た目のみ</span></div>
+      <div class="c-stat">${k.desc}</div>
+    </button>`;
+  }
   cardCore(c, on) {
     const r = rec(this.save, c.id);
     const names = c.traits.map((t) => D.TRAITS[t].name).join('・');
@@ -248,7 +337,7 @@ class Hangar {
   renderUpgrade() {
     const s = this.save;
     const items = [];
-    for (const k of ['frames', 'weapons', 'cores']) {
+    for (const k of ['frames', 'weapons', 'cores', 'attachments']) {
       for (const id in s[k]) {
         const def = defOf(id); if (!def) continue;
         items.push({ id, def, rec: s[k][id], kind: k });
@@ -263,7 +352,7 @@ class Hangar {
       const cost = upCost(it.def, it.rec.lv);
       const afford = s.scrap >= cost;
       const pips = [0, 1, 2, 3].map((i) => `<i class="${i < (it.rec.lb || 0) ? 'on' : ''}"></i>`).join('');
-      const gain = it.kind === 'weapons' ? '威力 +6.2%' : it.kind === 'frames' ? '耐久 +5.5%' : '効果安定';
+      const gain = it.kind === 'weapons' || it.kind === 'attachments' ? '威力 +6.2%' : it.kind === 'frames' ? '耐久 +5.5%' : '効果安定';
       return `<div class="upcard r${it.def.rarity}">
         <div class="up-top">
           <span class="up-name">${it.def.name}</span>
@@ -313,6 +402,15 @@ class Hangar {
     }
     h += '</tbody></table>';
     el('aff-table').innerHTML = h;
+    const ab = el('ability-list');
+    if (ab) {
+      ab.innerHTML = Object.values(D.ABILITIES).map((A) =>
+        `<div class="enemy-row">
+          <span class="e-dot" style="background:${A.color};border:1px solid ${A.color}"></span>
+          <span class="e-name">${A.name}</span>
+          <span class="e-note">${A.line}</span>
+        </div>`).join('');
+    }
 
     const notes = {
       scout: '軽く速い。真っ直ぐ突っ込んでくる。', gunner: '距離を保って三点射。遮蔽で切る。',
@@ -321,13 +419,15 @@ class Hangar {
       mender: '味方を回復する。最優先で潰す。', bomber: '接近して自爆。近づかせない。',
       heavy: '硬くて火力も高い。熱属性が効く。', arcbot: '電磁弾で動きを止めてくる。',
     };
-    el('enemy-list').innerHTML = Object.values(D.ENEMIES).map((e) =>
-      `<div class="enemy-row">
+    el('enemy-list').innerHTML = Object.values(D.ENEMIES).map((e) => {
+      const A = e.ability ? D.ABILITIES[e.ability] : null;
+      return `<div class="enemy-row">
         <span class="e-dot" style="background:${e.body};border:1px solid ${e.trim}"></span>
         <span class="e-name">${e.name}</span>
         <span class="e-armor">${D.ARMORS[e.armor].name}</span>
-        <span class="e-note">${notes[e.id] || ''}</span>
-      </div>`).join('');
+        <span class="e-note">${notes[e.id] || ''}${A ? `<br><i style="color:${A.color}">落とす: ${A.name}</i>` : ''}</span>
+      </div>`;
+    }).join('');
   }
 
   /* ---------------- ガチャ ---------------- */
@@ -349,7 +449,7 @@ class Hangar {
     const box = el('go-cards');
     box.innerHTML = '';
     el('gacha-overlay').classList.remove('hidden');
-    const kindLabel = { frame: '機体', weapon: '武装', core: 'コア' };
+    const kindLabel = { frame: '機体', weapon: '武装', core: 'コア', attach: '装着武装', skin: '外装' };
     results.forEach((r, i) => {
       const d = document.createElement('div');
       d.className = `gcard r${r.rarity}`;
@@ -388,12 +488,23 @@ class Hangar {
       ctx.setLineDash([]);
       ctx.restore();
       const a = this.previewT * 0.5;
+      const skin = D.getSkin(lo.skin) || D.SKINS[0];
+      const cu = lo.custom || {};
+      const col = skin.custom
+        ? { body: cu.body || f.body, trim: cu.trim || f.trim, accent: cu.accent || f.accent }
+        : { body: skin.body || f.body, trim: skin.trim || f.trim, accent: skin.accent || f.accent };
+      const decal = skin.custom ? (cu.decal || null) : skin.decal;
+      const attach = [];
+      for (const slot of ['front', 'back']) {
+        const at = D.getAttach(lo[slot]);
+        if (at && at.slot === slot) attach.push(Object.assign({}, at, { yawAng: a + Math.sin(this.previewT) * 0.8 }));
+      }
       R.shadow(ctx, cv.width / 2, cv.height / 2 + 44, 52, 15, 0.35);
       R.drawRobot(ctx, {
         x: cv.width / 2, y: cv.height / 2, r: 50,
         ang: a, aim: a + Math.sin(this.previewT * 0.7) * 0.22,
         walkPhase: this.previewT * 2.0, muzzle: 0, recoil: 0, hitFlash: 0, thrust: false,
-      }, { body: f.body, trim: f.trim, accent: f.accent }, { twin: !!lo.sub, shape: f.shape });
+      }, col, { twin: !!lo.sub && (f.weaponSlots || 2) > 1, shape: f.shape, decal, attach });
       this.raf = requestAnimationFrame(tick);
     };
     if (!this.raf) this.raf = requestAnimationFrame(tick);
@@ -401,5 +512,31 @@ class Hangar {
   stopPreview() { if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; } }
 }
 
-window.MRHangar = { Hangar, grant, owned, rec, maxLv, upCost, defOf, kindOf };
+/* ---------------- チートコード ----------------
+   全部の機体・武装・コア・装着武装・外装を開放し、資源と全セクターを解放する。 */
+function unlockAll(save) {
+  if (!save) return 0;
+  let n = 0;
+  const all = []
+    .concat(D.FRAMES.map((x) => x.id))
+    .concat(D.WEAPONS.map((x) => x.id))
+    .concat(D.CORES.map((x) => x.id))
+    .concat(D.ATTACHMENTS.map((x) => x.id))
+    .concat(D.SKINS.map((x) => x.id));
+  for (const id of all) {
+    const k = kindOf(id); if (!k) continue;
+    const b = save[BUCKET[k]];
+    if (!b[id]) { b[id] = { lv: 1, lb: 0, n: 1 }; n++; }
+    b[id].lb = 4;
+    b[id].lv = Math.max(b[id].lv, maxLv(b[id]));
+    save.seen[id] = true;
+  }
+  save.scrap = Math.max(save.scrap, 999999);
+  save.tickets = Math.max(save.tickets, 999);
+  for (const sec of D.SECTORS) if (!save.cleared[sec.id]) save.cleared[sec.id] = { best: 0, rank: 'C' };
+  C.Save.save();
+  return n;
+}
+
+window.MRHangar = { Hangar, grant, owned, rec, maxLv, upCost, defOf, kindOf, unlockAll };
 })();

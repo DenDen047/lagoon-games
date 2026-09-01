@@ -42,6 +42,7 @@
             <div class="bar sp"><div class="fill"></div><span class="btxt">必殺</span></div>
           </div>
           <div class="ps-weapon"><span class="wname">―</span><span class="wammo">0</span></div>
+          <div class="ps-extra"><span class="wbomb">EMP 3</span><span class="wdecoy">デコイ 2</span><span class="wattach">―</span></div>
           <div class="ps-roll"><div class="rfill"></div><span>ローリング</span></div>
         </div>
         <div class="pstat" id="pstat-2">
@@ -51,6 +52,7 @@
             <div class="bar sp"><div class="fill"></div><span class="btxt">必殺</span></div>
           </div>
           <div class="ps-weapon"><span class="wname">―</span><span class="wammo">0</span></div>
+          <div class="ps-extra"><span class="wbomb">EMP 3</span><span class="wdecoy">デコイ 2</span><span class="wattach">―</span></div>
           <div class="ps-roll"><div class="rfill"></div><span>ローリング</span></div>
         </div>
       </div>
@@ -58,7 +60,7 @@
       <div id="keyhint">
         <span><kbd>WASD</kbd> 移動</span><span><kbd>マウス</kbd> 照準・射撃</span>
         <span><kbd>Space</kbd> ローリング</span><span><kbd>Q</kbd> 必殺</span>
-        <span><kbd>E</kbd> 武器切替</span><span><kbd>Tab</kbd> ロック</span><span><kbd>Esc</kbd> 中断</span>
+        <span><kbd>E</kbd> 武器切替</span><span><kbd>F</kbd> EMP爆弾</span><span><kbd>G</kbd> デコイ</span><span><kbd>Tab</kbd> ロック</span><span><kbd>Esc</kbd> 中断</span>
       </div>
     </div>
   </div>
@@ -87,6 +89,37 @@
     </div>
   </div>
 
+  <!-- ==================== 基地 ==================== -->
+  <div id="screen-base" class="screen hidden">
+    <div class="bg-grid"></div>
+    <div class="base-wrap">
+      <header class="base-head">
+        <div class="hg-title"><span class="hg-mark">▲</span> 母艦 アークライト <small>ARC-LIGHT</small></div>
+        <div class="hg-wallet">
+          <span class="w-item"><i class="ico scrap">⬢</i><b id="base-scrap">0</b><small>スクラップ</small></span>
+          <span class="w-item"><i class="ico ticket">◆</i><b id="base-ticket">0</b><small>チケット</small></span>
+        </div>
+        <button class="btn btn-ghost" id="btn-base-title">タイトル</button>
+      </header>
+      <div class="base-body" id="base-body">
+        <div class="base-view">
+          <div class="base-stage"><canvas id="base-canvas"></canvas></div>
+          <div class="base-caption" id="base-caption">―</div>
+          <div class="base-hint">
+            <span><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> で艦内を歩く</span>
+            <span><kbd>↑</kbd> または <kbd>Space</kbd> で目の前の部屋に入る</span>
+            <span>画面をクリックするとそこまで歩く</span>
+          </div>
+          <div class="base-rooms" id="base-rooms"></div>
+        </div>
+        <div class="base-panel hidden" id="base-panel">
+          <button class="btn btn-ghost base-close" id="btn-base-close">閉じる</button>
+          <div id="base-panel-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== 格納庫 ==================== -->
   <div id="screen-hangar" class="screen hidden">
     <div class="bg-grid"></div>
@@ -105,7 +138,7 @@
           <button class="pbtn on" data-p="1">P1</button>
           <button class="pbtn" data-p="2">P2</button>
         </div>
-        <button class="btn btn-ghost" id="btn-hangar-back">タイトル</button>
+        <button class="btn btn-ghost" id="btn-hangar-back">母艦へ戻る</button>
       </header>
 
       <nav class="hg-tabs">
@@ -137,11 +170,30 @@
             <div class="slot-row">
               <h3>主武装 <small>（射撃キーで使用）</small></h3><div class="cardlist" id="list-main"></div>
             </div>
-            <div class="slot-row">
-              <h3>副武装 <small>（E / M で切替）</small></h3><div class="cardlist" id="list-sub"></div>
+            <div class="slot-row" id="row-sub">
+              <h3>副武装 <small id="sub-note">（E / M で切替）</small></h3><div class="cardlist" id="list-sub"></div>
             </div>
             <div class="slot-row">
               <h3>コア <small>（特性）</small></h3><div class="cardlist" id="list-cores"></div>
+            </div>
+            <div class="slot-row">
+              <h3>前面ハードポイント <small>（正面の敵を自動で撃つ）</small></h3><div class="cardlist" id="list-front"></div>
+            </div>
+            <div class="slot-row">
+              <h3>背面ハードポイント <small>（ターレット / ミサイル / ロケット / グレネード / ドローン。1 個だけ）</small></h3><div class="cardlist" id="list-back"></div>
+            </div>
+            <div class="slot-row">
+              <h3>外装 <small>（見た目だけ変わる。ガチャで増える）</small></h3><div class="cardlist" id="list-skins"></div>
+            </div>
+            <div class="slot-row" id="row-custom">
+              <h3>自分で塗る <small id="paint-note">外装で「自分で塗る」を選ぶと使える</small></h3>
+              <div class="paintbox">
+                <label>装甲<input type="color" id="paint-body"></label>
+                <label>縁取り<input type="color" id="paint-trim"></label>
+                <label>差し色<input type="color" id="paint-accent"></label>
+                <label>模様<select id="paint-decal"></select></label>
+                <button class="btn btn-ghost" id="paint-random">ランダムに塗る</button>
+              </div>
             </div>
           </div>
         </section>
@@ -183,6 +235,7 @@
           <div class="codex-grid">
             <div class="codex-card"><h3>属性 × 装甲</h3><div id="aff-table"></div></div>
             <div class="codex-card"><h3>敵機</h3><div id="enemy-list"></div></div>
+            <div class="codex-card"><h3>能力データ</h3><p class="note" style="margin-bottom:10px">撃破した敵から一定の確率で落ちる。基地の研究室で装備に組み直す。</p><div id="ability-list"></div></div>
           </div>
         </section>
       </div>
@@ -310,6 +363,40 @@
           <p class="note">軽量機は再使用が速い。コア「緊急噴射」を積むと、転がりながら敵を吹き飛ばせる。</p>
         </section>
         <section class="howto-card">
+          <h3>自動で撃つ武装</h3>
+          <p>編成の<b>前面</b>と<b>背面</b>にアタッチメントを 1 個ずつ載せられる。どちらも照準とは関係なく、射程に入った敵を機体が自分で見つけて撃つ。</p>
+          <ul class="dotlist">
+            <li>前面 ― 正面 70 度だけを撃つ固定武装（バルカン・散弾・レーザー）</li>
+            <li>背面 ― 独立して旋回する（ターレット・ミサイル・ロケット・グレネード）</li>
+            <li>背面に<b>ドローンベイ</b>を積むと随伴ドローンが出る。落とされても数秒で再射出される</li>
+          </ul>
+        </section>
+        <section class="howto-card">
+          <h3>EMP 爆弾</h3>
+          <p><b>F</b>（2P は <b>L</b>）でカーソルの位置へ放る。相手は機械なので、着弾点にいちばん近い <b>1 体だけ</b>が 8 秒間まったく動かなくなる。</p>
+          <p class="note">1 出撃で 3 発。弾薬パックを拾うと満タンに戻る。ボスには短い麻痺しか効かない。</p>
+        </section>
+        <section class="howto-card">
+          <h3>ホログラム・デコイ</h3>
+          <p><b>G</b>（2P は <b>K</b>）でその場に、自分と同じ形をした青いホログラムを置く。相手は機械なので本物と見分けられず、消えるまでそれを撃ち続ける。</p>
+          <ul class="dotlist">
+            <li>欠点 1 ― <b>電池</b>で動く。何もしなくても 11 秒で切れ、撃たれるほど早く尽きる</li>
+            <li>欠点 2 ― <b>連射はできない</b>。1 出撃 2 個、次に置けるまで 15 秒</li>
+          </ul>
+          <p class="note">弾薬パックを拾うと補充される。囲まれたときに置いて、横から回り込むのが基本。</p>
+        </section>
+        <section class="howto-card">
+          <h3>四足機 QD-06 リンクス</h3>
+          <p>武装は <b>1 本だけ</b>。その 1 本は<b>機体が自分で狙って撃つ</b>ので、操縦者が撃つのは<b>グレネード</b>（射撃ボタン）だけになる。脚が速く、連射も速い。</p>
+          <p class="note">カーソルはグレネードの落とし先。上体は主砲が選んだ相手のほうを向く。</p>
+        </section>
+        <section class="howto-card">
+          <h3>母艦アークライトと帰艦</h3>
+          <p>拠点は戦域の上空に浮かぶ<b>宇宙船</b>。作戦に成功すると輸送機が回収に来て、艦の<b>下部ハッチ</b>から格納デッキへ降りてくる。機体を降ろすとコックピットが開き、パイロットが出てくる。</p>
+          <p class="note">艦内は<b>自分で歩いて移動する</b>。<kbd>←</kbd><kbd>→</kbd>（または <kbd>A</kbd><kbd>D</kbd>）で歩き、扉の前で <kbd>↑</kbd> か <kbd>Space</kbd> を押すとその部屋に入る。画面をクリックしてもそこまで歩く。</p>
+          <p class="note">格納デッキから前へ順に、発進口・整備ハンガー・補給廠・研究室・訓練場・自室・指令室、いちばん前が<b>運転室</b>。運転室では航路と艦の積載が見られる。</p>
+        </section>
+        <section class="howto-card">
           <h3>属性と装甲</h3>
           <p>弾には <b>実弾・熱・エネルギー・電磁</b> の 4 属性、敵には <b>素体・重装甲・シールド・複合装甲</b> の 4 種類がある。噛み合うとダメージ表示が緑、不利だと赤になる。</p>
           <ul class="dotlist">
@@ -364,10 +451,12 @@
         <div class="rrow"><span>獲得スクラップ</span><b id="result-scrap">0</b></div>
         <div class="rrow"><span>獲得チケット</span><b id="result-ticket">0</b></div>
       </div>
+      <div class="result-samples" id="result-samples"></div>
       <div class="result-players" id="result-players"></div>
       <div class="panel-foot btns">
         <button id="btn-again" class="btn btn-main">もう一度</button>
-        <button id="btn-tohangar" class="btn">格納庫へ</button>
+        <button id="btn-tohangar" class="btn">母艦へ</button>
+        <button id="btn-result-hangar" class="btn">格納庫へ</button>
         <button id="btn-tosectors" class="btn btn-ghost">セクター選択</button>
       </div>
     </div>
@@ -381,7 +470,7 @@
       <div class="panel-foot btns col">
         <button id="btn-resume" class="btn btn-main">再開</button>
         <button id="btn-restart" class="btn">最初からやり直す</button>
-        <button id="btn-abort" class="btn btn-ghost">撤退して格納庫へ</button>
+        <button id="btn-abort" class="btn btn-ghost">撤退して母艦へ</button>
       </div>
     </div>
   </div>
@@ -405,6 +494,7 @@
 <script src="boss.js"></script>
 <script src="render.js"></script>
 <script src="hangar.js"></script>
+<script src="base.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

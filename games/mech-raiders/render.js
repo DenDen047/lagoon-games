@@ -94,6 +94,13 @@ const SHAPES = {
     shoulder: { type: 'thin', off: 0.46, w: 0.54, h: 0.26 },
     head: 0.22, barrel: 1.05, extras: ['booster', 'claws'],
   },
+  quad: {
+    torso: [[0.80, 0], [0.46, -0.40], [-0.40, -0.44], [-0.70, 0], [-0.40, 0.44], [0.46, 0.40]],
+    inner: [[0.52, 0], [0.20, -0.24], [-0.18, -0.24], [-0.30, 0], [-0.18, 0.24], [0.20, 0.24]],
+    legs: { type: 'quad', off: 0.80, len: 0.84, w: 0.32 },
+    shoulder: { type: 'thin', off: 0.54, w: 0.58, h: 0.30 },
+    head: 0.24, barrel: 1.34, extras: ['fins', 'booster'],
+  },
   titan: {
     torso: [[0.72, 0.46], [0.78, -0.46], [0.26, -0.82], [-0.56, -0.76], [-0.80, 0], [-0.56, 0.76], [0.26, 0.82]],
     inner: [[0.48, 0], [0.16, -0.46], [-0.34, -0.42], [-0.46, 0], [-0.34, 0.42], [0.16, 0.46]],
@@ -102,6 +109,106 @@ const SHAPES = {
     head: 0.24, barrel: 1.05, extras: ['layered', 'rivets', 'missilepods', 'chestplate'],
   },
 };
+
+/* 外装（スキン）の模様。胴の形で切り抜いてから描く */
+function drawDecal(ctx, kind, R, col, S) {
+  ctx.save();
+  polyS(ctx, S.torso, R); ctx.clip();
+  ctx.globalAlpha = 0.85;
+  if (kind === 'stripe') {
+    ctx.fillStyle = col.trim;
+    ctx.fillRect(-R, -R * 0.15, R * 2, R * 0.10);
+    ctx.fillRect(-R, R * 0.04, R * 2, R * 0.10);
+  } else if (kind === 'checker') {
+    ctx.fillStyle = col.trim;
+    for (let i = -4; i < 4; i++) for (let j = -4; j < 4; j++) {
+      if ((i + j) % 2) continue;
+      ctx.fillRect(i * R * 0.24, j * R * 0.24, R * 0.24, R * 0.24);
+    }
+  } else if (kind === 'blotch') {
+    ctx.fillStyle = shade(col.body, 0.66);
+    for (const [x, y, r] of [[-0.30, -0.28, 0.34], [0.26, 0.12, 0.30], [-0.06, 0.36, 0.24], [0.42, -0.34, 0.22]]) {
+      ctx.beginPath(); ctx.ellipse(x * R, y * R, r * R, r * R * 0.72, x + y, 0, TAU); ctx.fill();
+    }
+  } else if (kind === 'hazard') {
+    ctx.fillStyle = col.accent;
+    for (let i = -4; i < 5; i++) {
+      ctx.save(); ctx.translate(i * R * 0.30, 0); ctx.rotate(-0.5);
+      ctx.fillRect(-R * 0.07, -R, R * 0.14, R * 2); ctx.restore();
+    }
+  } else if (kind === 'circuit') {
+    ctx.strokeStyle = col.accent; ctx.lineWidth = Math.max(1, R * 0.055); ctx.globalAlpha = 0.75;
+    ctx.beginPath();
+    ctx.moveTo(-R * 0.62, -R * 0.30); ctx.lineTo(R * 0.10, -R * 0.30);
+    ctx.lineTo(R * 0.10, R * 0.10); ctx.lineTo(R * 0.62, R * 0.10);
+    ctx.moveTo(-R * 0.42, R * 0.34); ctx.lineTo(R * 0.30, R * 0.34);
+    ctx.stroke();
+    ctx.fillStyle = col.accent;
+    for (const [x, y] of [[0.10, -0.30], [0.10, 0.10], [-0.42, 0.34]]) {
+      ctx.beginPath(); ctx.arc(x * R, y * R, R * 0.06, 0, TAU); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/* 背面に載せた装着武装。旋回するものは rel（自機正面からの差）だけ回す */
+function drawBackAttach(ctx, a, R, col, rel) {
+  ctx.save();
+  ctx.translate(-R * 0.44, 0);
+  ctx.fillStyle = shade(col.body, 0.36);
+  roundRect(ctx, -R * 0.30, -R * 0.34, R * 0.60, R * 0.68, R * 0.10); ctx.fill();
+  ctx.strokeStyle = shade(col.body, 0.24); ctx.lineWidth = Math.max(1, R * 0.05); ctx.stroke();
+  if (a.kind === 'drone') {
+    ctx.fillStyle = shade(col.trim, 0.55);
+    for (let i = -1; i <= 1; i++) { roundRect(ctx, -R * 0.19, i * R * 0.20 - R * 0.06, R * 0.38, R * 0.13, R * 0.04); ctx.fill(); }
+    ctx.fillStyle = col.accent;
+    ctx.beginPath(); ctx.arc(0, 0, R * 0.06, 0, TAU); ctx.fill();
+    ctx.restore(); return;
+  }
+  ctx.rotate(rel);
+  if (a.kind === 'homing') {
+    ctx.fillStyle = shade(col.body, 0.54);
+    roundRect(ctx, -R * 0.14, -R * 0.30, R * 0.58, R * 0.60, R * 0.06); ctx.fill();
+    ctx.fillStyle = shade(col.accent, 0.95);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
+      ctx.beginPath(); ctx.arc(R * 0.12 + j * R * 0.18, -R * 0.19 + i * R * 0.19, R * 0.052, 0, TAU); ctx.fill();
+    }
+  } else {
+    const long = a.kind === 'lob' ? 0.40 : 0.60;
+    const thick = a.kind === 'gun' && a.dmg < 20 ? 0.18 : 0.26;
+    ctx.fillStyle = shade(col.body, 0.54);
+    roundRect(ctx, -R * 0.17, -R * 0.17, R * 0.36, R * 0.34, R * 0.06); ctx.fill();
+    ctx.fillStyle = shade(col.body, 0.38);
+    roundRect(ctx, R * 0.10, -R * thick * 0.5, R * long, R * thick, R * 0.05); ctx.fill();
+    ctx.fillStyle = shade(col.trim, 0.8);
+    ctx.fillRect(R * (0.10 + long) - R * 0.04, -R * thick * 0.4, R * 0.09, R * thick * 0.8);
+  }
+  const f = a.flash || 0;
+  if (f > 0.05) {
+    ctx.globalAlpha = f; ctx.fillStyle = '#fff3c4';
+    ctx.beginPath(); ctx.arc(R * 0.80, 0, R * 0.16 * f + R * 0.05, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+/* 前面に固定した装着武装 */
+function drawFrontAttach(ctx, a, R, col) {
+  ctx.save();
+  ctx.fillStyle = shade(col.body, 0.50);
+  roundRect(ctx, R * 0.26, -R * 0.11, R * 0.64, R * 0.22, R * 0.05); ctx.fill();
+  ctx.strokeStyle = shade(col.body, 0.30); ctx.lineWidth = Math.max(1, R * 0.045); ctx.stroke();
+  ctx.fillStyle = shade(col.accent, 0.92);
+  ctx.fillRect(R * 0.86, -R * 0.065, R * 0.11, R * 0.13);
+  const f = a.flash || 0;
+  if (f > 0.05) {
+    ctx.globalAlpha = f; ctx.fillStyle = '#fff3c4';
+    ctx.beginPath(); ctx.arc(R * 1.04, 0, R * 0.14 * f + R * 0.05, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
 
 function polyS(ctx, pts, R) {
   ctx.beginPath();
@@ -124,6 +231,23 @@ function drawRobot(ctx, o, col, opt) {
   ctx.save();
   ctx.rotate(o.ang);
   const swing = Math.sin(o.walkPhase || 0) * R * 0.44;
+  if (L.type === 'quad') {
+    /* 四足 ― 前後 2 対を斜めに交互に振る */
+    for (const [fx, sy] of [[1, -1], [1, 1], [-1, -1], [-1, 1]]) {
+      const sw = Math.sin((o.walkPhase || 0) + (fx * sy > 0 ? 0 : Math.PI)) * R * 0.28;
+      ctx.save();
+      ctx.translate(fx * R * 0.54 + sw * 0.6, sy * R * L.off);
+      ctx.rotate(sy * fx * 0.26);
+      ctx.fillStyle = shade(col.body, 0.38);
+      roundRect(ctx, -R * L.len * 0.50, -R * L.w * 0.5, R * L.len, R * L.w, R * 0.08); ctx.fill();
+      ctx.strokeStyle = shade(col.body, 0.26); ctx.lineWidth = Math.max(1, R * 0.05); ctx.stroke();
+      ctx.fillStyle = shade(col.body, 0.62);
+      roundRect(ctx, -R * L.len * 0.10, -R * L.w * 0.40, R * L.len * 0.42, R * L.w * 0.80, R * 0.06); ctx.fill();
+      ctx.fillStyle = shade(col.trim, 0.62);
+      ctx.beginPath(); ctx.arc(R * L.len * 0.44, 0, R * L.w * 0.46, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  } else
   for (const s of [-1, 1]) {
     const off = s > 0 ? swing : -swing;
     ctx.save();
@@ -205,6 +329,11 @@ function drawRobot(ctx, o, col, opt) {
   } else {
     ctx.fillStyle = shade(col.body, 0.48);
     roundRect(ctx, -R * 0.92, -R * 0.52, R * 0.42, R * 1.04, R * 0.14); ctx.fill();
+  }
+  /* 背面の装着武装 */
+  for (const a of (opt.attach || [])) {
+    if (a.slot !== 'back') continue;
+    drawBackAttach(ctx, a, R, col, (a.yawAng == null ? (o.aim || 0) : a.yawAng) - (o.aim || 0));
   }
   if (has('backgun')) {
     ctx.fillStyle = shade(col.body, 0.40);
@@ -334,6 +463,11 @@ function drawRobot(ctx, o, col, opt) {
     }
   }
 
+  /* 外装の模様 */
+  if (opt.decal) drawDecal(ctx, opt.decal, R, col, S);
+  /* 前面の装着武装 */
+  for (const a of (opt.attach || [])) if (a.slot === 'front') drawFrontAttach(ctx, a, R, col);
+
   /* 主武装 */
   const bl = opt.barrel != null ? opt.barrel : R * S.barrel;
   const gy = SH.type === 'none' ? -R * 0.44 : -R * (SH.off * 0.70 + 0.14);
@@ -446,6 +580,18 @@ function drawEnemy(ctx, e) {
     ctx.beginPath(); ctx.arc(0, 0, R * 1.5, 0, TAU); ctx.stroke();
     ctx.fillStyle = '#ffcf4a'; ctx.font = '700 11px system-ui, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('指揮官機', 0, -R * 1.9);
+    ctx.textAlign = 'left';
+  }
+  if (e.disableT > 0) {
+    const t = performance.now() * 0.006;
+    ctx.strokeStyle = `rgba(197,140,255,${0.55 + 0.3 * Math.sin(t * 3)})`;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.arc(0, 0, R * 1.35, 0, TAU); ctx.stroke();
+    ctx.setLineDash([5, 6]); ctx.lineDashOffset = -t * 18;
+    ctx.beginPath(); ctx.arc(0, 0, R * 1.7, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#d8b0ff'; ctx.font = '700 11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`機能停止 ${Math.ceil(e.disableT)}`, 0, -R * 2.0);
     ctx.textAlign = 'left';
   }
   if (e.stun > 0) {
@@ -575,7 +721,81 @@ function drawBoss(ctx, b) {
   }
 }
 
-window.MRRender = { drawRobot, drawEnemy, drawBoss, shade, shadow, poly };
+/* ---------------------------------------------------------------- パイロット */
+/* 正面向きの小さな人物。s は身長のめやす（px） */
+function drawPilot(ctx, x, y, s, opt) {
+  opt = opt || {};
+  const suit = opt.suit || '#3d5f86';
+  const trim = opt.trim || '#9fd4ff';
+  const skin = opt.skin || '#e8c39a';
+  const wave = opt.wave || 0;          // 手を上げる量 0..1
+  const step = opt.step || 0;          // 歩きの位相
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s / 100, s / 100);
+
+  /* 影 */
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath(); ctx.ellipse(0, 2, 22, 6, 0, 0, TAU); ctx.fill();
+
+  /* 脚 */
+  const sw = Math.sin(step) * 8;
+  for (const sgn of [-1, 1]) {
+    ctx.fillStyle = shade(suit, 0.7);
+    ctx.save(); ctx.translate(sgn * 7, -34); ctx.rotate(sgn * sw * 0.012);
+    roundRect(ctx, -6, 0, 12, 36, 4); ctx.fill();
+    ctx.fillStyle = '#20262f';
+    roundRect(ctx, -7, 30, 14, 8, 3); ctx.fill();
+    ctx.restore();
+  }
+  /* 胴 */
+  ctx.fillStyle = suit;
+  roundRect(ctx, -17, -74, 34, 42, 9); ctx.fill();
+  ctx.strokeStyle = shade(suit, 0.6); ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = trim;
+  ctx.fillRect(-17, -58, 34, 4);
+  ctx.fillStyle = shade(trim, 0.8);
+  roundRect(ctx, -6, -70, 12, 10, 3); ctx.fill();
+  /* 腕 */
+  for (const sgn of [-1, 1]) {
+    ctx.save();
+    ctx.translate(sgn * 17, -70);
+    ctx.rotate(sgn * (0.35 - wave * 2.1) + Math.sin(step + (sgn > 0 ? 0 : Math.PI)) * 0.10);
+    ctx.fillStyle = shade(suit, 0.85);
+    roundRect(ctx, -5, 0, 10, 32, 4); ctx.fill();
+    ctx.fillStyle = skin;
+    ctx.beginPath(); ctx.arc(0, 34, 5, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  /* 頭 */
+  ctx.fillStyle = skin;
+  ctx.beginPath(); ctx.arc(0, -88, 12, 0, TAU); ctx.fill();
+  if (opt.cap) {
+    /* 士官帽 */
+    ctx.fillStyle = shade(suit, 0.55);
+    ctx.beginPath(); ctx.arc(0, -94, 13, Math.PI, TAU); ctx.fill();
+    ctx.fillRect(-13, -94, 26, 4);
+    ctx.fillStyle = shade(suit, 0.35);
+    roundRect(ctx, -15, -91, 30, 4, 2); ctx.fill();
+    ctx.fillStyle = trim;
+    ctx.beginPath(); ctx.arc(0, -99, 3, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#2b2b30';
+    ctx.beginPath(); ctx.ellipse(0, -85, 6, 1.6, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -85, 6, 1.6, 0, 0, TAU); ctx.fill();
+  } else {
+    /* 飛行ヘルメット */
+    ctx.fillStyle = opt.helmet || shade(suit, 1.25);
+    ctx.beginPath(); ctx.arc(0, -90, 14, Math.PI, TAU); ctx.fill();
+    ctx.fillRect(-14, -90, 28, 5);
+    ctx.fillStyle = 'rgba(120,220,255,0.85)';
+    roundRect(ctx, -11, -90, 22, 9, 4); ctx.fill();
+    ctx.strokeStyle = shade(trim, 0.9); ctx.lineWidth = 1.6;
+    roundRect(ctx, -11, -90, 22, 9, 4); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+window.MRRender = { drawRobot, drawEnemy, drawBoss, drawPilot, shade, shadow, poly, SHAPES };
 
 /* ---------------------------------------------------------------- Field */
 Object.assign(Field.prototype, {
@@ -641,6 +861,8 @@ drawSorted(ctx, view) {
   for (const o of this.objects) if (!o.dead) list.push({ sy: o.y, kind: 'obj', o });
   for (const e of this.enemies) if (!e.dead && e.x > view.x - 60 && e.x < view.x + view.w + 60 && e.y > view.y - 60 && e.y < view.y + view.h + 60) list.push({ sy: e.y, kind: 'enemy', o: e });
   for (const ph of this.phantoms) list.push({ sy: ph.y, kind: 'phantom', o: ph });
+  for (const p of this.players) for (const d of p.drones) if (!d.dead) list.push({ sy: d.y, kind: 'drone', o: d });
+  for (const h of this.holos) if (!h.dead) list.push({ sy: h.y, kind: 'holo', o: h });
   for (const p of this.players) if (!p.dead) list.push({ sy: p.y, kind: 'player', o: p });
   if (this.boss && !this.boss.dead) list.push({ sy: this.boss.y, kind: 'boss', o: this.boss });
   if (this.bossSite && !this.boss && this.sector.boss) list.push({ sy: this.bossSite.y, kind: 'site', o: this.bossSite });
@@ -653,6 +875,8 @@ drawSorted(ctx, view) {
       case 'enemy': drawEnemy(ctx, it.o); break;
       case 'boss': drawBoss(ctx, it.o); break;
       case 'phantom': this.drawPhantom(ctx, it.o); break;
+      case 'drone': this.drawAllyDrone(ctx, it.o); break;
+      case 'holo': this.drawHolo(ctx, it.o); break;
       case 'player': this.drawPlayer(ctx, it.o); break;
       case 'site': this.drawBossSite(ctx, it.o); break;
       default: break;
@@ -773,7 +997,7 @@ drawBossSite(ctx, s) {
 },
 
 drawPlayer(ctx, m) {
-  const col = { body: m.lo.frame.body, trim: m.lo.frame.trim, accent: m.lo.frame.accent };
+  const col = m.lo.colors || { body: m.lo.frame.body, trim: m.lo.frame.trim, accent: m.lo.frame.accent };
   shadow(ctx, m.x, m.y, m.r * 1.0, m.r * 0.5, 0.34);
 
   if (m.down) {
@@ -834,7 +1058,8 @@ drawPlayer(ctx, m) {
   const camo = m.has('optic_camo') && m.noHitT > 3;
   if (camo) ctx.globalAlpha = 0.55;
   drawRobot(ctx, m, col, { thrust: m.rollT > 0 || m.specialState === 'overboost',
-    twin: m.lo.weapons.length > 1, shape: m.lo.shape });
+    twin: m.lo.weapons.length > 1, shape: m.lo.shape,
+    decal: m.lo.decal, attach: m.attach });
   ctx.globalAlpha = 1;
 
   /* プレイヤー識別リング */
@@ -845,6 +1070,80 @@ drawPlayer(ctx, m) {
   ctx.font = '700 10px system-ui, sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(`P${m.pid}`, m.x, m.y - m.r * 1.72);
   ctx.textAlign = 'left';
+},
+
+/* ホログラム・デコイ ― 自機と同じ形の青い像。電池残量を足元に出す */
+drawHolo(ctx, h) {
+  const o = h.owner;
+  const t = performance.now() * 0.004;
+  const k = clamp(h.battery / h.maxBattery, 0, 1);
+  ctx.save();
+  /* 電池が減るほど像が瞬く */
+  const flicker = k > 0.25 ? 1 : 0.55 + 0.45 * Math.sin(t * 14);
+  ctx.globalAlpha = (0.42 + 0.12 * Math.sin(t * 2)) * flicker + h.hitFlash * 0.25;
+  drawRobot(ctx, {
+    x: h.x, y: h.y, r: h.r, ang: h.ang, aim: h.aim,
+    walkPhase: h.walkPhase, muzzle: 0, recoil: 0, hitFlash: 0, thrust: false,
+  }, { body: '#2f6f9e', trim: '#9fe0ff', accent: '#d8f4ff' },
+     { shape: o.lo.shape, decal: o.lo.decal, attach: [] });
+  ctx.globalAlpha = 1;
+
+  /* 走査線 */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(h.x, h.y, h.r * 1.5, 0, TAU); ctx.clip();
+  ctx.strokeStyle = 'rgba(150,220,255,0.28)'; ctx.lineWidth = 1;
+  const off = (performance.now() * 0.05) % 8;
+  for (let y = h.y - h.r * 1.5 + off; y < h.y + h.r * 1.5; y += 8) {
+    ctx.beginPath(); ctx.moveTo(h.x - h.r * 1.5, y); ctx.lineTo(h.x + h.r * 1.5, y); ctx.stroke();
+  }
+  ctx.restore();
+
+  /* 台座のリング */
+  ctx.strokeStyle = `rgba(120,200,255,${0.5 * flicker})`; ctx.lineWidth = 2;
+  ctx.setLineDash([7, 7]); ctx.lineDashOffset = -t * 22;
+  ctx.beginPath(); ctx.ellipse(h.x, h.y + h.r * 0.5, h.r * 1.35, h.r * 0.5, 0, 0, TAU); ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* 電池 */
+  const w = h.r * 2.4, bx = h.x - w / 2, by = h.y - h.r - 16;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(bx, by, w, 4);
+  ctx.fillStyle = k > 0.3 ? '#8fd4ff' : '#ff9a5c';
+  ctx.fillRect(bx, by, w * k, 4);
+  ctx.fillStyle = 'rgba(160,220,255,0.85)';
+  ctx.font = '700 10px system-ui, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`電池 ${Math.ceil(h.battery)}`, h.x, by - 5);
+  ctx.textAlign = 'left';
+  ctx.restore();
+},
+
+drawAllyDrone(ctx, d) {
+  const col = d.owner.lo.colors || { body: '#3f7f8f', trim: '#a8f0f0', accent: '#ffd166' };
+  const R = d.r;
+  shadow(ctx, d.x, d.y + 10, R * 0.7, R * 0.3, 0.20);
+  ctx.save(); ctx.translate(d.x, d.y - 8); ctx.rotate(d.ang);
+  for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    ctx.fillStyle = shade(col.body, 0.7);
+    ctx.beginPath(); ctx.arc(sx * R * 0.72, sy * R * 0.72, R * 0.28, 0, TAU); ctx.fill();
+    ctx.strokeStyle = `rgba(200,240,255,${0.30 + 0.22 * Math.sin(d.spin + sx * sy)})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(sx * R * 0.72, sy * R * 0.72, R * 0.54, 0, TAU); ctx.stroke();
+  }
+  ctx.fillStyle = col.body;
+  poly(ctx, [[R * 0.95, 0], [-R * 0.3, -R * 0.58], [-R * 0.6, 0], [-R * 0.3, R * 0.58]]); ctx.fill();
+  ctx.strokeStyle = shade(col.body, 0.4); ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = col.accent;
+  ctx.beginPath(); ctx.arc(R * 0.32, 0, R * 0.20, 0, TAU); ctx.fill();
+  if (d.hitFlash > 0.02) {
+    ctx.globalAlpha = d.hitFlash * 0.4; ctx.fillStyle = '#ffe8e8';
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  if (d.hp < d.maxHp - 0.5) {
+    const w = R * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(d.x - w / 2, d.y - R - 16, w, 3);
+    ctx.fillStyle = '#8ff0f0'; ctx.fillRect(d.x - w / 2, d.y - R - 16, w * clamp(d.hp / d.maxHp, 0, 1), 3);
+  }
 },
 
 drawPhantom(ctx, ph) {
@@ -941,6 +1240,20 @@ drawPickups(ctx) {
       ctx.restore();
       ctx.globalAlpha = 0.3; ctx.fillStyle = '#ffd166';
       ctx.beginPath(); ctx.arc(p.x, p.y + bob, 8, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+    } else if (p.kind === 'data') {
+      const A = D.ABILITIES[p.ab];
+      const c = A ? A.color : '#9fd4ff';
+      ctx.save(); ctx.translate(p.x, p.y + bob); ctx.rotate(Math.sin(t + p.x * 0.02) * 0.3);
+      ctx.globalAlpha = 0.30; ctx.fillStyle = c;
+      ctx.beginPath(); ctx.arc(0, 0, 15 + Math.sin(t * 2) * 2, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(16,22,30,0.92)';
+      roundRect(ctx, -9, -11, 18, 22, 3); ctx.fill();
+      ctx.strokeStyle = c; ctx.lineWidth = 2;
+      roundRect(ctx, -9, -11, 18, 22, 3); ctx.stroke();
+      ctx.fillStyle = c;
+      for (let i = 0; i < 3; i++) ctx.fillRect(-5, -6 + i * 5, 10, 2);
+      ctx.restore();
     } else {
       const c = p.kind === 'repair' ? '#8dffb0' : '#9fd4ff';
       ctx.fillStyle = 'rgba(20,26,32,0.9)';
@@ -1027,6 +1340,7 @@ drawOffscreen(ctx, W, H) {
   const z = (this.cam.zoom || 1) / (this.dpr || 1);
   const marks = [];
   for (const o of this.objects) if (!o.dead) marks.push({ x: o.x, y: o.y, c: o.kind === 'tower' ? '#8fd4ff' : '#8dffb0' });
+  for (const p of this.pickups) if (p.kind === 'data') marks.push({ x: p.x, y: p.y, c: '#ffd166' });
   if (this.boss && !this.boss.dead) marks.push({ x: this.boss.x, y: this.boss.y, c: '#ff6a4a', big: true });
   else if (this.bossSite && this.sector.boss && this.objectives.filter((o) => o.id !== 'boss').every((o) => o.done >= o.need)) marks.push({ x: this.bossSite.x, y: this.bossSite.y, c: '#ff6a4a', big: true });
   for (const p of this.players) if (p.down) marks.push({ x: p.x, y: p.y, c: '#ff9a9a' });

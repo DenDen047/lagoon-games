@@ -45,6 +45,7 @@ class Field {
     this.markers = [];
     this.pickups = [];
     this.phantoms = [];
+    this.holos = [];            // ホログラム・デコイ
     this.enemies = [];
     this.objects = [];          // 通信塔・コンテナ
     this.boss = null;
@@ -53,7 +54,7 @@ class Field {
     this.toast = null; this.toastT = 0;
     this.banner = null; this.bannerT = 0;
 
-    this.reward = { scrap: 0, tickets: 0, kills: 0 };
+    this.reward = { scrap: 0, tickets: 0, kills: 0, samples: {} };
     this.build();
   }
 
@@ -74,11 +75,12 @@ class Field {
     if (this.training) return this.buildTraining();
     if (this.demo) { this.respawnQueue = []; this.trainStats = null; }
 
-    const lvMul = 1 + (s.lv - 1) * 0.28;
+    const lvMul = 1 + (s.lv - 1) * D.BALANCE.lvStep;
     this.lvMul = lvMul;
     const pool = [];
     for (const [id, n] of s.pool) for (let i = 0; i < n; i++) pool.push(id);
-    for (let i = 0; i < s.count; i++) {
+    const count = Math.max(4, Math.round(s.count * D.BALANCE.enemyCount));
+    for (let i = 0; i < count; i++) {
       const id = pool[i % pool.length];
       const def = D.ENEMIES[id];
       const pos = this.findSpot(760);
@@ -94,9 +96,10 @@ class Field {
       else if (o === 'crates') { this.spawnCrates(s.crates || 3); this.objectives.push({ id: 'crates', need: s.crates || 3, done: 0 }); }
       else if (o === 'commander') { this.spawnCommander(); this.objectives.push({ id: 'commander', need: 1, done: 0 }); }
     }
-    /* kill_all は指揮官・護衛を足したあとの総数で数える */
+    /* kill_all は指揮官・護衛を足したあとの総数で数える。
+       全滅まで探し回らずに済むよう、必要数は総数の一部でよい。 */
     const ko = this.objectives.find((x) => x.id === 'kill_all');
-    if (ko) ko.need = this.enemies.length;
+    if (ko) ko.need = Math.max(1, Math.ceil(this.enemies.length * D.BALANCE.killAllRatio));
     if (s.boss) {
       this.objectives.push({ id: 'boss', need: 1, done: 0, locked: true });
       this.bossSite = { x: W.w - 280, y: W.h - 280 };
@@ -212,6 +215,7 @@ class Field {
     this.updateMarkers(dt);
     this.updatePickups(dt);
     this.updatePhantoms(dt);
+    this.updateHolos(dt);
     this.separate(dt);
 
     this.parts.update(dt);
@@ -288,6 +292,13 @@ class Field {
     } else {
       m.aimX = m.x + Math.cos(m.aim) * 400; m.aimY = m.y + Math.sin(m.aim) * 400;
     }
+    if (m.lo.autoFire) {
+      /* 上体は主砲が自分で選んだ目標へ向く。カーソルはグレネードの落とし先 */
+      const w = m.weapon;
+      const t = this.autoTarget(m, (w && w.range) || 460);
+      m.autoTgt = t;
+      if (t) m.aim = angApproach(m.aim, angTo(m.x, m.y, t.x, t.y), dt * 8);
+    }
 
     /* ---- 移動 ---- */
     let spd = m.lo.speed;
@@ -353,7 +364,22 @@ class Field {
     if (inp.special && m.sp >= m.spMax && !m.specialState) this.startSpecial(m);
     if (m.specialState) this.runSpecial(m, dt);
 
-    this.updateWeapon(m, dt, inp.fire && m.rollT <= 0 && m.stun <= 0 && !m.blockFire);
+    m.bombCd = Math.max(0, m.bombCd - dt);
+    m.grenCd = Math.max(0, m.grenCd - dt);
+    if (inp.bomb && m.rollT <= 0 && m.stun <= 0) this.throwEmpBomb(m);
+    m.decoyCd = Math.max(0, m.decoyCd - dt);
+    if (inp.decoy && m.rollT <= 0 && m.stun <= 0) this.deployHolo(m);
+
+    const canAct = m.rollT <= 0 && m.stun <= 0 && !m.blockFire;
+    if (m.lo.autoFire) {
+      /* 四足機 ― 主砲は機体が自分で狙って撃つ。射撃キーはグレネード投擲 */
+      this.updateWeapon(m, dt, !!m.autoTgt && canAct);
+      if (inp.fire && canAct) this.throwGrenade(m);
+    } else {
+      this.updateWeapon(m, dt, inp.fire && canAct);
+    }
+    this.updateAttachments(m, dt);
+    this.updateDrones(m, dt);
   }
 
   /* タイトル背景で流すデモ用の自動操縦 */
@@ -432,7 +458,7 @@ class Field {
   updateWeapon(m, dt, firing) {
     const w = m.weapon;
     if (!w) return;
-    let rateMul = 1;
+    let rateMul = m.lo.rateMul || 1;
     if (m.has('overheat') && m.hp / m.maxHp <= 0.5) rateMul *= 1.35;
     if (m.specialState === 'full_salvo') rateMul *= 1.6;
     if (m.specialState === 'overboost') rateMul *= 1.9;
@@ -608,7 +634,8 @@ class Field {
       const b = this.bullets[i];
       b.t += dt; b.life -= dt;
       if (b.life <= 0) {
-        if (b.splash) this.explode(b.x, b.y, b.splash, b.dmg, b.el, b.team, b.owner);
+        if (b.empBomb) this.empBlast(b.x, b.y, b.owner);
+        else if (b.splash) this.explode(b.x, b.y, b.splash, b.dmg, b.el, b.team, b.owner);
         this.bullets.splice(i, 1); continue;
       }
       if (b.homing && !b.homing.dead && b.turn) {
@@ -627,7 +654,7 @@ class Field {
         if (t >= 0 && t < bestT) { bestT = t; hitWall = w; }
       }
 
-      const foes = b.team === 'ally' ? this.allFoes() : this.players;
+      const foes = b.team === 'ally' ? this.allFoes() : this.allyTargets();
       let hitT = null, hitTT = 2;
       for (const t of foes) {
         if (t.dead || (b.team === 'foe' && t.down)) continue;
@@ -648,6 +675,7 @@ class Field {
 
       if (hitT && hitTT <= bestT) {
         const hx = b.x + (nx - b.x) * hitTT, hy = b.y + (ny - b.y) * hitTT;
+        if (b.empBomb) { this.empBlast(hx, hy, b.owner); this.bullets.splice(i, 1); continue; }
         if (hitT.part) this.damageBossPart(this.boss, hitT.part, b.dmg, b.el, b.owner);
         else this.applyDamage(hitT, b.dmg, b.el, b.owner, { text: true, stun: b.stun });
         this.parts.dirSpark(hx, hy, b.ang + Math.PI, 5, b.color, 210, 1.0, 0.22, 2.2);
@@ -659,6 +687,7 @@ class Field {
 
       if (hitWall) {
         const hx = b.x + (nx - b.x) * bestT, hy = b.y + (ny - b.y) * bestT;
+        if (b.empBomb) { this.empBlast(hx, hy, b.owner); this.bullets.splice(i, 1); continue; }
         if (b.splash) { this.explode(hx, hy, b.splash, b.dmg, b.el, b.team, b.owner); this.bullets.splice(i, 1); continue; }
         if (b.bounce > 0) {
           b.bounce--;
@@ -688,7 +717,7 @@ class Field {
       if (t >= 0 && t < endT) endT = t;
     }
     let hx = x + (ex - x) * endT, hy = y + (ey - y) * endT;
-    const foes = team === 'ally' ? this.allFoes() : this.players;
+    const foes = team === 'ally' ? this.allFoes() : this.allyTargets();
     const hits = [];
     for (const t of foes) {
       if (t.dead || t.down) continue;
@@ -707,7 +736,7 @@ class Field {
     this.parts.explosion(x, y, r);
     this.cam.addShake(clamp(r / 12, 2, 12));
     this.audio.sfx(r > 110 ? 'boom' : 'explode');
-    const foes = team === 'ally' ? this.allFoes() : this.players;
+    const foes = team === 'ally' ? this.allFoes() : this.allyTargets();
     for (const t of foes) {
       if (!t || t.dead || (team === 'foe' && t.down)) continue;
       if (skip && skip.indexOf(t) >= 0) continue;
@@ -725,6 +754,17 @@ class Field {
     }
   }
 
+  /* 敵の攻撃が当たりうる味方（自機 + 随伴ドローン） */
+  allyTargets() {
+    const out = [];
+    for (const p of this.players) {
+      if (!p.dead) out.push(p);
+      for (const d of p.drones) if (!d.dead) out.push(d);
+    }
+    for (const h of this.holos) if (!h.dead) out.push(h);
+    return out;
+  }
+
   allFoes() {
     const out = [];
     for (const e of this.enemies) if (!e.dead) out.push(e);
@@ -737,7 +777,12 @@ class Field {
   applyDamage(t, amount, el, src, opt) {
     opt = opt || {};
     if (!t || t.dead) return 0;
-    if (t.team === 'ally') { this.hurtPlayer(t, amount, el, src); return amount; }
+    if (t.team === 'ally') {
+      if (t.isDrone) this.hurtDrone(t, amount);
+      else if (t.isHolo) this.hurtHolo(t, amount);
+      else this.hurtPlayer(t, amount, el, src);
+      return amount;
+    }
 
     const aff = D.affinityOf(el, t.armor || 'FRAME');
     let dmg = amount * aff;
@@ -780,7 +825,7 @@ class Field {
   hurtPlayer(m, amount, el, src, silent) {
     if (m.dead || m.down) return;
     if (m.iframe > 0 || m.rollT > 0) return;
-    let dmg = amount * (1 - m.lo.dr);
+    let dmg = amount * (1 - m.lo.dr) * D.BALANCE.enemyDmg;
     if (m.shieldT > 0) dmg *= 0.3;
     if (m.specialState === 'siege') dmg *= 0.5;
     if (dmg <= 0) return;
@@ -887,10 +932,15 @@ class Field {
       if (src.has('detonator')) this.explode(t.x, t.y, 96, 45, 'THR', 'ally', src, [t]);
     }
     this.reward.kills++;
-    const scrap = Math.round((t.def.scrap || 10) * (t.commander ? 4 : 1) * (1 + (this.sector.lv - 1) * 0.12));
+    const scrap = Math.round((t.def.scrap || 10) * D.BALANCE.scrap * (t.commander ? 4 : 1) * (1 + (this.sector.lv - 1) * 0.12));
     this.dropScrap(t.x, t.y, scrap);
-    if (Math.random() < (t.commander ? 1 : 0.11)) this.dropPickup(t.x, t.y, 'repair');
-    if (Math.random() < 0.09) this.dropPickup(t.x, t.y, 'ammo');
+    if (Math.random() < (t.commander ? 1 : D.BALANCE.dropRepair)) this.dropPickup(t.x, t.y, 'repair');
+    if (Math.random() < D.BALANCE.dropAmmo) this.dropPickup(t.x, t.y, 'ammo');
+    /* 能力データ ― 相手は機械なので、壊れた個体から機能を吸い出せる */
+    if (!this.training && !this.demo) {
+      const ab = t.commander ? 'ab_command' : t.def.ability;
+      if (ab && Math.random() < (t.commander ? 1 : 0.34)) this.dropData(t.x, t.y, ab);
+    }
 
     if (this.training || this.demo) {
       this.respawnQueue.push({ id: t.def.id, t: this.demo ? 1.6 : 3.0 });
@@ -912,6 +962,9 @@ class Field {
       this.pickups.push({ kind: 'scrap', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, v: Math.max(1, Math.round(amount / n)), r: 7, life: 40 });
     }
   }
+  dropData(x, y, ab) {
+    this.pickups.push({ kind: 'data', ab, x, y, vx: rnd(-60, 60), vy: rnd(-60, 60), r: 10, life: 60 });
+  }
   dropPickup(x, y, kind) {
     this.pickups.push({ kind, x, y, vx: rnd(-40, 40), vy: rnd(-40, 40), r: 11, life: 50 });
   }
@@ -926,7 +979,7 @@ class Field {
       let near = null, nd = 1e9;
       for (const m of this.players) { if (m.dead || m.down) continue; const d = dist(p.x, p.y, m.x, m.y); if (d < nd) { nd = d; near = m; } }
       if (!near) continue;
-      const range = p.kind === 'scrap' ? 140 : 64;
+      const range = p.kind === 'scrap' ? 140 : p.kind === 'data' ? 120 : 64;
       if (nd < range) {
         const a = angTo(p.x, p.y, near.x, near.y);
         const pull = lerp(560, 140, nd / range);
@@ -936,12 +989,18 @@ class Field {
         if (p.kind === 'scrap') {
           const gain = Math.round(p.v * (near.has('scavenger') ? 1.3 : 1));
           this.reward.scrap += gain; near.scrapGained += gain;
+        } else if (p.kind === 'data') {
+          const A = D.ABILITIES[p.ab];
+          this.reward.samples[p.ab] = (this.reward.samples[p.ab] || 0) + 1;
+          this.ft.add(near.x, near.y - 40, `+${A ? A.name : '能力データ'}`, A ? A.color : '#9fd4ff', 13, 1.3);
         } else if (p.kind === 'repair') {
           near.hp = Math.min(near.maxHp, near.hp + near.maxHp * 0.3);
           this.ft.add(near.x, near.y - 38, '+修復', '#8dffb0', 14, 1);
         } else {
           for (const w of near.lo.weapons) { w.ammo = w.mag; w.reloading = 0; }
-          this.ft.add(near.x, near.y - 38, '+弾薬', '#9fd4ff', 14, 1);
+          near.bombs = D.EMP_BOMB.charges;
+          near.decoys = D.HOLO_DECOY.charges;
+          this.ft.add(near.x, near.y - 38, '+弾薬 / EMP / デコイ', '#9fd4ff', 14, 1);
         }
         this.audio.sfx('pickup');
         this.pickups.splice(i, 1);
@@ -970,6 +1029,233 @@ class Field {
     }
   }
 }
+
+
+/* =========================================================================
+   自動武装・随伴ドローン・投擲物
+   Field.prototype に足す。
+   ========================================================================= */
+Object.assign(Field.prototype, {
+
+/* 射程内でいちばん近く、視線の通る敵。cone を渡すと正面のその角度内だけ見る */
+autoTarget(src, range, cone) {
+  let best = null, bd = Infinity;
+  for (const t of this.allFoes()) {
+    const d = dist(src.x, src.y, t.x, t.y);
+    if (d > range + t.r) continue;
+    if (cone != null && Math.abs(angDiff(src.aim != null ? src.aim : src.ang, angTo(src.x, src.y, t.x, t.y))) > cone) continue;
+    if (!hasLOS(this.world, src.x, src.y, t.x, t.y, false)) continue;
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+},
+
+/* ---------------- 装着武装（前面 / 背面） ---------------- */
+updateAttachments(m, dt) {
+  for (const a of m.attach) {
+    a.flash = Math.max(0, (a.flash || 0) - dt * 6);
+    if (a.kind === 'drone') continue;
+    if (a.regen && m.hp > 0 && !m.down) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * (a.regen / 100) * dt);
+    a.cool -= dt * (m.lo.rateMul || 1);
+    /* 前面固定は正面 70 度だけ、背面は旋回するので全周 */
+    const t = this.autoTarget(m, a.range, a.slot === 'front' ? deg(70) : null);
+    a.target = t;
+    if (t) {
+      const ta = angTo(m.x, m.y, t.x, t.y);
+      a.yawAng = a.yaw ? angApproach(a.yawAng == null ? m.aim : a.yawAng, ta, dt * 5.5) : ta;
+    } else if (a.yaw) {
+      a.yawAng = angApproach(a.yawAng == null ? m.aim : a.yawAng, m.aim + Math.PI, dt * 2);
+    }
+    if (!t || a.cool > 0 || m.stun > 0) continue;
+    a.cool = 60 / a.rpm;
+    this.fireAttachment(m, a, t);
+  }
+},
+
+fireAttachment(m, a, t) {
+  const base = a.yaw ? a.yawAng : angTo(m.x, m.y, t.x, t.y);
+  const off = a.slot === 'front' ? m.r + 8 : -m.r * 0.4;
+  const px = m.x + Math.cos(base) * off, py = m.y + Math.sin(base) * off;
+  for (let v = 0; v < a.salvo; v++) {
+    for (let i = 0; i < a.pellets; i++) {
+      const sp = deg(a.spread || 0);
+      const ang = base + rnd(-sp, sp) + (a.salvo > 1 ? rnd(-0.16, 0.16) : 0);
+      this.spawnBullet({
+        x: px, y: py, ang, speed: a.bspeed * rnd(0.95, 1.05), dmg: a.dmg, el: a.el,
+        team: 'ally', owner: m, size: a.bsize || 3, range: a.range * 1.15,
+        pierce: a.pierce || 0, splash: a.splash || 0,
+        homing: a.kind === 'homing' ? t : null, turn: a.turn || 0,
+        lob: a.kind === 'lob', stun: a.stun || 0, color: D.ELEMENTS[a.el].color,
+      });
+    }
+  }
+  a.flash = 1;
+  this.parts.dirSpark(px, py, base, 3, '#ffe9b0', 190, 0.5, 0.14, 2);
+  this.audio.sfx(a.dmg >= 28 ? 'shotBig' : 'shot');
+},
+
+/* ---------------- 随伴ドローン ---------------- */
+updateDrones(m, dt) {
+  const bay = m.attach.find((a) => a.kind === 'drone');
+  if (!bay) { m.drones.length = 0; return; }
+
+  for (let i = m.drones.length - 1; i >= 0; i--) if (m.drones[i].dead) m.drones.splice(i, 1);
+  m.droneT -= dt;
+  if (!m.dead && !m.down && m.drones.length < bay.drones && m.droneT <= 0) {
+    m.droneT = 3.2;
+    m.drones.push({
+      isDrone: true, team: 'ally', owner: m, r: 9, dead: false, hitFlash: 0,
+      x: m.x, y: m.y, ang: m.aim, off: rnd(TAU), spin: rnd(TAU),
+      cool: rnd(0.1, 0.6), hp: bay.droneHp, maxHp: bay.droneHp,
+    });
+    this.parts.ring(m.x, m.y, '#8ff0f0', 6, 40, 0.4, 3);
+  }
+
+  for (const d of m.drones) {
+    d.hitFlash = Math.max(0, d.hitFlash - dt * 4);
+    d.spin += dt * 26;
+    d.off += dt * 1.4;
+    const tx = m.x + Math.cos(d.off) * 58, ty = m.y + Math.sin(d.off) * 58;
+    d.x = lerp(d.x, tx, 1 - Math.pow(0.0016, dt));
+    d.y = lerp(d.y, ty, 1 - Math.pow(0.0016, dt));
+    const t = this.autoTarget(d, bay.range);
+    if (!t) { d.ang = angApproach(d.ang, m.aim, dt * 5); continue; }
+    d.ang = angApproach(d.ang, angTo(d.x, d.y, t.x, t.y), dt * 9);
+    d.cool -= dt * (m.lo.rateMul || 1);
+    if (d.cool > 0) continue;
+    d.cool = 60 / bay.rpm;
+    this.spawnBullet({
+      x: d.x + Math.cos(d.ang) * 12, y: d.y + Math.sin(d.ang) * 12, ang: d.ang + rnd(-0.05, 0.05),
+      speed: bay.bspeed, dmg: bay.dmg, el: bay.el, team: 'ally', owner: m,
+      size: bay.bsize || 2.6, range: bay.range * 1.15, color: D.ELEMENTS[bay.el].color,
+    });
+    this.parts.dirSpark(d.x, d.y, d.ang, 2, '#a8f0f0', 150, 0.4, 0.12, 1.8);
+  }
+},
+
+hurtDrone(d, amount) {
+  if (d.dead) return;
+  d.hp -= amount;
+  d.hitFlash = 1;
+  if (d.hp > 0) return;
+  d.dead = true;
+  this.parts.explosion(d.x, d.y, 36);
+  this.audio.sfx('explode');
+},
+
+/* ---------------- 手投げグレネード（四足機の手動攻撃） ---------------- */
+throwGrenade(m) {
+  if (m.grenCd > 0) return;
+  const G = D.HAND_GRENADE;
+  m.grenCd = G.cool / (m.lo.rateMul || 1);
+  const a = angTo(m.x, m.y, m.aimX, m.aimY);
+  const d = clamp(dist(m.x, m.y, m.aimX, m.aimY), 70, G.range);
+  this.spawnBullet({
+    x: m.x + Math.cos(a) * (m.r + 8), y: m.y + Math.sin(a) * (m.r + 8), ang: a,
+    speed: G.speed, dmg: G.dmg * m.lo.dmgMul, el: G.el, team: 'ally', owner: m,
+    size: G.bsize, range: d, splash: G.splash, lob: true, color: '#ff9a5c',
+  });
+  m.muzzle = 1;
+  this.parts.dirSpark(m.x, m.y, a, 4, '#ffc07a', 160, 0.6, 0.2, 2.2);
+  this.audio.sfx('shot');
+},
+
+/* ---------------- EMP 爆弾 ---------------- */
+throwEmpBomb(m) {
+  if (m.bombCd > 0 || m.bombs <= 0) return;
+  const B = D.EMP_BOMB;
+  m.bombs--;
+  m.bombCd = B.cooldown;
+  const a = angTo(m.x, m.y, m.aimX, m.aimY);
+  const d = clamp(dist(m.x, m.y, m.aimX, m.aimY), 70, 520);
+  const b = this.spawnBullet({
+    x: m.x + Math.cos(a) * (m.r + 8), y: m.y + Math.sin(a) * (m.r + 8), ang: a,
+    speed: d / B.flight, dmg: 0, el: B.el, team: 'ally', owner: m,
+    size: 6, range: d, lob: true, color: '#c58cff',
+  });
+  b.empBomb = true;
+  this.ft.add(m.x, m.y - 40, `EMP 残り ${m.bombs}`, '#c58cff', 12, 0.9);
+  this.audio.sfx('reload');
+},
+
+/* ---------------- ホログラム・デコイ ---------------- */
+deployHolo(m) {
+  const G = D.HOLO_DECOY;
+  if (m.decoyCd > 0 || m.decoys <= 0) return;
+  m.decoys--;
+  m.decoyCd = G.cooldown;                       // 連射はできない
+  const h = {
+    isHolo: true, team: 'ally', owner: m, r: m.r, dead: false, hitFlash: 0,
+    x: m.x, y: m.y, ang: m.ang, aim: m.aim, walkPhase: m.walkPhase,
+    battery: G.battery, maxBattery: G.battery,
+    muzzle: 0, down: false, has: () => false,
+  };
+  this.holos.push(h);
+  this.parts.ring(m.x, m.y, 'rgba(120,200,255,0.85)', 8, 90, 0.45, 5);
+  this.parts.spark(m.x, m.y, 14, '#8fd4ff', 200, 0.5, 2.4);
+  this.ft.add(m.x, m.y - 44, `デコイ展開 残り ${m.decoys}`, '#8fd4ff', 13, 1.2);
+  this.audio.sfx('special');
+},
+
+updateHolos(dt) {
+  for (let i = this.holos.length - 1; i >= 0; i--) {
+    const h = this.holos[i];
+    h.hitFlash = Math.max(0, h.hitFlash - dt * 4);
+    h.battery -= dt;                            // 電池は放っておいても減る
+    /* その場で立ち姿を少し揺らす。像なので歩きはしない */
+    h.aim += Math.sin(this.time * 1.6 + h.x * 0.01) * dt * 0.6;
+    h.walkPhase += dt * 1.2;
+    if (Math.random() < dt * 10) {
+      this.parts.add({ x: h.x + rnd(-h.r, h.r), y: h.y + rnd(-h.r, h.r), vx: 0, vy: -20,
+        life: 0.3, max: 0.3, color: '#8fd4ff', size: rnd(1.5, 3), drag: 1, kind: 'spark' });
+    }
+    if (h.battery > 0) continue;
+    this.holos.splice(i, 1);
+    h.dead = true;
+    this.parts.ring(h.x, h.y, 'rgba(120,200,255,0.7)', 10, 70, 0.35, 4);
+    this.ft.add(h.x, h.y - 30, '電池切れ', '#8fd4ff', 13, 1.0);
+    this.audio.sfx('reload');
+  }
+},
+
+hurtHolo(h, amount) {
+  if (h.dead) return;
+  /* ダメージは通らない。撃たれたぶんだけ電池が早く尽きる */
+  h.battery -= (amount / 10) * D.HOLO_DECOY.drainPerHit;
+  h.hitFlash = 1;
+  this.parts.spark(h.x, h.y, 3, '#8fd4ff', 160, 0.3, 2);
+},
+
+/* 着弾点にいちばん近い敵 1 体だけを止める */
+empBlast(x, y, owner) {
+  const B = D.EMP_BOMB;
+  this.parts.ring(x, y, 'rgba(197,140,255,0.9)', 12, B.radius, 0.6, 8);
+  this.parts.spark(x, y, 24, '#e0c0ff', 320, 0.7, 3);
+  this.cam.addShake(7);
+  this.audio.sfx('special');
+  this.addHazard({ kind: 'emp', x, y, r: B.radius * 0.7, dps: 0, el: B.el, team: 'ally', owner, life: 1.2 });
+
+  let best = null, bd = Infinity;
+  for (const t of this.allFoes()) {
+    const d = dist(x, y, t.x, t.y);
+    if (d > B.radius + t.r) continue;
+    this.applyDamage(t, B.dmg, B.el, owner, { text: true });
+    if (t.dead || t.kind) continue;                 // 塔・的は停止対象にしない
+    if (d < bd) { bd = d; best = t; }
+  }
+  if (!best) return;
+  if (best.isBoss) {
+    best.stun = Math.max(best.stun || 0, B.bossStun);
+    this.ft.add(best.x, best.y - best.r, '麻痺', '#c58cff', 15, 1.3);
+    return;
+  }
+  best.disableT = B.disable;
+  best.stun = Math.max(best.stun || 0, B.disable);
+  this.parts.ring(best.x, best.y, '#c58cff', 8, 76, 0.5, 4);
+  this.ft.add(best.x, best.y - best.r - 10, '機能停止', '#c58cff', 16, 1.8);
+},
+
+});
 
 window.MRBattle = { Field };
 })();

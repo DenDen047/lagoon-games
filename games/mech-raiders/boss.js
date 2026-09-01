@@ -17,6 +17,12 @@ function nearestPlayer(field, b) {
     if (p.down) d *= 4;
     if (d < bd) { bd = d; best = p; }
   }
+  /* ボスもホログラムには騙される。ただし引きは弱い */
+  for (const h of field.holos) {
+    if (h.dead) continue;
+    const d = dist2(b.x, b.y, h.x, h.y) * 0.6;
+    if (d < bd) { bd = d; best = h; }
+  }
   return best;
 }
 

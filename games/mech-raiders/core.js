@@ -89,11 +89,11 @@ function segCircle(x1, y1, x2, y2, cx, cy, r) {
 const KEYMAP = {
   1: {
     up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
-    fire: ['Space_never'], roll: ['Space'], special: ['KeyQ'], swap: ['KeyE'], lock: ['Tab'],
+    fire: ['Space_never'], roll: ['Space'], special: ['KeyQ'], swap: ['KeyE'], lock: ['Tab'], bomb: ['KeyF'], decoy: ['KeyG'],
   },
   2: {
     up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'],
-    fire: ['ShiftRight', 'Period'], roll: ['Slash', 'ControlRight'], special: ['Comma'], swap: ['KeyM'], lock: ['KeyN'],
+    fire: ['ShiftRight', 'Period'], roll: ['Slash', 'ControlRight'], special: ['Comma'], swap: ['KeyM'], lock: ['KeyN'], bomb: ['KeyL'], decoy: ['KeyK'],
   },
 };
 
@@ -143,6 +143,8 @@ class Input {
       special: this.anyHit(m.special),
       swap: this.anyHit(m.swap),
       lock: this.anyHit(m.lock),
+      bomb: this.anyHit(m.bomb || []),
+      decoy: this.anyHit(m.decoy || []),
     };
     if (ax || ay) { const n = Math.hypot(ax, ay); out.mx = ax / n; out.my = ay / n; }
     return out;
@@ -384,8 +386,17 @@ function defaultSave() {
     frames:  { vanguard: { lv: 1, lb: 0, n: 1 }, jackal: { lv: 1, lb: 0, n: 1 }, gtitan: { lv: 1, lb: 0, n: 1 } },
     weapons: { ar12: { lv: 1, lb: 0, n: 1 }, db8: { lv: 1, lb: 0, n: 1 } },
     cores:   { core_std: { lv: 1, lb: 0, n: 1 } },
-    loadout: { 1: { frame: 'vanguard', main: 'ar12', sub: 'db8', core: 'core_std' },
-               2: { frame: 'gtitan', main: 'ar12', sub: 'db8', core: 'core_std' } },
+    attachments: { f_vulcan: { lv: 1, lb: 0, n: 1 }, b_turret: { lv: 1, lb: 0, n: 1 } },
+    skins:   { skin_std: { lv: 1, lb: 0, n: 1 }, skin_custom: { lv: 1, lb: 0, n: 1 } },
+    /* 敵から回収した能力データ: abilityId -> 個数 */
+    samples: {},
+    loadout: { 1: { frame: 'vanguard', main: 'ar12', sub: 'db8', core: 'core_std', front: null, back: 'b_turret',
+                    skin: 'skin_std', custom: { body: '#5b7fa8', trim: '#9fd4ff', accent: '#ffd166', decal: '' } },
+               2: { frame: 'gtitan', main: 'ar12', sub: 'db8', core: 'core_std', front: null, back: null,
+                    skin: 'skin_std', custom: { body: '#7a5a3c', trim: '#ffd9a0', accent: '#7cf3ff', decal: '' } } },
+    /* 基地 ― 訪問回数と、司令官との会話をどこまで見たか */
+    base: { visits: 0, talk: 0, room: {} },
+    pilot: { name: 'ノヴァ', callsign: 'RAIDER-01' },
     cleared: {},        // sectorId -> { best: 秒, rank: 'S' }
     pity: 0,            // SSR 天井カウンタ
     totalKills: 0,
@@ -403,10 +414,23 @@ function normalize(d) {
   d.frames = Object.assign({}, base.frames, d.frames);
   d.weapons = Object.assign({}, base.weapons, d.weapons);
   d.cores = Object.assign({}, base.cores, d.cores);
+  d.attachments = Object.assign({}, base.attachments, d.attachments);
+  d.skins = Object.assign({}, base.skins, d.skins);
+  d.samples = Object.assign({}, d.samples);
+  d.base = Object.assign({}, base.base, d.base);
+  d.base.room = Object.assign({}, d.base.room);
+  d.pilot = Object.assign({}, base.pilot, d.pilot);
   if (!d.loadout) d.loadout = base.loadout;
   for (const pid of [1, 2]) {
     if (!d.loadout[pid]) d.loadout[pid] = Object.assign({}, base.loadout[pid]);
-    if (!d.frames[d.loadout[pid].frame]) d.loadout[pid].frame = 'vanguard';
+    const lo = d.loadout[pid];
+    if (!d.frames[lo.frame]) lo.frame = 'vanguard';
+    if (lo.front === undefined) lo.front = null;
+    if (lo.back === undefined) lo.back = null;
+    if (!lo.skin || !d.skins[lo.skin]) lo.skin = 'skin_std';
+    lo.custom = Object.assign({ body: '#5b7fa8', trim: '#9fd4ff', accent: '#ffd166', decal: '' }, lo.custom);
+    if (lo.front && !d.attachments[lo.front]) lo.front = null;
+    if (lo.back && !d.attachments[lo.back]) lo.back = null;
   }
   return d;
 }
