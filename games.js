@@ -24,6 +24,17 @@ const GAMES = [
     },
   },
   {
+    slug: 'castaway-planet', genre: 'sandbox', players: '1P', date: '2026-09-01',
+    ja: {
+      title: 'CASTAWAY PLANET ― 墜ちた星の暮らし',
+      desc: '宇宙船が墜ちた星で暮らしながら、船を直して次の星へ渡っていく見下ろし2Dのサンドボックス。畑を耕して種を蒔き、鉱脈を掘り、作業台や製錬炉を好きな場所に建てる。組み立てたロボットは自分で乗り込んで動かすもので、左右の手にドリル・散水・播種・収穫アームを付け替えると3×3をまとめて作業できる。機体の色は4か所とも自由に変えられる。一つ目で口の大きな四足獣ガルパは、餌をあげるとなつき、背に乗って走れる。惑星は4つ、それぞれ植物も鉱石も宇宙人も違う。',
+    },
+    en: {
+      title: 'Castaway Planet',
+      desc: 'A top-down survival sandbox about crashing on an alien world and slowly building your way off it — till and sow fields, dig ore veins, and drop workbenches and smelters wherever you like. The robot you build is not a helper that works on its own: you climb in and pilot it, swapping the arms on its left and right hands (drill, sprinkler, seeder, harvester) to work a whole 3×3 at once, and repainting all four of its colours. Feed the one-eyed, big-mouthed quadruped and it will carry you. Four planets, each with its own plants, ores and neighbours.',
+    },
+  },
+  {
     slug: 'walled-wolves', genre: 'puzzle', players: '1P', date: '2026-08-25',
     ja: {
       title: 'WALLED WOLVES ― 壁の中の人狼',

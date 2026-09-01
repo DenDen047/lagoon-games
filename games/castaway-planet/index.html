@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>CASTAWAY PLANET ― 墜ちた星の暮らし</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= HUD ================= -->
+<div id="hud">
+  <div id="topbar">
+    <div class="panel" id="timeBox">
+      <span id="planetName">―</span>
+      <span class="sep"></span>
+      <span id="day">1日目</span>
+      <span id="clock">07:00</span>
+    </div>
+    <div class="panel" id="vitals">
+      <div class="bar"><span class="lbl">体力</span><div class="track"><div id="hpFill" class="fill hp"></div></div></div>
+      <div class="bar"><span class="lbl">元気</span><div class="track"><div id="stFill" class="fill st"></div></div></div>
+    </div>
+    <div class="panel" id="robotBox">
+      <div class="bar"><span class="lbl">🔋</span><div class="track"><div id="battFill" class="fill batt"></div></div></div>
+      <div class="bar"><span class="lbl">💧</span><div class="track"><div id="waterFill" class="fill water"></div></div></div>
+      <div class="arms">
+        <span id="armL" class="arm">左 ―</span>
+        <span id="armR" class="arm">右 ―</span>
+      </div>
+      <div id="seedBox" class="seed"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="quest">🛰 <span id="questText"></span></div>
+
+  <div id="sidebtns">
+    <button class="rbtn" id="btnE" title="調べる (E)">E</button>
+    <button class="rbtn" id="btnBag" title="持ち物 (Tab)">🎒</button>
+    <button class="rbtn" id="btnCraft" title="作る (C)">🛠️</button>
+    <button class="rbtn" id="btnHelp2" title="遊びかた (H)">？</button>
+  </div>
+
+  <div id="prompt"><span class="key">E</span><span id="promptText"></span></div>
+  <div id="hotbar"></div>
+</div>
+
+<div id="toasts"></div>
+
+<!-- ================= パネル ================= -->
+<div id="panelWrap">
+  <div id="panel">
+    <div id="panelHead">
+      <h2 id="panelTitle"></h2>
+      <button id="panelClose">✕</button>
+    </div>
+    <div id="panelBody"></div>
+    <div id="panelFoot"></div>
+  </div>
+</div>
+
+<!-- ================= タイトル ================= -->
+<div id="titleScreen">
+  <div class="tcard">
+    <h1>CASTAWAY PLANET</h1>
+    <p class="sub">墜ちた星の暮らし</p>
+    <p class="lead">
+      補給船が未知の星に不時着した。帰る道はひとつ ―
+      畑を耕し、鉱脈を掘り、ロボットを組み立てて、壊れた船を直すこと。
+      星には星の植物と鉱石と、先に住んでいる者たちがいる。
+    </p>
+    <div class="tbtns">
+      <button class="btn primary" id="btnNew">新しく始める</button>
+      <button class="btn" id="btnContinue">つづきから</button>
+      <button class="btn ghost" id="btnHelp">操作を見る</button>
+    </div>
+    <p id="newWarn">今のセーブデータは消えます。もう一度押すと最初から始まります。</p>
+    <div id="titleHelp">
+      <div class="kgrid">
+        <div><b>WASD / 矢印</b><span>歩く</span></div>
+        <div><b>左クリック</b><span>手に持った道具を使う</span></div>
+        <div><b>E</b><span>調べる・乗る・降りる</span></div>
+        <div><b>1〜9</b><span>手に持つものを選ぶ</span></div>
+        <div><b>Tab</b><span>持ち物</span></div>
+        <div><b>C</b><span>作る</span></div>
+        <div><b>Q</b><span>ロボットの使う手を替える</span></div>
+        <div><b>右クリック</b><span>ロボットの左手</span></div>
+      </div>
+      <p class="hint">スマートフォンでは、画面の左半分をなぞって移動、右半分をタップして操作します。</p>
+    </div>
+    <p class="foot">セーブは自動。データはこの端末のブラウザにだけ残ります。</p>
+  </div>
+</div>
+
+<!-- ================= エンディング ================= -->
+<div id="endScreen">
+  <div class="tcard">
+    <h1>帰還</h1>
+    <div id="endBody"></div>
+    <div class="tbtns">
+      <button class="btn primary" id="btnRestart">もう一度はじめから</button>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="robot.js"></script>
+<script src="render.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
