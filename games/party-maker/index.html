@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PARTY MAKER ― みんなでつくる大会</title>
+<meta name="description" content="1台の画面を順番に回して遊ぶ2〜5人のパーティーゲーム。おえかき・クイズ・れんそうなど6種のミニゲームを、誰か1人が番組表に組んで進めます。" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <header id="hud" hidden>
+    <div id="roundTag"></div>
+    <div id="scoreStrip"></div>
+  </header>
+  <main id="stage"></main>
+</div>
+
+<script src="data.js"></script>
+<script src="ui.js"></script>
+<script src="paint.js"></script>
+<script src="minigames.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

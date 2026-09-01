@@ -9,6 +9,7 @@ const GENRES = [
   { id: 'sandbox',  ja: 'サンドボックス・生活', en: 'Sandbox & Life' },
   { id: 'sports',   ja: 'スポーツ',         en: 'Sports' },
   { id: 'puzzle',   ja: '推理',             en: 'Deduction' },
+  { id: 'party',    ja: 'パーティー',       en: 'Party' },
 ];
 
 const GAMES = [
@@ -21,6 +22,17 @@ const GAMES = [
     en: {
       title: 'Moko God',
       desc: 'A god game about the Moko from Castaway Planet, in which you are the white, haloed one they tell stories about. It opens as a bedtime picture book — a Moko parent reading to two children, the plates drawn like woodcuts in an old volume — and when the book closes you wake up on the clouds as the god in it. Name the planet, walk the cloud islands, watch the world through the sky window, and spend faith at the altar: raise land out of the sea, grow forests, put animals on the ground, found towns, send rain and sun, or throw down lightning if you would rather be feared. Towns grow through six ages, from grass nests to lit spires, and you can take the descent gate down and walk among the Mokos yourself. At the far edge of the clouds a black castle waits for the day your faith is strong enough to bridge it. Saves automatically; plays on phones and tablets.',
+    },
+  },
+  {
+    slug: 'party-maker', genre: 'party', players: '2–5P', date: '2026-09-01',
+    ja: {
+      title: 'PARTY MAKER ― みんなでつくる大会',
+      desc: '1台の画面を順番に回して遊ぶ、2〜5人のターン制パーティーゲーム。キャラクターを動かす場面はひとつもない。まず誰か1人が「今日はどのミニゲームを何回やるか」という番組表を組み、出題者と得点2倍ラウンドを決めてから始める。ミニゲームは6種。看板はおえかきクイズで、描いた人が正解の言葉を決め、その言葉を打てた人の勝ち。ほかに自作の4択クイズ、3ヒントクイズ、かずあて、れんそう、伝言おえかきがある。秘密を打つ前には必ず「○○さんだけが見る画面です」の一枚がはさまる。',
+    },
+    en: {
+      title: 'Party Maker',
+      desc: 'A pass-the-screen party game for 2–5 players in which nobody ever controls a character. One player first builds the running order — which of the six minigames get played, in what order, who hosts each one, and which round is worth double — and everyone then takes turns down that programme. The headline game is draw-and-guess: whoever drew also decides the answer, and the first player to type it wins the round. Alongside it are a build-your-own multiple choice quiz, a three-hint quiz, a hidden-number hunt, a word association round, and a drawing telephone. A for-your-eyes-only card comes up before every secret is typed.',
     },
   },
   {
