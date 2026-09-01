@@ -72,11 +72,11 @@ const GAMES = [
     slug: 'mech-raiders', genre: 'shooter', players: '1–2P', date: '2026-08-25',
     ja: {
       title: 'MECH RAIDERS ― 鋼鉄機兵',
-      desc: 'セクターに降下して敵機を自分で探して潰す見下ろし型のロボット戦。92HPの俊足機から340HPの重装機まで10機、それぞれに必殺技がある。武器とコアのガチャ、セクター末のボス、セーブスロット3枠、装甲別の的とDPS表示つきの練習場。1人でも、同じキーボードで2人でも遊べる。',
+      desc: 'セクターに降下して敵機を自分で探して潰す見下ろし型のロボット戦。拠点は艦内を歩ける母艦アークライトで、発進口・整備ハンガー・補給廠・研究室・訓練場・自室・指令室をたずねて出撃の支度をする。機体は92HPの俊足機から340HPの重装機まで18機、砲を機体が自分で狙って撃つ四足機もいる。前面と背面の装着武装、随伴ドローン、自分で塗れる外装、撃破した敵から吸い出す能力データでの作成。武器とコアのガチャ、セクター末のボス、セーブスロット3枠、装甲別の的とDPS表示つきの練習場。1人でも、同じキーボードで2人でも遊べる。',
     },
     en: {
       title: 'Mech Raiders',
-      desc: 'A top-down mech shooter where you are dropped into a sector and have to hunt the enemy machines down — ten frames from a 92-HP sprinter to a tread-footed 340-HP titan, each with its own ultimate, plus a gacha for weapons and cores and a boss at the end of every sector. Three save slots, a training range with one target per armour type and a live DPS readout, and solo or two players on one keyboard.',
+      desc: 'A top-down mech shooter where you are dropped into a sector and have to hunt the enemy machines down. Between sorties you walk the decks of the carrier Arc-Light, stepping into the launch bay, hangar, supply depot, lab, training range, your own quarters and the command room. Eighteen frames from a 92-HP sprinter to a tread-footed 340-HP titan, including four-legged machines that aim and fire their one gun themselves; bolt-on front and back weapons, an escort drone, skins you can repaint yourself, and ability data drained from the wrecks to build new parts in the lab. A gacha for weapons and cores, a boss at the end of every sector, three save slots, a training range with one target per armour type and a live DPS readout, and solo or two players on one keyboard.',
     },
   },
   {
