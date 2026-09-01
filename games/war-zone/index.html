@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>WARZONE 2D ― 戦場</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ===== ゲーム画面 ===== -->
+    <div id="stage-wrap">
+      <canvas id="game" width="960" height="600"></canvas>
+
+      <!-- HUD -->
+      <div id="hud">
+        <div class="hud-top">
+          <div class="objective"><span id="daytime" class="daytime">🌅 朝</span><b id="score-goal">他3軍の基地をすべて破壊</b></div>
+          <div id="team-board" class="team-board"></div>
+        </div>
+        <div class="hud-bottom">
+          <div class="vitals">
+            <div class="hp-row">
+              <span class="hp-bar"><span id="hp-fill" class="fill"></span></span>
+              <span id="hp-text" class="hp-text">100</span>
+            </div>
+            <div id="recovery-text" class="recovery-text">5秒間被弾なしで自動回復</div>
+            <div class="xp-row">
+              <span class="lv">Lv <b id="lv-text">1</b></span>
+              <span class="xp-bar"><span id="xp-fill" class="fill"></span></span>
+            </div>
+          </div>
+        </div>
+        <div class="weapon">
+          <span id="weapon-name" class="wname">アサルトライフル</span>
+          <span id="ammo-text" class="ammo">30 / 30</span>
+          <span id="grenade-text" class="grenade-count">💣 3　🧨 2</span>
+          <div class="equipment-status">
+            <div class="equip-row armor"><span class="equip-label">鎧</span><span class="equip-bar"><span id="armor-fill"></span></span><b id="armor-text">100</b></div>
+            <div class="equip-row shield"><span class="equip-label">盾</span><span class="equip-bar"><span id="shield-fill"></span></span><b id="shield-text">160</b></div>
+            <span id="shield-state" class="shield-state">Qを攻撃直前に押してパリィ</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="vehicle-hint" class="vehicle-hint hidden"></div>
+
+      <!-- 練習場のチュートリアル -->
+      <div id="training-panel" class="training-panel hidden">
+        <div class="tp-head"><span class="tp-title">🎯 練習メニュー</span><span id="tp-progress" class="tp-progress">0 / 0</span></div>
+        <ul id="tp-steps" class="tp-steps"></ul>
+        <button id="tp-skip" class="tp-skip">この項目をとばす</button>
+      </div>
+
+      <!-- ミニマップ -->
+      <canvas id="minimap" width="160" height="106"></canvas>
+
+      <!-- キルフィード -->
+      <div id="killfeed"></div>
+
+      <!-- 上部ボタン -->
+      <div id="topbtns">
+        <button id="btn-help" class="ui-btn" aria-label="あそびかた">?</button>
+        <button id="btn-mute" class="ui-btn" aria-label="ミュート">🔊</button>
+        <button id="btn-menu" class="ui-btn" aria-label="メニュー">≡</button>
+      </div>
+
+      <!-- レベルアップ通知 -->
+      <div id="levelup" class="hidden"></div>
+
+      <!-- 実績獲得の通知 -->
+      <div id="medal-toast" class="medal-toast hidden"></div>
+
+      <!-- ===== 拠点（庭）のHUD ===== -->
+      <div id="garden-hud" class="garden-hud hidden">
+        <div class="garden-bar">
+          <span class="gb-title">🏕 拠点</span>
+          <span class="gb-wallet">💰 <b data-wallet-money>0</b> G</span>
+          <span class="gb-wallet">🔩 <b data-wallet-scrap>0</b></span>
+          <span class="gb-wallet">🎫 <b data-wallet-ticket>0</b></span>
+          <button id="btn-garden-menu" class="ui-btn">≡ メニュー</button>
+        </div>
+        <div id="garden-prompt" class="garden-prompt hidden"></div>
+        <p class="garden-help">WASD / 矢印キーで歩く　E で建物に入る・ロボットに乗る</p>
+      </div>
+
+      <!-- ===== 拠点のタッチ操作 ===== -->
+      <div id="garden-touch" class="hidden">
+        <div id="stick-garden" class="stick"><div class="knob"></div></div>
+        <button id="g-enter" class="tbtn action">アクション</button>
+      </div>
+
+      <!-- ===== タッチ操作 (スマホ) ===== -->
+      <div id="touch" class="hidden">
+        <div id="stick-move" class="stick"><div class="knob"></div></div>
+        <div id="stick-aim" class="stick"><div class="knob"></div></div>
+        <div id="touch-btns">
+          <button id="t-grenade" class="tbtn action">💣 投げる</button>
+          <button id="t-mine" class="tbtn action">🧨 地雷</button>
+          <button id="t-wire" class="tbtn action hidden">🪤 鉄線</button>
+          <button id="t-ult" class="tbtn ult-btn hidden">✈️ 必殺技</button>
+          <button id="t-action" class="tbtn action">アクション</button>
+          <button id="t-shield" class="tbtn shield-btn">🛡 盾</button>
+          <button id="t-reload" class="tbtn">リロード</button>
+          <button id="t-swap" class="tbtn">武器</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== メニュー / ロビー ===== -->
+    <div id="menu" class="overlay">
+      <div class="panel">
+        <h1>WARZONE <span class="sub">2D ― 戦場</span></h1>
+        <p class="lead">見下ろし型の本格2D戦争シューター。基地と軍用犬を活用し、足音を察知して戦え。</p>
+
+        <label class="field">
+          <span>あなたの名前</span>
+          <input id="name-input" type="text" maxlength="12" placeholder="Soldier" value="">
+        </label>
+
+        <label class="field">
+          <span>あなたの軍の名前</span>
+          <input id="army-input" type="text" maxlength="16" placeholder="ブルー・フェニックス軍" value="">
+        </label>
+
+        <div class="field">
+          <span>所属チーム（4軍が同時に戦います）</span>
+          <div id="team-seg" class="team-seg"></div>
+        </div>
+
+        <div class="field">
+          <span>ステージ</span>
+          <div id="stage-seg" class="class-seg"></div>
+        </div>
+
+        <div class="field">
+          <span>キャラクター</span>
+          <div id="class-seg" class="class-seg"></div>
+        </div>
+
+        <div class="field">
+          <span>スキン（見た目だけが変わります）</span>
+          <div id="skin-seg" class="class-seg skin-seg"></div>
+        </div>
+
+        <div id="menu-main">
+          <p class="menu-wallet">所持金 <b id="menu-money">0</b> G</p>
+          <button id="btn-solo" class="big-btn primary">ソロ戦（CPUと対戦）</button>
+          <button id="btn-online" class="big-btn">オンライン対戦</button>
+          <div class="diff-row">
+            <span>難易度</span>
+            <div class="seg" id="diff-seg">
+              <button data-diff="easy">かんたん</button>
+              <button data-diff="normal" class="on">ふつう</button>
+              <button data-diff="hard">むずかしい</button>
+            </div>
+          </div>
+          <button id="btn-garden" class="big-btn">🏕 拠点へ（ショップ・作業台・ガチャ）</button>
+          <button id="btn-medals" class="big-btn">🎖 実績（メダル）</button>
+          <button id="btn-controls" class="big-btn">🎮 操作方法</button>
+        </div>
+
+        <!-- オンラインのサブパネル -->
+        <div id="menu-online" class="hidden">
+          <p class="lead small">同じルームコードを共有すると、ブラウザ同士で対戦できます（P2P / サーバー不要）。同じチームを選べば味方として一緒に戦えます。</p>
+          <div id="online-actions">
+            <button id="btn-host" class="big-btn primary">ルームを作成（ホスト）</button>
+            <div class="join-row">
+              <input id="join-code" type="text" maxlength="8" placeholder="ルームコード" autocapitalize="characters">
+              <button id="btn-join" class="big-btn">参加</button>
+            </div>
+          </div>
+          <div id="room-lobby" class="room-lobby hidden" aria-live="polite">
+            <span class="room-lobby-label">ルームコード</span>
+            <strong id="room-code">----</strong>
+            <p id="lobby-status">参加者を待っています…</p>
+            <div id="lobby-roster" class="lobby-roster"></div>
+            <button id="btn-lobby-start" class="big-btn primary hidden">参加者を待っています…</button>
+          </div>
+          <div id="net-status" class="net-status"></div>
+          <button id="btn-back" class="link-btn">← もどる</button>
+        </div>
+
+        <p class="hint" id="menu-hint"></p>
+      </div>
+    </div>
+
+    <!-- ===== 脱落（観戦するか、やめるか） ===== -->
+    <div id="eliminated" class="overlay hidden">
+      <div class="panel pause-panel">
+        <p class="pause-kicker">TEAM ELIMINATED</p>
+        <h2>あなたの軍は全滅しました</h2>
+        <p class="lead" id="eliminated-detail">基地を失い、生き残りも倒されました。もう復活はできません。</p>
+        <button id="btn-spectate" class="big-btn primary">観戦する（決着まで見届ける）</button>
+        <button id="btn-give-up" class="big-btn">やめてメニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== 一時停止 ===== -->
+    <div id="pause" class="overlay hidden">
+      <div class="panel pause-panel">
+        <p class="pause-kicker">MATCH PAUSED</p>
+        <h2>一時停止</h2>
+        <p class="lead">戦闘・復活・リロードなど、ゲーム内の時間は停止しています。</p>
+        <button id="btn-resume" class="big-btn primary">ゲームに戻る</button>
+        <button id="btn-pause-help" class="big-btn">🎮 操作方法</button>
+        <button id="btn-pause-quit" class="big-btn">メインメニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== あそびかた ===== -->
+    <div id="help" class="overlay hidden">
+      <div class="panel">
+        <h2>操作方法</h2>
+        <div class="help-cols">
+          <div>
+            <h3>PC</h3>
+            <ul>
+              <li><b>WASD</b> … 移動</li>
+              <li><b>マウス</b> … 照準</li>
+              <li><b>左クリック長押し</b> … 射撃</li>
+              <li><b>R</b> … リロード</li>
+              <li><b>G</b> … グレネードを投げる</li>
+              <li><b>F</b> … 足元に地雷を設置</li>
+              <li><b>C</b> … 有刺鉄線を張る（罠師のみ）</li>
+              <li><b>E</b> … 戦車・ロボット・機関銃座に乗る / 降りる</li>
+              <li><b>Q</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>X</b> … 必殺技（持っているキャラだけ）</li>
+              <li><b>1〜3</b> / ホイール … 武器切替（持てる武器はキャラごとに固定）</li>
+              <li><b>Shift</b> … ダッシュ</li>
+              <li><b>WASD / E</b> … 拠点（庭）を歩く / 建物に入る・ロボットに乗る</li>
+            </ul>
+          </div>
+          <div>
+            <h3>スマホ</h3>
+            <ul>
+              <li><b>左スティック</b> … 移動</li>
+              <li><b>右スティック</b> … 照準＆自動射撃</li>
+              <li>指を離しても<b>最後に向いた方向を維持</b>します</li>
+              <li><b>💣 投げる</b> … グレネード</li>
+              <li><b>🧨 地雷</b> … 足元に設置</li>
+              <li><b>アクション</b> … 近くの戦車・ロボット・機関銃座に乗る / 降りる</li>
+              <li><b>🛡 盾</b> … 攻撃直前に押してパリィ / 長押しで防御</li>
+              <li><b>✈️ 必殺技</b> … 必殺技を持つキャラのときだけ出る</li>
+              <li><b>リロード / 武器</b> … 右下ボタン</li>
+            </ul>
+          </div>
+        </div>
+        <h3 style="margin-top:6px">戦い方（サバイバル）</h3>
+        <p class="help-rpg"><b>4軍による同時戦</b>です。基地を破壊された軍は<b>それ以降いっさい復活できません</b>。生き残っている兵士は戦い続けられますが、倒されたらその軍は脱落。最後まで残った1軍の勝ちです。だから自分の基地を守ることが何より大事で、逆に敵の基地さえ落とせば、あとは残党を掃討するだけになります。オンラインでは同じチームを選んだ人同士が味方になります。</p>
+        <h3 style="margin-top:6px">キャラクター</h3>
+        <p class="help-rpg">キャラクターごとに<b>持てる武器が決まっています</b>。数字キーの1〜3は、そのキャラの装備の1番目〜3番目に対応します。</p>
+        <ul class="help-classes">
+          <li><b>🎖️ 兵士</b> … アサルトライフル / ハンドガン / 銃剣。撃ち合いに強い標準型。</li>
+          <li><b>⚔️ 侍</b> … 打刀 / 戦斧 / コンバットナイフ。<b>銃は一切持てません</b>が、体力＋30・移動速度＋18%・近接ダメージ1.12倍で、パリィの受付も長め。懐に飛び込むのが仕事です。<b>打刀は構え方で技が変わります</b>：走りながら斬ると正面の1体を斬る通常攻撃、<b>足を止めて斬ると全方位の範囲攻撃</b>になり、まわりを囲む敵をまとめて薙ぎ払えます（間合いも少し広がる代わりに、1体あたりの威力は下がります）。さらに<b>足を止めて振っている間は、飛んできた銃弾を刀で弾き返します</b>。囲まれたら止まって振る、追うときは走りながら振る、と使い分けてください。</li>
+          <li><b>🪤 罠師</b> … サブマシンガン / ショットガン / 軍用シャベル。地雷を5個持ち、その地雷は敵からほとんど見えません。敵の地雷も見抜けて、有刺鉄線（Cキー）で敵の足を止められます。そのぶん体力は低めです。</li>
+          <li><b>🚀 重火器兵</b> … ロケットランチャー / スナイパー / ハンドガン。ロケット弾は弾速が遅くて避けられますが、当たれば戦車や基地を大きく削ります。足は遅く、接近戦は苦手です。</li>
+        </ul>
+        <h3 style="margin-top:6px">ステージ「練習場」</h3>
+        <p class="help-rpg">はじめての人のための訓練施設です。<b>敵兵はいません</b>。マップの中央に的が並んでいて、撃っても撃ち返されません。壊した的は数秒で立て直るので、何度でも練習できます。</p>
+        <p class="help-rpg">画面の左に<b>練習メニュー</b>が出ます。案内された操作をそのとおりにやると、次の項目へ進みます。移動・射撃・リロード・武器の持ちかえ・グレネード・地雷・盾・機関銃座・戦車・基地での補給まで、ひととおり試せば本番のステージで困りません。うまくいかない項目は「この項目をとばす」で先に進めます。</p>
+        <p class="help-rpg">中央には<b>動く的</b>とドラム缶もあります。動く的は少し先を狙うと当たります。ドラム缶は撃つと爆発するので、近くにいると自分もダメージを受けます。勝ち負けはないので、飽きたらメニューから本番のステージへどうぞ。</p>
+
+        <h3 style="margin-top:6px">ステージ「時の森」</h3>
+        <p class="help-rpg">薄明かりの森です。<b>マップの中央にある岩に、剣が1本だけ刺さっています</b>（ミニマップに剣の印が出ます）。岩に近づいて <b>E キー</b>（スマホは「アクション」ボタン）を<b>5秒間押し続ける</b>と剣が抜けます。途中で手を離すと戻ってしまうので、安全を確かめてから抜きましょう。</p>
+        <p class="help-rpg">抜いた<b>時の剣</b>は、森が育てた聖剣です。持っているあいだ、<b>自分の近くに飛んできた銃弾は時間が止まったようにゆっくりになります</b>。ゆっくり流れてくる弾は歩いてよけられるので、そのまま相手の懐へ踏み込めます。剣は倒されても失いません。</p>
+        <p class="help-rpg">森には<b>魔物</b>が棲んでいます。銃でも倒せますが体力が非常に高く、削り切るには時間がかかります。ところが<b>時の剣で叩けば一撃で倒せます</b>。魔物はどの軍の兵士も襲うので、他の軍との戦いの最中に出くわさないよう気をつけてください。</p>
+
+        <h3 style="margin-top:6px">ステージ「暗黒の森」</h3>
+        <p class="help-rpg">夜が明けない密林のステージです。木と茂みが密生していて視界はほとんど利きません。そしてこの森には<b>クリーチャーが1体だけ</b>棲んでいます。</p>
+        <p class="help-rpg">クリーチャーは<b>音に反応します</b>。Shift でダッシュすると足音が響いて気づかれ、銃を撃つとさらに遠くから寄ってきます。歩いている限りは、すぐ近くまで行かないかぎり見つかりません。</p>
+        <p class="help-rpg"><b>倒すことはできません。</b>どんな武器も効かないので、見つかったら逃げるしかありません。そして<b>触れられたら一撃で死にます</b>。追われている間は画面の縁が赤く脈打ち、ミニマップに赤い点が出ます。走って逃げれば足音でずっと追われるので、遮蔽に隠れて歩いて撒くのが賢いやり方です。</p>
+
+        <h3 style="margin-top:6px">乗り物と銃座</h3>
+        <p class="help-rpg"><b>戦車</b>は<b>120mm主砲</b>（爆発・対戦車）と<b>同軸機関銃</b>（連射・対歩兵）を積んでいます。数字キーかホイール（スマホは「武器」ボタン）で切り替えてください。</p>
+        <p class="help-rpg"><b>機関銃座</b>はマップ上に8つ置かれた中立の設備です。近づいてEキー（スマホは「アクション」ボタン）で取り付けます。動けなくなる代わりに、連射の効く重機関銃を撃て、防盾のおかげで被弾も半分になります。誰でも先に取り付いた者が使えるので、要所の銃座は奪い合いになります。</p>
+        <p class="help-rpg"><b>ロボット</b>は拠点の<b>🤖 ロボット格納庫</b>で組み立てる、自分だけの1機です。試合が始まると自軍基地のわき（戦車とは反対がわ）に配備されます。近づいてEキー（スマホは「アクション」ボタン）で乗り込め、もう一度押すと降ります。乗っている間の体力はロボットの装甲になり、攻撃は左右の腕に付けた武器で行います。<b>武器切替（1〜3キー・ホイール、スマホは「武器」ボタン）で右腕と左腕を持ち替えます</b>。壊されても数秒で基地のわきに戻ってきます。</p>
+        <p class="help-rpg">腕の武器のうち<b>🎯 ロックオンミサイル</b>だけは撃ち方が違います。<b>照準に敵を入れたまま1.5秒待つ</b>とロックが完了し、そこで初めて撃てます。撃った弾は<b>壁を越えて相手を追いかける</b>ので、遮蔽に隠れられても当たります。ロックの進み具合は相手に出る輪で分かり、完了すると赤い「LOCK ON」に変わります。狙いを外すとロックはやり直しです。</p>
+        <p class="help-rpg">自分が乗っていないあいだ、ロボットは戦車と同じように<b>自分で敵を探して戦います</b>。硬い相手には一撃の重い腕、生身の相手には手数の多い腕、と勝手に持ち替え、射程の短い腕なら間合いまで踏み込みます。前線に置いておくだけでも仕事をしてくれます。</p>
+        <p class="help-rpg"><b>隠れる</b>：敵は壁やコンテナの裏にいる相手を見つけられず、正面の視野角の外も見えません。<b>茂み</b>は通り抜けられるのに視線を遮るので、待ち伏せに最適です。ただし至近距離まで近づくと向きに関係なく気づかれます。走ると足音が響くので、忍び寄るときは歩きましょう。</p>
+        <p class="help-rpg"><b>昼と夜</b>：時間が進むと朝→昼→夕方→夜と移り変わります。<b>朝のあいだは夜明けの光で戦場全体が見渡せ</b>、敵の位置がすべて分かります。昼は遠くまで見通せ、夜は視界がぐっと狭まるので奇襲のチャンスです。</p>
+        <p class="help-rpg"><b>降下</b>：試合はソロ戦のとき、輸送機からのパラシュート降下で始まります。降りている間は攻撃も被弾もできませんが、移動キーで少しだけ流されるように動けます。着地したところが最初の位置になります。</p>
+
+        <h3 style="margin-top:6px">拠点（ショップ・作業台・鍛冶場・格納庫・徴兵ガチャ）</h3>
+        <p class="help-rpg">メニューの<b>「🏕 拠点へ」</b>から、自分の陣地を歩き回れます。<b>WASD / 矢印キー</b>で歩き、建物の入口に近づいて <b>E キー</b>（スマホは「アクション」ボタン）を押すと中に入れます。試合の結果画面からも直接行けます。</p>
+        <ul class="help-classes">
+          <li><b>🏪 補給ショップ</b> … 5つのタブに分かれています。<b>強化</b>は最大HPや装甲などの底上げ、<b>武器</b>は新しい銃・弓・近接武器、<b>部品</b>はアタッチメント、<b>塗装</b>は武器の色、<b>矢</b>は弓で撃つ矢です。お金（G）は試合に勝つとたまります。</li>
+          <li><b>🔧 作業台</b> … 買ったアタッチメントを武器に取り付け、好きな色に塗るところです。武器を選ぶと、取り付けで数値がどれだけ変わるかが緑（良くなる）と赤（悪くなる）で出ます。一度買った部品は、何度でもどの武器にも付け替えられます。</li>
+          <li><b>⚒ 鍛冶場</b> … <b>廃材</b>と所持金で鎧を作ります。廃材は試合で敵を倒すとたまります。兜・胴鎧・具足の3部位があり、それぞれ1つ装備できます。上の段の鎧は、下の段を作ってからでないと作れません。</li>
+          <li><b>🎲 徴兵所</b> … チケットで新しいキャラクターを引きます。チケットは試合に勝つともらえ、お金でも買えます。すでに仲間のキャラが出たら<b>練度</b>が上がり、そのキャラの最大HPと攻撃力が5%ずつ伸びます（最大5回）。仲間にしたキャラの装備武器は、買わなくても使えるようになります。</li>
+          <li><b>📋 編成テント</b> … 出撃するキャラクターと、持っていく3つの武器を決めます。数字キーの1〜3がこの並び順に対応します。侍のような近接専門のキャラは銃を選べません。</li>
+          <li><b>🛠 兵器開発室</b> … 部品を組んで、自分で名前を付けた武器を作ります。部品はショップの「開発部品」タブか、戦場の部品箱で手に入ります。</li>
+          <li><b>🤖 ロボット格納庫</b> … 自分のロボットを組み立てます。<b>フレーム</b>（体力・速さ・脚の形）、<b>カラー</b>（色）、<b>右腕 / 左腕</b>（武器）をそれぞれ選べて、機体名も付けられます。プレビューがゆっくり回るので、いまの見た目をそのまま確かめられます。フレームと腕は所持金と<b>廃材</b>で作り、カラーは所持金だけで買えます。組んだ機体は格納庫のわきに駐機するので、<b>拠点でも乗って動かせます</b>。</li>
+          <li><b>🚩 出撃ゲート</b> … メニューへ戻ります。</li>
+        </ul>
+
+        <h3 style="margin-top:6px">アタッチメント</h3>
+        <p class="help-rpg">銃と弓には<b>照準器・銃身・弾倉・下部レール</b>の4か所に部品を付けられます（近接武器には付きません）。同じ場所には1つだけです。</p>
+        <ul class="help-classes">
+          <li><b>🔴 ドットサイト / 🔭 倍率スコープ / 📡 レーダー</b>（照準器）… レーダーは半径620以内の敵を、<b>壁の裏にいてもミニマップに映します</b>。ミニマップに青い輪が出ているときは効いています。</li>
+          <li><b>🤫 サプレッサー / 🔩 ヘビーバレル / 🔥 マズルブレーキ</b>（銃身）… サプレッサーを付けると<b>銃声が消え、撃っても位置がバレません</b>。</li>
+          <li><b>📦 拡張マガジン / ⚡ クイックマグ / 🛡 徹甲弾</b>（弾倉）… 装弾数・リロードの速さ・貫通が変わります。</li>
+          <li><b>🔫 アンダーバレルSMG / 🔺 レーザーサイト / 🖐 フォアグリップ</b>（下部レール）… アンダーバレルSMGは<b>撃つたびに9mm弾をもう1発おまけで発射</b>します。弾も矢も減りません。</li>
+        </ul>
+
+        <h3 style="margin-top:6px">弓と矢</h3>
+        <p class="help-rpg"><b>軍用弓</b>と<b>クロスボウ</b>はショップで買えます。弾倉ではなく<b>矢</b>を消費し、<b>撃っても音がしない</b>ので位置がバレません。矢もショップで10本ずつ買い、出撃するときに<b>矢筒の容量ぶんだけ</b>持ち出します。撃たずに残った矢は帰ってくると戻ります。</p>
+        <p class="help-rpg">矢は3種類あります。<b>標準矢</b>は安く、<b>貫通矢</b>は敵を2体多く貫き、<b>爆裂矢</b>は当たると爆発して戦車や基地にも効きます。どれを持っていくかは編成テントで選びます。矢筒の容量はショップの<b>大型矢筒</b>で増やせます。試合中に矢が足りなくなったら、<b>自分の基地に戻ると残っている矢を補給</b>できます。試合が終わるたびに標準矢が8本支給されるので、矢が尽きて何もできなくなることはありません。</p>
+
+        <h3 style="margin-top:6px">必殺技</h3>
+        <p class="help-rpg">一部のキャラクターは<b>必殺技</b>を持っています。<b>X キー</b>（スマホは「✈️ 必殺技」ボタン）で撃てて、使うとしばらく再使用待ちになります。残り時間は画面右下の装備欄に出ます。</p>
+        <p class="help-rpg"><b>💣 擲弾兵 ボマー</b>の必殺技は<b>「空爆要請」</b>です。照準の先へ輸送機が飛んできて、その線に沿って爆弾を7発落とします。着弾までは少し間があり、地面に赤い輪が出るので、味方も自分も巻き込まれないよう下がってください。再使用まで42秒。</p>
+
+        <h3 style="margin-top:6px">兵器開発（自分の武器を作る）</h3>
+        <p class="help-rpg">拠点の<b>🛠 兵器開発室</b>では、部品を組み合わせて<b>自分で名前を付けた武器</b>を作れます。部品は4か所です。</p>
+        <ul class="help-classes">
+          <li><b>🔩 銃身</b> … 威力と射程、それにばらつきが決まります。</li>
+          <li><b>⚙ 機関部</b> … 連射の速さと、単発か連射かが決まります。連射が速いものほど1発は軽くなります。</li>
+          <li><b>📦 弾倉</b> … 装弾数とリロードの速さが決まります。</li>
+          <li><b>🪵 銃床</b> … ばらつき・反動・弾速が決まります。上等なものは貫通も付きます。</li>
+        </ul>
+        <p class="help-rpg">部品の手に入れ方は2つあります。<b>ショップの「🧰 開発部品」タブで買う</b>か、<b>戦場に落ちている部品箱を拾う</b>かです。部品箱は工具箱の見た目で、拾えるのは自分だけ。まだ持っていない部品が優先して出ます。一度手に入れた部品は無くならないので、同じ部品で何丁でも設計し直せます。</p>
+        <p class="help-rpg">4か所すべてに部品を入れて名前を決めたら「開発する」で完成です（工賃 260 G）。作った武器は<b>編成テントで持ち出す3つに入れられます</b>。設計は6丁まで保管でき、いつでも作り直せます。なお開発した武器は自分の端末にしか無いので、<b>オンライン対戦では持ち出さず、キャラの初期装備に戻ります</b>。</p>
+
+        <h3 style="margin-top:6px">ステージ「ハロウィンの森」と隠しキャラクター</h3>
+        <p class="help-rpg">月あかりのカボチャ畑です。森じゅうに<b>光るカボチャ</b>が12個ちらばっていて、近づくだけで拾えます（拾えるのは自分だけ）。残りの数は画面上の目標欄に出ます。</p>
+        <p class="help-rpg"><b>カボチャをすべて集めたうえで、その試合に勝つ</b>と、隠しキャラクターの<b>🎃 ジャック・オー・ランタン</b>が仲間になります。徴兵ガチャからは絶対に出ません。頭がカボチャで、目も口も緑に光ります。</p>
+        <p class="help-rpg">専用武器の<b>ジャックランチャー</b>は、<b>狙いがそれていても近くの敵のほうへ向き直って飛び出し</b>、飛びながらもゆるく追いかけます。そのかわり弾はとても遅いので、置くように撃つ武器です。弾の先にはカボチャの顔が乗っています。</p>
+
+        <h3 style="margin-top:6px">二丁拳銃と二刀流</h3>
+        <p class="help-rpg">ショップで買える<b>二丁拳銃</b>は、撃つたびに右手と左手が入れ替わります。1発は軽いぶん手数が多く、近〜中距離の撃ち合いで押し切る武器です。</p>
+        <p class="help-rpg"><b>二刀流</b>は二本の刀を交互に振る近接武器です。振るたびに右手と左手が入れ替わり、<b>振っている間は正面に飛んできた銃弾や矢を斬り落とします</b>。斬った弾はその場で消えるので、撃たれながら前へ出るのに使えます。</p>
+        <p class="help-rpg">この2つだけを装備しているのが、徴兵ガチャの★5<b>🖤 黒衣の傭兵 ヴァンタ</b>です。全身黒ずくめの覆面で、傷の治りが2.6倍速く、足も速い接近戦向きのキャラクターです。</p>
+
+        <h3 style="margin-top:6px">ミッションと実績（メダル）</h3>
+        <p class="help-rpg">「1試合で20体倒す」「暗黒の森で勝つ」といった<b>ミッション</b>があり、達成すると<b>メダル</b>がもらえます。集めたメダルはメニューの<b>「🎖 実績（メダル）」</b>に貯まっていきます。まだ取っていないメダルも条件が見えるので、次の目標にしてください。練習場での戦果は数えません（訓練のメダルだけは練習場で取れます）。</p>
+
+        <h3 style="margin-top:6px">スキン</h3>
+        <p class="help-rpg">メニューの<b>スキン</b>で自分の見た目を変えられます。強さはいっさい変わりません。迷彩のほかに、半透明で走査線が流れる<b>ホログラム兵</b>、発光ラインが走る<b>ネオングリッド</b>、バイザーが光る<b>クロムメック</b>、ブロック体の<b>ボクセル</b>といったSF系もあります。</p>
+        <p class="help-rpg"><b>地雷</b>：足元に設置すると約1秒後に作動し、踏んだ敵を吹き飛ばします。味方には見えますが、敵にはすぐ近くに来るまで見えません。戦車にも大ダメージ。</p>
+        <p class="help-rpg">攻撃直前に盾を構えるとパリィ成功。銃弾は敵へ跳ね返し、近接武器や軍用犬の攻撃は相手をひるませます。パリィ受付は短く、成功後も約1秒の再使用待ちがあります。通常の盾防御は正面攻撃を軽減しますが、構え中は攻撃不可・移動速度低下。防弾鎧と盾はフィールド装備または基地で補給できます。</p>
+        <button id="btn-help-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 結果 ===== -->
+    <div id="result" class="overlay hidden">
+      <div class="panel result-panel">
+        <!-- 勝利したときだけ出る紋章。盾が先に出て、少し遅れて左右の羽が現れる。 -->
+        <div id="victory-crest" class="victory-crest hidden" aria-hidden="true">
+          <svg viewBox="0 0 440 200" role="img">
+            <defs>
+              <linearGradient id="vc-gold" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffefb0"/>
+                <stop offset="0.45" stop-color="#f5c440"/>
+                <stop offset="1" stop-color="#a9760a"/>
+              </linearGradient>
+              <linearGradient id="vc-shield" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#5b7f3f"/>
+                <stop offset="1" stop-color="#2e4a22"/>
+              </linearGradient>
+            </defs>
+            <g class="vc-wing vc-wing-l">
+              <g transform="translate(178 88)">
+                <ellipse fill="url(#vc-gold)" cx="-46" cy="-40" rx="52" ry="11" transform="rotate(-30 -46 -40)"/>
+                <ellipse fill="url(#vc-gold)" cx="-58" cy="-16" rx="62" ry="12" transform="rotate(-13 -58 -16)"/>
+                <ellipse fill="url(#vc-gold)" cx="-58" cy="8" rx="60" ry="12" transform="rotate(5 -58 8)"/>
+                <ellipse fill="url(#vc-gold)" cx="-46" cy="32" rx="48" ry="11" transform="rotate(21 -46 32)"/>
+                <ellipse fill="url(#vc-gold)" cx="-30" cy="52" rx="32" ry="9" transform="rotate(34 -30 52)"/>
+              </g>
+            </g>
+            <g class="vc-wing vc-wing-r">
+              <g transform="translate(262 88)">
+                <ellipse fill="url(#vc-gold)" cx="46" cy="-40" rx="52" ry="11" transform="rotate(30 46 -40)"/>
+                <ellipse fill="url(#vc-gold)" cx="58" cy="-16" rx="62" ry="12" transform="rotate(13 58 -16)"/>
+                <ellipse fill="url(#vc-gold)" cx="58" cy="8" rx="60" ry="12" transform="rotate(-5 58 8)"/>
+                <ellipse fill="url(#vc-gold)" cx="46" cy="32" rx="48" ry="11" transform="rotate(-21 46 32)"/>
+                <ellipse fill="url(#vc-gold)" cx="30" cy="52" rx="32" ry="9" transform="rotate(-34 30 52)"/>
+              </g>
+            </g>
+            <g class="vc-shield">
+              <path d="M220 20 L278 41 L278 94 Q278 142 220 172 Q162 142 162 94 L162 41 Z"
+                    fill="url(#vc-shield)" stroke="url(#vc-gold)" stroke-width="6" stroke-linejoin="round"/>
+              <path d="M220 34 L267 50 L267 93 Q267 133 220 158 Q173 133 173 93 L173 50 Z"
+                    fill="none" stroke="rgba(255,239,176,0.45)" stroke-width="2"/>
+              <text x="220" y="112" text-anchor="middle" class="vc-text">勝利</text>
+            </g>
+          </svg>
+        </div>
+        <h2 id="result-title">勝利！</h2>
+        <div id="reward-summary" class="reward-summary"></div>
+        <div id="result-stats" class="result-stats"></div>
+        <button id="btn-result-garden" class="big-btn primary">🏕 拠点でそなえる（買い物・作業台・ガチャ）</button>
+        <button id="btn-again" class="big-btn">もう一度</button>
+        <button id="btn-result-medals" class="big-btn">🎖 実績（メダル）を見る</button>
+        <button id="btn-tomenu" class="big-btn">メニューへ</button>
+      </div>
+    </div>
+
+    <!-- ===== 補給ショップ ===== -->
+    <div id="shop" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🏪 補給ショップ</h2>
+          <div class="wallet-row">
+            <span>💰 <b data-wallet-money>0</b> G</span>
+            <span>🔩 <b data-wallet-scrap>0</b></span>
+            <span>🎫 <b data-wallet-ticket>0</b></span>
+          </div>
+        </div>
+        <div id="shop-tabs" class="hub-tabs"></div>
+        <p id="shop-note" class="shop-note"></p>
+        <div id="shop-items" class="shop-items"></div>
+        <p id="shop-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-shop-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 作業台（アタッチメント / 塗装） ===== -->
+    <div id="bench" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🔧 作業台</h2>
+          <div class="wallet-row"><span>💰 <b data-wallet-money>0</b> G</span></div>
+        </div>
+        <p class="shop-note">武器を選んでから、アタッチメントを取り付けたり色を塗ったりできます。持っていない部品はショップで買えます。</p>
+        <div id="bench-weapons" class="bench-weapons"></div>
+        <div id="bench-detail" class="bench-detail"></div>
+        <p id="bench-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-bench-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 鍛冶場（鎧づくり） ===== -->
+    <div id="forge" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>⚒ 鍛冶場</h2>
+          <div class="wallet-row">
+            <span>💰 <b data-wallet-money>0</b> G</span>
+            <span>🔩 廃材 <b data-wallet-scrap>0</b></span>
+          </div>
+        </div>
+        <p class="shop-note">廃材と所持金で鎧を作れます。廃材は試合で敵を倒すとたまります。部位ごとに1つ装備できます。</p>
+        <div id="forge-items" class="forge-items"></div>
+        <p id="forge-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-forge-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 兵器開発室（部品を組んで自分の武器を作る） ===== -->
+    <div id="lab" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🛠 兵器開発室</h2>
+          <div class="wallet-row"><span>💰 <b data-wallet-money>0</b> G</span></div>
+        </div>
+        <p class="shop-note">銃身・機関部・弾倉・銃床の4か所に部品を入れて、自分の武器を作ります。部品はショップの「開発部品」で買うか、戦場に落ちている部品箱から拾えます。一度手に入れた部品は無くならないので、何丁でも設計し直せます。</p>
+        <div class="mech-top">
+          <div class="mech-side">
+            <label class="field"><span>武器の名前</span>
+              <input id="lab-name" type="text" maxlength="12" placeholder="例: ハチドリMk-II">
+            </label>
+            <p id="lab-spec" class="mech-spec"></p>
+          </div>
+        </div>
+        <div id="lab-parts" class="lab-parts"></div>
+        <button id="btn-lab-make" class="big-btn primary">開発する</button>
+        <p id="lab-message" class="shop-message" aria-live="polite"></p>
+        <p class="forge-group">🛠 開発ずみの武器</p>
+        <div id="lab-list" class="shop-items"></div>
+        <button id="btn-lab-close" class="big-btn">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== ロボット格納庫（フレーム / カラー / 腕の武器） ===== -->
+    <div id="hangar" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🤖 ロボット格納庫</h2>
+          <div class="wallet-row">
+            <span>💰 <b data-wallet-money>0</b> G</span>
+            <span>🔩 廃材 <b data-wallet-scrap>0</b></span>
+          </div>
+        </div>
+        <p class="shop-note">自分だけのロボットを組み立てます。組んだ機体は拠点の格納庫のわきに駐機し、試合では自軍基地のそばに配備されます。近づいて E キー（スマホは「アクション」ボタン）で乗り込めます。</p>
+        <div class="mech-top">
+          <canvas id="hangar-preview" width="240" height="200"></canvas>
+          <div class="mech-side">
+            <label class="field"><span>機体名</span>
+              <input id="hangar-name" type="text" maxlength="12" placeholder="未設定ならフレーム名">
+            </label>
+            <p id="hangar-spec" class="mech-spec"></p>
+          </div>
+        </div>
+        <div id="hangar-tabs" class="hub-tabs"></div>
+        <p id="hangar-note" class="shop-note"></p>
+        <div id="hangar-items" class="shop-items"></div>
+        <p id="hangar-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-hangar-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 徴兵ガチャ ===== -->
+    <div id="gacha" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>🎲 徴兵ガチャ</h2>
+          <div class="wallet-row">
+            <span>🎫 チケット <b data-wallet-ticket>0</b></span>
+            <span>💰 <b data-wallet-money>0</b> G</span>
+          </div>
+        </div>
+        <p class="shop-note">チケットを使って新しい仲間を集めます。すでに仲間のキャラが出たら「練度」が上がり、そのキャラが強くなります。</p>
+        <div id="gacha-result" class="gacha-result hidden"></div>
+        <div class="gacha-actions">
+          <button id="btn-gacha-one" class="big-btn primary">🎫 1回引く</button>
+          <button id="btn-gacha-ten" class="big-btn">🎫×10 まとめて引く（★4以上 確定）</button>
+          <button id="btn-gacha-buy" class="big-btn">チケットを買う（320 G）</button>
+        </div>
+        <p id="gacha-message" class="shop-message" aria-live="polite"></p>
+        <div id="gacha-roster" class="gacha-roster"></div>
+        <button id="btn-gacha-close" class="big-btn">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 編成テント（キャラ / 装備） ===== -->
+    <div id="squad" class="overlay hidden">
+      <div class="panel hub-panel">
+        <div class="hub-head">
+          <h2>📋 編成テント</h2>
+          <div class="wallet-row"><span>仲間 <b id="squad-count">0</b> 人</span></div>
+        </div>
+        <p class="shop-note">出撃するキャラクターと、持っていく3つの武器を決めます。武器はショップで買うと増えます。</p>
+        <div id="squad-chars" class="squad-chars"></div>
+        <div id="squad-loadout" class="squad-loadout"></div>
+        <p id="squad-message" class="shop-message" aria-live="polite"></p>
+        <button id="btn-squad-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+
+    <!-- ===== 実績（メダル） ===== -->
+    <div id="medals" class="overlay hidden">
+      <div class="panel medal-panel">
+        <h2>🎖 実績（メダル）</h2>
+        <p class="lead">ミッションを達成するとメダルがここに増えます。練習場での戦果は数えません（訓練のメダルだけは練習場で取れます）。</p>
+        <p class="medal-count">獲得 <b id="medal-count">0</b> / <span id="medal-total">0</span></p>
+        <div id="medal-grid" class="medal-grid"></div>
+        <button id="btn-medals-close" class="big-btn primary">とじる</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
