@@ -1,0 +1,333 @@
+/* =========================================================================
+   MOKO GOD ― 画面のスタイル
+   ========================================================================= */
+:root {
+  --ink: #f2f6ff;
+  --ink-dim: #a8b6d4;
+  --panel: rgba(20, 24, 46, 0.86);
+  --panel2: rgba(30, 36, 62, 0.95);
+  --line: rgba(160, 190, 255, 0.26);
+  --accent: #ffe08a;      /* 神さまの金 */
+  --accent2: #9fe6ff;     /* 雲の水色 */
+  --danger: #ff7a8a;
+  --paper: #efe0bd;       /* えほんの紙 */
+  --sepia: #4a331f;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+body {
+  background: #0a0c22;
+  color: var(--ink);
+  font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+#game { display: block; position: absolute; inset: 0; touch-action: none; }
+.hidden { display: none !important; }
+
+body.shake #game { animation: shake .2s ease; }
+@keyframes shake {
+  0% { transform: translate(0, 0); }
+  30% { transform: translate(-5px, 4px); }
+  60% { transform: translate(4px, -4px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ------------------------------- HUD ------------------------------- */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+#topbar {
+  position: fixed; top: max(12px, env(safe-area-inset-top)); left: 12px;
+  display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap;
+  max-width: calc(100vw - 96px);
+}
+#timeBox { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+#planetLabel { color: var(--accent2); }
+#eraLabel { color: var(--accent); }
+#timeBox .sep { width: 1px; height: 14px; background: var(--line); }
+#dayLabel, #clockLabel { font-variant-numeric: tabular-nums; color: var(--ink-dim); font-weight: 700; }
+
+#faithBox { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 15px; }
+#faithBox .faithIcon { filter: drop-shadow(0 0 6px rgba(255, 224, 138, .8)); }
+#faithNum { color: var(--accent); font-variant-numeric: tabular-nums; min-width: 44px; }
+#faithBox .rate { font-size: 11px; color: var(--ink-dim); font-weight: 700; }
+
+#speedBox { display: flex; gap: 4px; padding: 5px 6px; }
+.sbtn {
+  min-width: 34px; height: 30px; border-radius: 9px; cursor: pointer;
+  background: rgba(255, 255, 255, .06); color: var(--ink-dim);
+  border: 1px solid transparent; font-size: 11px; font-weight: 800;
+}
+.sbtn.on { background: rgba(255, 224, 138, .18); color: var(--accent); border-color: rgba(255, 224, 138, .5); }
+
+#quest {
+  position: fixed; left: 12px; bottom: max(12px, env(safe-area-inset-bottom));
+  max-width: min(460px, calc(100vw - 110px)); font-size: 13px; line-height: 1.5;
+}
+
+#sidebtns {
+  position: fixed; right: max(12px, env(safe-area-inset-right)); top: 50%;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.rbtn {
+  width: 54px; height: 54px; border-radius: 16px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  font-size: 19px; font-weight: 800; backdrop-filter: blur(6px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .4);
+}
+.rbtn:active { transform: scale(.94); background: var(--panel2); }
+
+#prompt {
+  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+  display: none; align-items: center; gap: 9px; font-size: 14px; font-weight: 700;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  padding: 8px 16px; backdrop-filter: blur(6px); white-space: nowrap;
+}
+#prompt.on { display: flex; }
+#prompt .key {
+  background: var(--accent); color: #2a1f05; border-radius: 7px;
+  padding: 1px 8px; font-size: 12px; font-weight: 900;
+}
+
+/* えらんだ奇跡のバー */
+#miracleBar {
+  position: fixed; left: 50%; bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex; gap: 6px; padding: 6px; border-radius: 16px;
+  background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(6px);
+  max-width: calc(100vw - 150px); overflow-x: auto; scrollbar-width: none;
+}
+#miracleBar::-webkit-scrollbar { display: none; }
+.mslot {
+  width: 52px; height: 56px; border-radius: 12px; cursor: pointer; flex: 0 0 auto;
+  background: rgba(255, 255, 255, .05); border: 1px solid transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--ink); font-size: 20px;
+}
+.mslot .cost { font-size: 10px; font-weight: 800; color: var(--accent); }
+.mslot .nm { font-size: 9px; color: var(--ink-dim); font-weight: 700; }
+.mslot.on { background: rgba(255, 224, 138, .16); border-color: var(--accent); }
+.mslot.poor { opacity: .42; }
+
+#bossBar {
+  position: fixed; top: 84px; left: 50%; transform: translateX(-50%);
+  display: none; flex-direction: column; gap: 5px; align-items: center;
+  width: min(420px, 80vw);
+}
+#bossBar.on { display: flex; }
+#bossName { font-size: 13px; font-weight: 800; color: #ff9fb4; text-shadow: 0 2px 8px #000; }
+#bossBar .track { width: 100%; height: 12px; background: rgba(0, 0, 0, .55); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+#bossFill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5f8a, #a03fd8); transition: width .15s linear; }
+
+/* ------------------------------ トースト ------------------------------ */
+#toasts {
+  position: fixed; top: 84px; right: 84px; display: flex; flex-direction: column;
+  gap: 7px; align-items: flex-end; pointer-events: none; z-index: 40;
+}
+.toast {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 11px;
+  padding: 8px 14px; font-size: 13px; font-weight: 700; max-width: 62vw;
+  animation: pop .25s ease, fade .4s ease 2.2s forwards;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+}
+.toast.good { border-color: rgba(160, 255, 200, .6); color: #b8ffd8; }
+.toast.bad { border-color: rgba(255, 130, 150, .6); color: #ffc0cc; }
+.toast.holy { border-color: rgba(255, 224, 138, .7); color: var(--accent); }
+@keyframes pop { from { transform: translateX(20px); opacity: 0; } }
+@keyframes fade { to { opacity: 0; transform: translateX(16px); } }
+
+/* ------------------------------- パネル ------------------------------- */
+#panelWrap {
+  position: fixed; inset: 0; background: rgba(6, 8, 22, .68);
+  display: flex; align-items: center; justify-content: center; z-index: 60;
+  backdrop-filter: blur(3px); padding: 16px;
+}
+#panel {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 18px;
+  width: min(880px, 100%); max-height: min(86vh, 780px);
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+}
+#panelHead {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--line);
+}
+#panelHead h2 { margin: 0; font-size: 17px; color: var(--accent); }
+#panelClose {
+  width: 36px; height: 36px; border-radius: 11px; cursor: pointer;
+  background: rgba(255, 255, 255, .07); border: 1px solid var(--line); color: var(--ink); font-size: 15px;
+}
+#panelBody { padding: 16px 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#panelFoot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; flex-wrap: wrap; }
+#panelFoot:empty { display: none; }
+
+/* 世界地図 */
+#mapHolder { position: relative; touch-action: none; }
+#mapCanvas {
+  display: block; width: 100%; border-radius: 12px; background: #0a1a2a;
+  border: 1px solid var(--line); touch-action: none;
+}
+.mapLegend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-dim); margin-top: 10px; }
+.mapLegend b { color: var(--ink); }
+
+.rows { display: flex; flex-direction: column; gap: 9px; }
+.row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  background: rgba(255, 255, 255, .045); border: 1px solid transparent;
+  border-radius: 12px; font-size: 13px;
+}
+.row:hover { border-color: var(--line); }
+.row .ic { font-size: 21px; width: 28px; text-align: center; }
+.row .nm { font-weight: 800; }
+.row .ds { color: var(--ink-dim); font-size: 12px; line-height: 1.5; }
+.row .grow { flex: 1; min-width: 0; }
+.row .cost { color: var(--accent); font-weight: 800; white-space: nowrap; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 9px; margin-bottom: 14px; }
+.stat { background: rgba(255, 255, 255, .05); border-radius: 12px; padding: 10px 12px; }
+.stat .k { font-size: 11px; color: var(--ink-dim); font-weight: 700; }
+.stat .v { font-size: 18px; font-weight: 800; margin-top: 2px; }
+.meter { height: 8px; border-radius: 5px; background: rgba(0, 0, 0, .4); overflow: hidden; margin-top: 6px; }
+.meter > i { display: block; height: 100%; background: linear-gradient(90deg, #8ae0ff, #5fb8ff); }
+.meter.happy > i { background: linear-gradient(90deg, #ffd98a, #ffb45f); }
+.meter.food > i { background: linear-gradient(90deg, #a8e88a, #6fd05f); }
+
+.chron { display: flex; flex-direction: column; gap: 8px; }
+.chron .cr { display: flex; gap: 12px; font-size: 13px; line-height: 1.6; }
+.chron .cy { color: var(--accent2); font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.note { color: var(--ink-dim); font-size: 12px; line-height: 1.7; }
+
+.btn {
+  padding: 11px 20px; border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: 800;
+  background: rgba(255, 255, 255, .08); border: 1px solid var(--line); color: var(--ink);
+  font-family: inherit;
+}
+.btn:active { transform: scale(.97); }
+.btn.primary { background: linear-gradient(180deg, #ffe9a8, #f0c65f); color: #3a2a05; border-color: #ffe08a; }
+.btn.ghost { background: transparent; color: var(--ink-dim); }
+.btn.danger { background: rgba(255, 122, 138, .18); border-color: rgba(255, 122, 138, .6); color: #ffc0cc; }
+.btn[disabled] { opacity: .4; pointer-events: none; }
+.btn.sm { padding: 7px 13px; font-size: 12px; border-radius: 10px; }
+
+/* ------------------------------ 会話まど ------------------------------ */
+#talkWrap {
+  position: fixed; inset: auto 0 0 0; z-index: 55; display: flex; justify-content: center;
+  padding: 0 16px max(18px, env(safe-area-inset-bottom));
+}
+#talk {
+  width: min(720px, 100%); background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 18px; padding: 16px 20px; box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+  cursor: pointer;
+}
+#talkName { font-size: 13px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+#talkText { font-size: 15px; line-height: 1.75; min-height: 52px; }
+#talkHint { font-size: 11px; color: var(--ink-dim); text-align: right; margin-top: 6px; }
+
+body.talking #miracleBar, body.talking #quest, body.talking #prompt { display: none !important; }
+
+/* ------------------------------ タイトル ------------------------------ */
+#titleScreen, #nameScreen, #endScreen {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  padding: 20px; overflow-y: auto;
+  background:
+    radial-gradient(1000px 620px at 50% 8%, rgba(255, 224, 138, .16), transparent 62%),
+    radial-gradient(700px 500px at 78% 90%, rgba(120, 90, 200, .28), transparent 60%),
+    linear-gradient(180deg, #10143a 0%, #0a0c22 60%, #070818 100%);
+}
+.tcard {
+  position: relative; width: min(680px, 100%); text-align: center;
+  background: rgba(16, 20, 44, .78); border: 1px solid var(--line);
+  border-radius: 22px; padding: 30px 28px; backdrop-filter: blur(8px);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+}
+.tcard .halo {
+  width: 76px; height: 22px; margin: 0 auto 10px;
+  border: 5px solid var(--accent); border-radius: 50%;
+  box-shadow: 0 0 22px rgba(255, 224, 138, .8), inset 0 0 12px rgba(255, 224, 138, .5);
+  transform: rotateX(60deg);
+}
+.tcard h1 {
+  margin: 0; font-size: clamp(30px, 8vw, 52px); letter-spacing: .12em;
+  color: var(--accent); text-shadow: 0 0 28px rgba(255, 224, 138, .5);
+}
+.tcard h1.small { font-size: clamp(22px, 5vw, 30px); }
+.tcard .sub { margin: 6px 0 16px; color: var(--accent2); font-size: 15px; letter-spacing: .16em; }
+.tcard .lead { font-size: 13.5px; line-height: 1.95; color: var(--ink-dim); text-align: left; margin: 0 0 20px; }
+.tcard .lead.small { font-size: 12.5px; text-align: center; margin-bottom: 8px; }
+.tbtns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+#newWarn { display: none; color: #ffc0cc; font-size: 12px; margin: 14px 0 0; font-weight: 700; }
+#newWarn.on { display: block; }
+#titleHelp { display: none; margin-top: 20px; text-align: left; }
+#titleHelp.on { display: block; }
+.kgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+.kgrid > div { display: flex; gap: 10px; font-size: 12.5px; align-items: baseline; }
+.kgrid b { color: var(--accent2); min-width: 96px; }
+.kgrid span { color: var(--ink-dim); }
+.hint { font-size: 12px; color: var(--ink-dim); line-height: 1.8; margin-top: 12px; }
+
+.nameRow { display: flex; gap: 10px; justify-content: center; margin-bottom: 16px; flex-wrap: wrap; }
+.nameRow input {
+  flex: 1 1 220px; max-width: 340px; padding: 13px 16px; font-size: 17px; font-weight: 800;
+  border-radius: 12px; border: 1px solid var(--line); background: rgba(0, 0, 0, .35);
+  color: var(--ink); font-family: inherit; text-align: center;
+}
+.nameRow input:focus { outline: 2px solid var(--accent); }
+
+#endBody { text-align: left; font-size: 14px; line-height: 2; color: var(--ink-dim); margin-bottom: 20px; }
+#endBody b { color: var(--accent); }
+
+/* ------------------------------- えほん ------------------------------- */
+#bookScreen {
+  position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; padding: 18px;
+  background: linear-gradient(180deg, #1a1206 0%, #0b0803 100%);
+}
+#bookCanvas {
+  width: min(760px, 100%); aspect-ratio: 4 / 3; max-height: 58vh;
+  border-radius: 8px; background: var(--paper);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .7), 0 0 0 10px #2a1c0c, 0 0 0 12px #6b4a22;
+}
+#bookText {
+  width: min(760px, 100%); min-height: 88px; font-size: clamp(14px, 2.4vw, 17px);
+  line-height: 2; color: #f6e7c4; text-shadow: 0 2px 10px #000;
+}
+#bookText .who { color: var(--accent); font-weight: 800; margin-right: 8px; }
+#bookBtns { display: flex; gap: 12px; }
+
+/* ------------------------------ せまい画面 ------------------------------ */
+@media (max-width: 760px) {
+  #topbar { gap: 6px; max-width: calc(100vw - 84px); }
+  #timeBox, #faithBox { font-size: 12px; padding: 6px 10px; }
+  #faithNum { min-width: 36px; }
+  #faithBox .rate { display: none; }
+  .rbtn { width: 48px; height: 48px; font-size: 17px; border-radius: 14px; }
+  #sidebtns { gap: 8px; right: max(8px, env(safe-area-inset-right)); }
+  #quest { font-size: 12px; max-width: calc(100vw - 84px); bottom: 88px; }
+  #miracleBar { max-width: calc(100vw - 76px); padding: 5px; }
+  .mslot { width: 46px; height: 50px; font-size: 17px; }
+  .mslot .nm { display: none; }
+  #toasts { right: 74px; top: 74px; }
+  #prompt { bottom: 152px; font-size: 13px; }
+  #panelBody { padding: 12px; }
+  #talkText { font-size: 14px; }
+  .tcard { padding: 22px 18px; }
+}
+@media (max-height: 520px) {
+  #bookCanvas { max-height: 46vh; }
+  #bookText { min-height: 60px; font-size: 13px; line-height: 1.8; }
+}

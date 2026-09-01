@@ -13,6 +13,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'moko-god', genre: 'sandbox', players: '1P', date: '2026-09-01',
+    ja: {
+      title: 'MOKO GOD ― 雲の上の神さま',
+      desc: 'CASTAWAY PLANET に出てくるモコたちの神さまになって、ひとつの星の一生を見まもる箱庭ゲーム。始まりはモコの親が子どもに読み聞かせる絵本で、古い本の挿し絵のなかで「まっしろで天使の輪をつけたモコ」が語られる。目がさめると、あなたはその神さま。星に名前をつけ、雲の上の島を歩き、天窓から地上をのぞき、祭壇で奇跡をえらぶ。海に土をもりあげ、森を生やし、ぴょんたやくも羊を生み、街をひらいて、はじまりの時代から星の時代までモコの暮らしが移り変わっていくのを眺める。降りの門から地上へ降りれば、自分の足でモコたちのあいだを歩いて話しかけられる。雲のはしには黒い城があり、信仰がたまると橋がかかって、こわい夢をくばるクロモコと向かいあうことになる。セーブは自動、スマホとタブレットにも対応。',
+    },
+    en: {
+      title: 'Moko God',
+      desc: 'A god game about the Moko from Castaway Planet, in which you are the white, haloed one they tell stories about. It opens as a bedtime picture book — a Moko parent reading to two children, the plates drawn like woodcuts in an old volume — and when the book closes you wake up on the clouds as the god in it. Name the planet, walk the cloud islands, watch the world through the sky window, and spend faith at the altar: raise land out of the sea, grow forests, put animals on the ground, found towns, send rain and sun, or throw down lightning if you would rather be feared. Towns grow through six ages, from grass nests to lit spires, and you can take the descent gate down and walk among the Mokos yourself. At the far edge of the clouds a black castle waits for the day your faith is strong enough to bridge it. Saves automatically; plays on phones and tablets.',
+    },
+  },
+  {
     slug: 'walled-wolves', genre: 'puzzle', players: '1P', date: '2026-08-25',
     ja: {
       title: 'WALLED WOLVES ― 壁の中の人狼',
