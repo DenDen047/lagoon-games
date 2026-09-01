@@ -2960,18 +2960,19 @@
 
   // ---- 障害物の種類 ----
   // solid: 通り抜けられない / opaque: 視線を遮る / stopsBullets: 弾を止める
-  // 茂みだけは「通れるが見通せない」= 隠れられる場所として特別扱いする。
+  // 視線を遮るのは建物(壁・崩れ壁)だけ。木・岩・茂みのような低い遮蔽の裏に回っても
+  // 姿は消えないし、こちらからも見える。弾と足は今までどおり普通に止まる。
   const OBSTACLE_KINDS = {
     wall:     { solid: true,  opaque: true,  stopsBullets: true },
     ruin:     { solid: true,  opaque: true,  stopsBullets: true },
-    crate:    { solid: true,  opaque: true,  stopsBullets: true },
-    sandbag:  { solid: true,  opaque: true,  stopsBullets: true },
-    rock:     { solid: true,  opaque: true,  stopsBullets: true },
-    wreck:    { solid: true,  opaque: true,  stopsBullets: true },
-    tree:     { solid: true,  opaque: true,  stopsBullets: true },
-    tires:    { solid: true,  opaque: true,  stopsBullets: true },
+    crate:    { solid: true,  opaque: false, stopsBullets: true },
+    sandbag:  { solid: true,  opaque: false, stopsBullets: true },
+    rock:     { solid: true,  opaque: false, stopsBullets: true },
+    wreck:    { solid: true,  opaque: false, stopsBullets: true },
+    tree:     { solid: true,  opaque: false, stopsBullets: true },
+    tires:    { solid: true,  opaque: false, stopsBullets: true },
     hedgehog: { solid: true,  opaque: false, stopsBullets: false },
-    bush:     { solid: false, opaque: true,  stopsBullets: false },
+    bush:     { solid: false, opaque: false, stopsBullets: false },
     barrel:   { solid: true,  opaque: false, stopsBullets: true },
   };
   const isSolid = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].solid : true;
@@ -3030,7 +3031,7 @@
       obs.push({ x: p.x - 15, y: p.y - 15, w: 30, h: 30, type: "barrel", hp: 30, r: 16 });
     }
 
-    // 遮蔽ゾーン。隠れる練習用に、コンテナ・崩れ壁・茂みを混ぜて並べる。
+    // 遮蔽ゾーン。弾をよける練習用に、コンテナ・崩れ壁・茂みを混ぜて並べる。
     const coverKinds = ["crate", "ruin", "bush", "tires", "crate", "bush", "hedgehog", "ruin", "bush", "crate", "wreck", "bush"];
     for (let i = 0; i < coverKinds.length; i++) {
       const t = coverKinds[i];
@@ -3047,7 +3048,7 @@
     return obs;
   }
 
-  // 暗黒の森 / 時の森: 木と茂みで埋め尽くし、見通しを極端に悪くする。
+  // 暗黒の森 / 時の森: 木と茂みで埋め尽くし、まっすぐ進めない入り組んだ地形にする。
   // 遮蔽が多いぶん、音を立てるとクリーチャーに位置がバレる。
   // clearing に半径を渡すと、マップ中央をその半径だけ空き地にする(時の森の岩場)。
   function genForestMap(clearing) {
@@ -3095,7 +3096,7 @@
       solids.push(tree);
     }
 
-    // 茂みは通り抜けられるので、視界を潰すために好きなだけ重ねて置く
+    // 茂みは通り抜けられるし視線も通る。足元を隠す飾りとして好きなだけ重ねて置く
     for (let i = 0; i < 190; i++) {
       const w = rand(64, 124), h = rand(58, 106);
       const x = rand(70, WORLD_W - 70 - w);
@@ -3136,7 +3137,7 @@
       obs.push({ x, y, w: rw, h: rh, type: "ruin", hp: Infinity, seed: Math.random() });
     }
 
-    // 散在カバー。茂みは通り抜けられるが視線を遮る = 隠れ場所。
+    // 散在カバー。茂みは通り抜けられて視線も通る。弾を止めるのは硬い遮蔽だけ。
     const coverTypes = ["crate", "crate", "sandbag", "rock", "tree", "tree", "bush", "bush", "wreck", "tires", "hedgehog"];
     const covers = 46;
     for (let i = 0; i < covers; i++) {
@@ -6032,7 +6033,7 @@
     drawBases();
     // 影 → 車両 → 兵士 → 投擲物/弾 → パーティクル
     drawStains();
-    drawObstaclesBack();
+    drawObstacles();
     drawTimeField();
     drawSwordRock();
     drawWires();
@@ -6050,7 +6051,6 @@
     for (const beast of G.beasts) if (!beast.dead && isEntityVisible(beast)) drawBeast(beast);
     for (const s of G.soldiers) if (!s.dead && s.vehicleId < 0 && isEntityVisible(s)) (s.dummy ? drawDummy(s) : drawSoldier(s));
     if (G.creature && creatureVisible()) drawCreature(G.creature);
-    drawObstaclesOver();
     drawParachutes();
     drawGrenades();
     drawBullets();
@@ -6197,19 +6197,9 @@
     }
   }
 
-  // 木と茂みは兵士より手前に描く。茂みに入った兵士が隠れて見えるようにするため。
-  const OVERHEAD_TYPES = { tree: 1, bush: 1 };
-
-  function drawObstaclesBack() {
-    for (const o of G.obstacles) {
-      if (!OVERHEAD_TYPES[o.type]) drawObstacle(o);
-    }
-  }
-
-  function drawObstaclesOver() {
-    for (const o of G.obstacles) {
-      if (OVERHEAD_TYPES[o.type]) drawObstacle(o);
-    }
+  // 障害物はすべて兵士より奥に描く。木や茂みに重なっても兵士が隠れないようにするため。
+  function drawObstacles() {
+    for (const o of G.obstacles) drawObstacle(o);
   }
 
   // ハロウィンの森に転がっているカボチャ。拾うと消える。
@@ -6484,7 +6474,7 @@
         ctx.fill();
       }
     } else if (o.type === "bush") {
-      // 通り抜けられるが視線は通らない = 伏兵に使える
+      // 通り抜けられて視線も通る。弾も抜ける。
       const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
       const blobs = 5;
       for (let i = 0; i < blobs; i++) {
