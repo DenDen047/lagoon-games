@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>PHANTOM DUEL ― 自分だけの幻影</title>
+<meta name="description" content="自分だけの幻影をつくって戦う見下ろし型のバトル。本体と幻影の2つの体を同時に動かして戦います。パンチ2発ごとに溜めが入るムートくん、レベル10の覚醒、練習場つき。" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<canvas id="game" hidden></canvas>
+
+<div id="hud" hidden>
+  <div class="hud-side">
+    <div class="hud-row"><b id="pName">じぶん</b><span class="lv" id="pLv">Lv1</span></div>
+    <div class="bar hp"><i id="pHp"></i></div>
+    <div class="bar gg"><i id="pGauge"></i></div>
+  </div>
+  <div id="hudMid">
+    <div id="hudTimer">90</div>
+    <div id="hudNote"></div>
+  </div>
+  <div class="hud-side right">
+    <div class="hud-row"><span class="lv" id="eLv">Lv1</span><b id="eName">あいて</b></div>
+    <div class="bar hp"><i id="eHp"></i></div>
+    <div class="bar gg"><i id="eGauge"></i></div>
+  </div>
+</div>
+
+<div id="touch" hidden>
+  <div id="padMove" class="pad"></div>
+  <div id="padAim" class="pad"></div>
+  <button id="btnAbil" class="tbtn" type="button">能力</button>
+  <button id="btnDodge" class="tbtn" type="button">回避</button>
+  <button id="btnQuit" class="tbtn small" type="button">やめる</button>
+</div>
+
+<div id="banner" hidden></div>
+<div id="ui"></div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="draw.js"></script>
+<script src="battle.js"></script>
+<script src="menu.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

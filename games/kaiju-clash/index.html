@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>KAIJU CLASH ― 街を壊す怪獣たち</title>
+<meta name="description" content="街を舞台に怪獣どうしが殴りあう対戦格闘。熱線を吐く恐竜、金色の三首竜、大猿、蛾、対怪獣ロボなど8体。ビルは殴れば倒れ、倒すほど怒りが溜まります。" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<canvas id="game" hidden></canvas>
+
+<div id="hud" hidden>
+  <div class="hud-side left">
+    <div class="hud-head"><b class="hud-name" id="n1"></b><span class="hud-sub" id="t1"></span></div>
+    <div class="bar hp"><i class="ghost" id="g1"></i><i class="fill" id="h1"></i></div>
+    <div class="bar rage"><i class="fill" id="r1"></i><span class="rage-label">RAGE</span></div>
+    <div class="wins" id="w1"></div>
+  </div>
+  <div class="hud-mid">
+    <div id="hudTimer">99</div>
+    <div id="hudStage"></div>
+  </div>
+  <div class="hud-side right">
+    <div class="hud-head"><b class="hud-name" id="n2"></b><span class="hud-sub" id="t2"></span></div>
+    <div class="bar hp"><i class="ghost" id="g2"></i><i class="fill" id="h2"></i></div>
+    <div class="bar rage"><i class="fill" id="r2"></i><span class="rage-label">RAGE</span></div>
+    <div class="wins" id="w2"></div>
+  </div>
+</div>
+
+<div id="touch" hidden>
+  <div class="tpad">
+    <button class="tkey" data-k="left" type="button">◀</button>
+    <button class="tkey" data-k="up" type="button">▲</button>
+    <button class="tkey" data-k="right" type="button">▶</button>
+    <button class="tkey guard" data-k="down" type="button">ガード</button>
+  </div>
+  <div class="tbtns">
+    <button class="tkey act light" data-k="light" type="button">弱</button>
+    <button class="tkey act heavy" data-k="heavy" type="button">強</button>
+    <button class="tkey act sp" data-k="special" type="button">必殺</button>
+    <button class="tkey act su" data-k="super" type="button">超</button>
+  </div>
+  <button id="btnPause" type="button">‖</button>
+</div>
+
+<div id="banner" hidden></div>
+<div id="ui"></div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="kaiju.js"></script>
+<script src="stage.js"></script>
+<script src="fx.js"></script>
+<script src="ai.js"></script>
+<script src="battle.js"></script>
+<script src="menu.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
