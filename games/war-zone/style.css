@@ -354,6 +354,8 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 .tbtn.shield-btn { background: rgba(43, 105, 119, 0.8); border: 1px solid rgba(138, 238, 235, 0.32); }
 .tbtn.ult-btn { background: rgba(146, 74, 24, 0.82); border: 1px solid rgba(255, 200, 120, 0.4); color: #ffe9c2; }
 .tbtn.ult-btn.charging { opacity: 0.45; }
+.tbtn.nvg-btn { background: rgba(34, 82, 48, 0.82); border: 1px solid rgba(140, 240, 170, 0.34); color: #d6ffe4; }
+.tbtn.nvg-btn.active { color: #0d1a10; background: #8cf0aa; }
 .tbtn.shield-btn.active { color: #202511; background: #a9efe5; }
 .tbtn:active { background: rgba(255, 255, 255, 0.25); }
 
@@ -965,3 +967,47 @@ body.touch-ui .garden-help { display: none; }
   .bench-weapons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .swatch.big { width: 26px; height: 20px; border-radius: 5px; }
+
+/* 進行が保存できない環境で出る警告。見落とされると詰むので目立たせる。 */
+.save-warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #d9a441;
+  border-left: 4px solid #d9a441;
+  border-radius: 4px;
+  background: rgba(217, 164, 65, 0.12);
+  color: #f0d9a8;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+/* セーブデータの書き出し / 読み込み */
+.save-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.save-row .save-btn {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+}
+.save-msg {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #a9d6a0;
+  text-align: left;
+}
+.save-msg.bad { color: #f0a8a8; }
+
+@media (max-width: 520px) {
+  .save-row { flex-direction: column; }
+}
+.save-label {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  color: #8a9a86;
+  text-align: left;
+}
