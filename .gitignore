@@ -16,3 +16,9 @@ Thumbs.db
 
 # Linux
 *~
+
+# BOOTH 配布パッケージのビルド成果物 (tools/build-booth-package.sh)
+dist/
+
+# 生成物 (販売ページ用の画像など。必要なら作り直せる)
+output/
