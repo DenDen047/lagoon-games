@@ -8,7 +8,6 @@ const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const dist = (ax, ay, bx, by) => Math.hypot(bx - ax, by - ay);
-const dist2 = (ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay; return dx * dx + dy * dy; };
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -66,13 +65,6 @@ function shade(hex, amt) {
   const g = clamp(((n >> 8) & 255) + amt, 0, 255);
   const b = clamp((n & 255) + amt, 0, 255);
   return `rgb(${r},${g},${b})`;
-}
-function mixHex(a, b, t) {
-  const na = parseInt(a.slice(1), 16), nb = parseInt(b.slice(1), 16);
-  const r = Math.round(lerp((na >> 16) & 255, (nb >> 16) & 255, t));
-  const g = Math.round(lerp((na >> 8) & 255, (nb >> 8) & 255, t));
-  const bl = Math.round(lerp(na & 255, nb & 255, t));
-  return `rgb(${r},${g},${bl})`;
 }
 
 /* -------------------------------- 入力 --------------------------------
@@ -246,7 +238,7 @@ function toast(msg, kind = '') {
 }
 
 /* -------------------------------- セーブ -------------------------------- */
-const SAVE_KEY = 'moko-god-save-v1';
+const SAVE_KEY = 'moko-god-save-v2';
 const Save = {
   write(data) {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; }

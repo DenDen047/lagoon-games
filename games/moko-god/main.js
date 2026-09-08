@@ -1,41 +1,37 @@
 /* =========================================================================
    MOKO GOD ― ゲーム本体
-   タイトル / えほん / 雲の上 / 地上 / 城 / セーブ
+   歩く / 斬る / 魔法をつかう / 魔物と戦う / レベルをあげる / 城へ
    ========================================================================= */
 'use strict';
 
-const YEAR_SEC = 26;      /* 1年がすぎる長さ（ふつうの速さで、秒） */
-const GOD_SPEED_SKY = 250;
-const GOD_SPEED_GROUND = 190;
-const GOD_SPEED_CASTLE = 260;
+const HERO_SPEED = 180;
+const ROLL_TIME = 0.34;
+const ROLL_SPEED = 460;
+const IFRAME_HIT = 0.7;
+const DAY_SEC = 210;      /* 1日の長さ（秒） */
+
+function sealCount(G) {
+  return (G.seals.seal_leaf ? 1 : 0) + (G.seals.seal_sun ? 1 : 0) + (G.seals.seal_ice ? 1 : 0);
+}
 
 const Game = {
-  G: null,
-  canvas: null,
-  playing: false,
-  last: 0,
-  autoT: 0,
-  agentT: 0,
-  hudT: 0,
+  G: null, canvas: null, playing: false, last: 0, saveT: 0, spawnT: 0, hudT: 0,
+  newArmed: false,
 
   /* ============================== はじめ ============================== */
   boot() {
     this.canvas = document.getElementById('game');
-    World.generate(1);
     R.init(this.canvas);
     Input.init(this.canvas);
-    SKY.build();
-    Book.init();
     UI.init();
     this.bindTitle();
     requestAnimationFrame((t) => this.loop(t));
   },
 
   bindTitle() {
-    const hasSave = Save.has();
     const cont = document.getElementById('btnContinue');
-    cont.disabled = !hasSave;
-    if (!hasSave) cont.classList.add('ghost');
+    cont.disabled = !Save.has();
+    if (cont.disabled) cont.classList.add('ghost');
 
     document.getElementById('btnNew').addEventListener('click', () => {
       if (Save.has() && !this.newArmed) {
@@ -45,36 +41,32 @@ const Game = {
       }
       document.getElementById('titleScreen').classList.add('hidden');
       document.getElementById('nameScreen').classList.remove('hidden');
-      const inp = document.getElementById('planetInput');
-      inp.value = PLANET_NAMES[Math.floor(Math.random() * PLANET_NAMES.length)];
-      document.getElementById('godInput').value = GOD_DEFAULT;
+      document.getElementById('heroInput').value = HERO_DEFAULT;
+      document.getElementById('heroInput').focus();
     });
     cont.addEventListener('click', () => this.continueGame());
     document.getElementById('btnHelp').addEventListener('click', () => {
       document.getElementById('titleHelp').classList.toggle('on');
     });
-    document.getElementById('btnRandName').addEventListener('click', () => {
-      document.getElementById('planetInput').value = PLANET_NAMES[Math.floor(Math.random() * PLANET_NAMES.length)];
-    });
     document.getElementById('btnNameBack').addEventListener('click', () => {
       document.getElementById('nameScreen').classList.add('hidden');
       document.getElementById('titleScreen').classList.remove('hidden');
     });
-    document.getElementById('btnCreate').addEventListener('click', () => {
-      const planet = (document.getElementById('planetInput').value.trim() || PLANET_NAMES[0]).slice(0, 14);
-      const godName = (document.getElementById('godInput').value.trim() || GOD_DEFAULT).slice(0, 10);
+    document.getElementById('btnStart').addEventListener('click', () => {
+      const name = (document.getElementById('heroInput').value.trim() || HERO_DEFAULT).slice(0, 10);
       document.getElementById('nameScreen').classList.add('hidden');
-      this.newGame(planet, godName);
+      this.newGame(name);
     });
-    document.getElementById('planetInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') document.getElementById('btnCreate').click();
+    document.getElementById('heroInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btnStart').click();
     });
+    document.getElementById('btnRevive').addEventListener('click', () => this.revive());
     document.getElementById('btnEndClose').addEventListener('click', () => {
       document.getElementById('endScreen').classList.add('hidden');
     });
     document.getElementById('btnEndTitle').addEventListener('click', () => {
       document.getElementById('endScreen').classList.add('hidden');
-      this.save(true); this.toTitle();
+      this.save(); this.toTitle();
     });
   },
 
@@ -89,743 +81,825 @@ const Game = {
     if (!cont.disabled) cont.classList.remove('ghost');
   },
 
-  /* ============================ 新しい星 ============================ */
-  freshState(planet, godName, seed) {
+  /* ============================ 新しい旅 ============================ */
+  freshState(name, seed) {
+    const v = World.villages[0];
     return {
-      ver: 1, seed, planet, godName,
-      year: 1, tod: 0.32, speed: 1, faith: 60, faithRate: 0,
-      scene: 'sky',
-      god: { x: SKY.spawn.x, y: SKY.spawn.y, gx: 0, gy: 0, cx: 0, cy: 300, face: 1, wob: 0, hurt: 0 },
-      towns: [], herds: [], edits: [], chronicle: [],
-      nextTownId: 1, nextHerdId: 1,
-      demon: { alive: true, power: 6, hp: 120, maxHp: 120, bridge: false, sealed: 0, met: false },
-      ui: { miracle: 'land', species: 'pyonta', cur: null },
-      flags: {},
-      landing: null,
-      castle: { orbs: [], shots: [], dx: 0, dy: -120, hurt: 0, face: 1, cool: 0, shotCool: 0, burst: 0 },
-      agents: [],
+      ver: 2, seed, name,
+      tod: 0.35, home: 0,
+      p: {
+        x: v.tx * TILE + 16, y: v.ty * TILE + 70,
+        vx: 0, vy: 0, face: 1, aim: Math.PI / 2, wob: 0,
+        lv: 1, exp: 0, coin: 30,
+        hp: baseHp(1), mp: baseMp(1),
+        weapon: 0, armor: 0, charm: 0,
+        ownW: [0], ownA: [0], ownC: [0],
+        bag: { herb: 3 },
+        skill: 0, cool: [0, 0, 0, 0, 0, 0],
+        swing: 0, swingMax: 0, hitIds: [], iframe: 0,
+        roll: 0, rdx: 0, rdy: 0, ward: 0, dead: false,
+      },
+      seals: { seal_leaf: false, seal_sun: false, seal_ice: false },
+      kills: 0, bossDown: {}, demonDown: false, metElder: false,
+      mobs: [], npcs: [], bullets: [], novas: [], drops: [],
+      nearNpc: null, quest: '', paused: false,
     };
   },
 
-  newGame(planet, godName) {
+  newGame(name) {
     const seed = (Math.random() * 0xffffffff) >>> 0;
     World.generate(seed);
-    const G = this.freshState(planet, godName, seed);
-    this.G = G;
-    R.thumbDirty = true;
-
-    /* いちばんはじめの街 */
-    const rng = new RNG(seed ^ 0x5bf03635);
-    const cradle = World.findCradle(rng);
-    const t0 = World.makeTown(G, cradle.tx, cradle.ty, 'はじまりの里');
-    G.ui.cur = { tx: t0.tx, ty: t0.ty };
-
-    /* はじめのいきもの */
-    World.spawnHerd(G, clamp(t0.tx + 5, 1, World.w - 2), clamp(t0.ty - 4, 1, World.h - 2), 'pyonta', 5);
-    World.spawnHerd(G, clamp(t0.tx - 6, 1, World.w - 2), clamp(t0.ty + 5, 1, World.h - 2), 'pyonta', 4);
-
-    this.log(`${planet} という星が生まれた。`);
-    this.log(`海に丘がもりあがり、${t0.name} に さいしょのモコたちが目をさました。`);
-
-    Book.start(() => this.begin(true));
+    this.G = this.freshState(name, seed);
+    this.buildNpcs();
+    this.G.metElder = true;   /* 旅立ちの場面で村長が話しかけてくる */
+    this.refreshQuest();
+    this.start(true);
+    UI.talk('村長', ELDER_LINES[0]);
   },
 
   continueGame() {
     const d = Save.read();
-    if (!d) { toast('セーブがありません', 'bad'); return; }
-    try { this.loadState(d); } catch (e) { toast('セーブを読めませんでした', 'bad'); return; }
-    document.getElementById('titleScreen').classList.add('hidden');
-    this.begin(false);
-  },
-
-  begin(showIntroTalk) {
-    const G = this.G;
-    document.getElementById('hud').classList.remove('hidden');
-    this.playing = true;
-    this.last = performance.now();
-    R.thumbDirty = true;
-    if (G.scene === 'ground') R.snap(G.god.gx, G.god.gy, { w: World.pxW(), h: World.pxH() });
-    else R.snap(G.god.x, G.god.y);
-    UI.refreshHUD(G);
-    this.updateQuest();
-    if (showIntroTalk) {
-      UI.talk(G.godName, [
-        { who: G.godName, text: 'ここは雲の上。下には、生まれたばかりの星がひろがっている。' },
-        { who: '', text: '歩いて「天窓」へ行くと、地上のようすが見られる。「創世の祭壇」では奇跡をえらべる。' },
-        { who: '', text: '「降りの門」から地上へ降りれば、モコたちのあいだを歩ける。' },
-      ]);
-    }
-    this.save();
-  },
-
-  /* ============================== セーブ ============================== */
-  save(loud) {
-    const G = this.G;
-    if (!G) return;
-    const d = {
-      ver: 1, seed: G.seed, planet: G.planet, godName: G.godName,
-      year: G.year, tod: G.tod, faith: G.faith, speed: G.speed,
-      scene: G.scene, god: G.god, landing: G.landing,
-      towns: G.towns, herds: G.herds, edits: G.edits,
-      chronicle: G.chronicle.slice(-200),
-      nextTownId: G.nextTownId, nextHerdId: G.nextHerdId,
-      demon: G.demon, ui: { miracle: G.ui.miracle, species: G.ui.species, cur: G.ui.cur },
-      flags: G.flags,
-    };
-    const ok = Save.write(d);
-    if (loud) toast(ok ? '記録した' : '記録できなかった', ok ? 'good' : 'bad');
-  },
-
-  loadState(d) {
+    if (!d) return;
     World.generate(d.seed);
-    World.applyEdits(d.edits);
-    const G = this.freshState(d.planet, d.godName, d.seed);
-    Object.assign(G, {
-      year: d.year, tod: d.tod, faith: d.faith, speed: d.speed ?? 1,
-      scene: d.scene === 'castle' ? 'sky' : d.scene,
-      god: d.god, landing: d.landing || null,
-      towns: d.towns, herds: d.herds, edits: d.edits,
-      chronicle: d.chronicle || [],
-      nextTownId: d.nextTownId, nextHerdId: d.nextHerdId,
-      demon: Object.assign({ met: false }, d.demon),
-      flags: d.flags || {},
-    });
-    G.ui = Object.assign(G.ui, d.ui || {});
-    for (const t of G.towns) if (!t.houses || !t.houses.length) World.rebuildHouses(t);
+    const G = this.freshState(d.name, d.seed);
+    Object.assign(G.p, d.p);
+    G.p.swing = 0; G.p.roll = 0; G.p.iframe = 0; G.p.ward = 0; G.p.dead = false;
+    G.p.cool = [0, 0, 0, 0, 0, 0];
+    G.seals = d.seals;
+    G.kills = d.kills || 0;
+    G.bossDown = d.bossDown || {};
+    G.demonDown = !!d.demonDown;
+    G.metElder = !!d.metElder;
+    G.tod = d.tod ?? 0.35;
     this.G = G;
-    R.thumbDirty = true;
+    this.buildNpcs();
+    this.refreshQuest();
+    this.start(true);
   },
 
-  log(text) {
+  start(snap) {
+    this.playing = true;
+    document.getElementById('titleScreen').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    R.follow(this.G.p.x, this.G.p.y, snap);
+    UI.refreshHUD(this.G);
+    UI.refreshSkills(this.G);
+    FX.clear();
+  },
+
+  /* ============================ 村びと ============================ */
+  buildNpcs() {
     const G = this.G;
-    G.chronicle.push({ y: G.year, t: text });
-    if (G.chronicle.length > 400) G.chronicle.splice(0, 100);
+    G.npcs = [];
+    World.villages.forEach((v, vi) => {
+      const jobs = v.main ? ['elder', 'smith', 'shop', 'inn', 'sage'] : ['smith', 'shop', 'inn'];
+      const cx = v.tx * TILE + 16, cy = v.ty * TILE + 16;
+      jobs.forEach((job, i) => {
+        const a = (i / jobs.length) * TAU + vi;
+        const p = { x: cx + Math.cos(a) * 74, y: cy + Math.sin(a) * 58 };
+        const jd = NPC_JOBS[job];
+        G.npcs.push({
+          job, name: jd.name, icon: jd.icon, shop: jd.shop, village: vi,
+          x: p.x, y: p.y, hx: p.x, hy: p.y, face: 1, wob: Math.random() * TAU,
+          c1: jd.c1, c2: jd.c2,
+        });
+      });
+      /* 子どもと村びとを何人か */
+      const extra = v.main ? 4 : 2;
+      for (let i = 0; i < extra; i++) {
+        const a = Math.random() * TAU, r = 30 + Math.random() * 70;
+        G.npcs.push({
+          job: 'villager', name: MOKO_NAMES[(vi * 5 + i) % MOKO_NAMES.length], icon: '', village: vi,
+          x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r * 0.8,
+          hx: cx, hy: cy, face: 1, wob: Math.random() * TAU,
+          child: i % 2 === 0,
+          c1: '#ffc2dc', c2: '#ff8ab4',
+        });
+      }
+    });
   },
 
-  setSpeed(s) { this.G.speed = s; UI.refreshHUD(this.G); },
-
-  /* ============================== ループ ============================== */
+  /* ============================ ループ ============================ */
   loop(now) {
-    const dt = clamp((now - this.last) / 1000, 0, 0.05);
+    requestAnimationFrame((t) => this.loop(t));
+    const dt = Math.min(0.05, (now - this.last) / 1000 || 0);
     this.last = now;
     R.t += dt;
 
-    if (Book.running) {
-      Book.update(dt);
-      Input.endFrame();
-      requestAnimationFrame((t) => this.loop(t));
-      return;
-    }
+    if (!this.playing) { Input.endFrame(); return; }
+    const G = this.G;
+    const busy = UI.talkOn || UI.panelOpen || G.p.dead;
+    if (!busy) this.update(dt);
+    else { FX.update(dt); this.wobble(dt); }
 
-    if (this.playing) {
-      this.update(dt);
-      this.draw(dt);
-      this.hudT += dt;
-      if (this.hudT > 0.25) { this.hudT = 0; UI.refreshHUD(this.G); this.updateQuest(); }
-      UI.drawMap();
-    }
+    R.follow(G.p.x, G.p.y);
+    R.drawWorld(G);
+    const mm = R.minimapSpot();
+    R.drawMinimap(R.ctx, G, mm.x, mm.y, mm.r);
+
+    this.hudT += dt;
+    if (this.hudT > 0.1) { this.hudT = 0; UI.refreshHUD(G); }
+    this.saveT += dt;
+    if (this.saveT > 12) { this.saveT = 0; this.save(); }
+
     Input.endFrame();
-    requestAnimationFrame((t) => this.loop(t));
+  },
+
+  wobble(dt) {
+    for (const n of this.G.npcs) n.wob += dt * 2;
+    for (const m of this.G.mobs) m.wob += dt * 3;
   },
 
   update(dt) {
     const G = this.G;
+    G.tod = (G.tod + dt / DAY_SEC) % 1;
+
+    this.updateHotkeys();
+    this.updatePlayer(dt);
+    this.updateMobs(dt);
+    this.updateBullets(dt);
+    this.updateNovas(dt);
+    this.updateNpcs(dt);
+    this.updateDrops(dt);
     FX.update(dt);
-    G.god.wob += dt * 6;
 
-    const busy = UI.panelOpen || UI.talkOn;
-    const timeRuns = G.speed > 0 && !busy && G.scene !== 'castle';
-    if (timeRuns) {
-      G.tod += (dt * G.speed) / YEAR_SEC;
-      while (G.tod >= 1) {
-        G.tod -= 1;
-        World.yearTick(G, (t) => this.log(t));
-        this.checkEnding();
-        this.save();
-      }
+    /* 魔物をわかせる */
+    this.spawnT += dt;
+    if (this.spawnT > 0.7) {
+      this.spawnT = 0;
+      World.spawnRing(G, G.p.x, G.p.y);
+      World.cullFar(G, G.p.x, G.p.y);
     }
-
-    /* キーの受けつけ */
-    if (!busy) {
-      if (Input.hit('m')) UI.openMap();
-      if (Input.hit('q')) UI.openMiracles();
-      if (Input.hit('r')) UI.openChronicle();
-      if (Input.hit('e')) this.act();
-      for (let i = 1; i <= 9; i++) if (Input.hit(String(i)) && MIRACLES[i - 1]) UI.pickMiracle(MIRACLES[i - 1].id);
-    }
-    if (Input.hit('Escape')) { if (UI.panelOpen) UI.close(); else if (!UI.talkOn) UI.openMenu(); }
-    if (UI.talkOn && (Input.hit(' ') || Input.hit('Enter') || Input.hit('e'))) UI.talkNext();
-
-    if (busy) return;
-    if (G.scene === 'sky') this.updateSky(dt);
-    else if (G.scene === 'ground') this.updateGround(dt);
-    else if (G.scene === 'castle') this.updateCastle(dt);
-
-    this.autoT += dt;
-    if (this.autoT > 30) { this.autoT = 0; this.save(); }
+    this.checkBosses();
   },
 
-  draw() {
+  /* ============================ キー ============================ */
+  updateHotkeys() {
     const G = this.G;
-    if (G.scene === 'sky') R.drawSky(G);
-    else if (G.scene === 'ground') R.drawGround(G);
-    else R.drawCastle(G);
-  },
-
-  /* ============================== 雲の上 ============================== */
-  updateSky(dt) {
-    const G = this.G, g = G.god;
-    const ax = Input.axis();
-    const sp = GOD_SPEED_SKY * dt;
-    if (ax.x || ax.y) {
-      const nx = g.x + ax.x * sp, ny = g.y + ax.y * sp;
-      if (SKY.onCloud(nx, g.y, G)) g.x = nx;
-      if (SKY.onCloud(g.x, ny, G)) g.y = ny;
-      if (ax.x) g.face = ax.x > 0 ? 1 : -1;
-      if (Math.random() < 0.14) FX.rise(g.x, g.y + 10, 'rgba(255,255,255,.7)', 1, 0.8);
+    if (Input.hit('Escape')) { UI.openMenu(); return; }
+    if (Input.hit('m')) { UI.openMap(); return; }
+    if (Input.hit('i') || Input.hit('Tab')) { UI.openBag(); return; }
+    if (Input.hit('e')) this.act();
+    if (Input.hit('f')) this.useItem('herb');
+    for (let i = 0; i < SKILLS.length; i++) {
+      if (Input.hit(String(i + 1))) this.cast(i);
     }
-    g.x = clamp(g.x, 40, SKY.W - 40); g.y = clamp(g.y, 40, SKY.H - 40);
-    R.follow(g.x, g.y);
-
-    const s = SKY.spotAt(g.x, g.y);
-    UI.setPrompt(s ? `${s.name}：${s.hint}` : '');
-  },
-
-  /* ============================== 地上 ============================== */
-  updateGround(dt) {
-    const G = this.G, g = G.god;
-    const ax = Input.axis();
-    const sp = GOD_SPEED_GROUND * dt;
-    if (ax.x || ax.y) {
-      const nx = g.gx + ax.x * sp, ny = g.gy + ax.y * sp;
-      if (World.walkableAtPx(nx, g.gy)) g.gx = nx;
-      if (World.walkableAtPx(g.gx, ny)) g.gy = ny;
-      if (ax.x) g.face = ax.x > 0 ? 1 : -1;
-    }
-    g.gx = clamp(g.gx, 8, World.pxW() - 8); g.gy = clamp(g.gy, 8, World.pxH() - 8);
-    R.follow(g.gx, g.gy, { w: World.pxW(), h: World.pxH() });
-
-    /* 画面をタップ／クリックしたら、そこに奇跡 */
-    if (Input.mouse.clicked) {
-      const wx = Input.mouse.x + R.cam.x, wy = Input.mouse.y + R.cam.y;
-      this.castMiracle(Math.floor(wx / TILE), Math.floor(wy / TILE));
-    }
-
-    this.agentT += dt;
-    if (this.agentT > 0.6) { this.agentT = 0; this.syncAgents(); }
-    this.updateAgents(dt);
-
-    /* 近くにあるもの */
-    const near = this.nearestInteract();
-    if (near) UI.setPrompt(near.prompt);
-    else UI.setPrompt('');
-  },
-
-  pillars() {
-    const G = this.G;
-    const out = G.towns.map((t) => ({ x: t.tx * TILE + 16 + 62, y: t.ty * TILE + 16 - 34, town: t }));
-    if (G.landing) out.push({ x: G.landing.x, y: G.landing.y, town: null });
-    return out;
-  },
-
-  nearestInteract() {
-    const G = this.G, g = G.god;
-    for (const p of this.pillars()) {
-      if (dist(g.gx, g.gy, p.x, p.y) < 62) {
-        return { kind: 'pillar', prompt: '昇りの柱：雲の上へもどる' };
-      }
-    }
-    let best = null, bd = 74;
-    for (const a of G.agents) {
-      if (a.kind !== 'moko') continue;
-      const d = dist(g.gx, g.gy, a.x, a.y);
-      if (d < bd) { bd = d; best = a; }
-    }
-    if (best) return { kind: 'moko', agent: best, prompt: `${best.name} に話しかける` };
-    return null;
-  },
-
-  /* --------------------------- 地上のモコたち --------------------------- */
-  syncAgents() {
-    const G = this.G, g = G.god, RANGE = 1200;
-    G.agents = G.agents.filter((a) => dist(a.x, a.y, g.gx, g.gy) < RANGE * 1.5);
-
-    for (const t of G.towns) {
-      const cx = t.tx * TILE + 16, cy = t.ty * TILE + 16;
-      if (dist(cx, cy, g.gx, g.gy) > RANGE) continue;
-      const want = clamp(Math.round(t.pop / 4), 3, 12);
-      const have = G.agents.filter((a) => a.kind === 'moko' && a.town === t.id).length;
-      for (let i = have; i < want; i++) {
-        const rng = new RNG((t.id * 977 + i * 31 + G.year) >>> 0);
-        const a = rng.f(0, TAU), r = rng.f(20, 110);
-        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-        if (!World.walkableAtPx(x, y)) continue;
-        const child = rng.chance(0.3);
-        G.agents.push({
-          kind: 'moko', town: t.id, x, y, hx: cx, hy: cy,
-          tx: x, ty: y, face: 1, wob: rng.f(0, TAU), child,
-          name: rng.pick(MOKO_NAMES) + (child ? 'ちゃん' : ''),
-          c1: child ? '#ffd8e8' : '#ffc2dc', c2: child ? '#f0a8c8' : '#ff8ab4',
-          spd: child ? 46 : 32, wait: rng.f(0, 2), sleep: false, said: false,
-        });
-      }
-    }
-
-    for (const h of G.herds) {
-      const cx = h.tx * TILE + 16, cy = h.ty * TILE + 16;
-      if (dist(cx, cy, g.gx, g.gy) > RANGE) continue;
-      const want = clamp(h.n, 1, 6);
-      const have = G.agents.filter((a) => a.kind === 'beast' && a.hid === h.id).length;
-      for (let i = have; i < want; i++) {
-        const rng = new RNG((h.id * 613 + i * 47) >>> 0);
-        const a = rng.f(0, TAU), r = rng.f(10, 70);
-        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-        G.agents.push({
-          kind: 'beast', hid: h.id, sp: h.sp, x, y, hx: cx, hy: cy,
-          tx: x, ty: y, face: 1, wob: rng.f(0, TAU), spd: 34, wait: rng.f(0, 2),
-        });
+    if (Input.hit('q')) {
+      const usable = SKILLS.map((s, i) => i).filter((i) => G.p.lv >= SKILLS[i].lv);
+      if (usable.length) {
+        const at = usable.indexOf(G.p.skill);
+        G.p.skill = usable[(at + 1) % usable.length];
+        UI.refreshSkills(G);
       }
     }
   },
 
-  updateAgents(dt) {
-    const G = this.G;
-    const night = !(G.tod > 0.25 && G.tod < 0.78);
-    for (const a of G.agents) {
-      a.wob += dt * (a.kind === 'moko' ? 5 : 6);
-      if (a.kind === 'moko') {
-        const t = G.towns.find((x) => x.id === a.town);
-        a.sleep = night && t && t.era < 1 ? true : (night && Math.random() < 0.0006 ? true : a.sleep);
-        if (night) { a.hx = t ? t.tx * TILE + 16 : a.hx; a.hy = t ? t.ty * TILE + 16 : a.hy; }
-        if (a.sleep && night) continue;
-        if (!night) a.sleep = false;
-      }
-      a.wait -= dt;
-      if (a.wait <= 0) {
-        a.wait = 1 + Math.random() * 2.5;
-        const r = a.kind === 'moko' ? (night ? 40 : 110) : 80;
-        const ang = Math.random() * TAU, d = Math.random() * r;
-        const nx = a.hx + Math.cos(ang) * d, ny = a.hy + Math.sin(ang) * d;
-        if (World.walkableAtPx(nx, ny)) { a.tx = nx; a.ty = ny; }
-      }
-      const dx = a.tx - a.x, dy = a.ty - a.y, d = Math.hypot(dx, dy);
-      if (d > 3) {
-        const step = Math.min(a.spd * dt, d);
-        const nx = a.x + (dx / d) * step, ny = a.y + (dy / d) * step;
-        if (World.walkableAtPx(nx, ny)) { a.x = nx; a.y = ny; a.face = dx > 0 ? 1 : -1; }
-        else a.wait = 0;
-      }
-    }
-  },
-
-  /* =============================== 行動 =============================== */
-  act() {
-    const G = this.G;
-    if (UI.talkOn) { UI.talkNext(); return; }
-    if (UI.panelOpen) return;
-    if (G.scene === 'sky') {
-      const s = SKY.spotAt(G.god.x, G.god.y);
-      if (!s) return;
-      this.useSpot(s);
-    } else if (G.scene === 'ground') {
-      const near = this.nearestInteract();
-      if (!near) return;
-      if (near.kind === 'pillar') this.ascend();
-      else this.talkTo(near.agent);
-    }
-  },
-
-  useSpot(s) {
-    const G = this.G;
-    switch (s.id) {
-      case 'shrine':
-        this.save(true);
-        FX.ring(G.god.x, G.god.y, 'rgba(255,236,170,.9)', 18, 120, 0.8);
-        UI.talk('', [{ who: 'はじまりの社', text: `ここまでの${G.year}年が、社の石に刻まれた。（記録した）` }]);
-        break;
-      case 'window': UI.openMap(); break;
-      case 'altar': UI.openMiracles(); break;
-      case 'tower': UI.openChronicle(); break;
-      case 'gate': {
-        const target = G.landing
-          ? { tx: Math.floor(G.landing.x / TILE), ty: Math.floor(G.landing.y / TILE) }
-          : (G.towns[0] ? { tx: G.towns[0].tx, ty: G.towns[0].ty + 3 } : { tx: World.w >> 1, ty: World.h >> 1 });
-        const p = World.findWalkableNear(target.tx, target.ty);
-        this.descend(p.tx, p.ty);
-        break;
-      }
-      case 'castle': this.enterCastle(); break;
-    }
-  },
-
-  talkTo(a) {
-    const G = this.G;
-    const t = G.towns.find((x) => x.id === a.town);
-    const era = t ? t.era : 0;
-    const line = a.child ? CHILD_LINES[Math.floor(Math.random() * CHILD_LINES.length)]
-      : MOKO_LINES[era][Math.floor(Math.random() * MOKO_LINES[era].length)];
-    UI.talk(a.name, [{ who: a.name, text: line }]);
-    FX.rise(a.x, a.y - 10, 'rgba(255,224,138,.9)', 4, 1);
-    G.faith += 2;
-    if (t) t.happy = clamp(t.happy + 1.5, 0, 100);
-    if (!G.flags.metMoko) {
-      G.flags.metMoko = true;
-      this.log('神さまが地上におりて、はじめてモコと言葉をかわした。');
-    }
-  },
-
-  /* --------------------------- 行き来 --------------------------- */
-  descend(tx, ty) {
-    const G = this.G;
-    G.scene = 'ground';
-    G.god.gx = tx * TILE + 16; G.god.gy = ty * TILE + 16;
-    G.landing = { x: G.god.gx + 62, y: G.god.gy - 34 };
-    G.agents = [];
-    FX.clear();
-    R.snap(G.god.gx, G.god.gy, { w: World.pxW(), h: World.pxH() });
-    FX.ring(G.god.gx, G.god.gy, 'rgba(255,236,170,.9)', 20, 160, 0.9);
-    this.syncAgents();
-    UI.refreshHUD(G);
-    toast('地上へ降りた', 'holy');
-    this.save();
-  },
-
-  ascend() {
-    const G = this.G;
-    G.scene = 'sky';
-    const gate = SKY.spots.find((s) => s.id === 'gate');
-    G.god.x = gate.x; G.god.y = gate.y + 80;
-    FX.clear();
-    R.snap(G.god.x, G.god.y);
-    FX.ring(G.god.x, G.god.y, 'rgba(255,236,170,.9)', 20, 160, 0.9);
-    UI.refreshHUD(G);
-    toast('雲の上へもどった', 'holy');
-    this.save();
-  },
-
-  /* =============================== 奇跡 =============================== */
-  miracleCost(G, m) {
-    if (m.id === 'life') return SPECIES[G.ui.species].cost;
-    return m.cost;
-  },
-
-  castMiracle(tx, ty) {
-    const G = this.G;
-    const m = MIRACLES.find((k) => k.id === G.ui.miracle);
-    if (!m) return;
-    const cost = this.miracleCost(G, m);
-    if (G.faith < cost) { toast('信仰がたりない', 'bad'); return; }
-    if (!World.inside(tx, ty)) return;
-
-    let ok = false, terrain = false;
-    const r = m.r;
-
-    const eachInR = (fn) => {
-      for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) {
-        if (Math.hypot(x - tx, y - ty) > r + 0.2) continue;
-        fn(x, y);
-      }
+  /* ============================ 勇者 ============================ */
+  stats() {
+    const p = this.G.p;
+    const w = WEAPONS[p.weapon], a = ARMORS[p.armor], c = CHARMS[p.charm];
+    return {
+      maxhp: Math.round(baseHp(p.lv) + (c.hp || 0)),
+      maxmp: Math.round(baseMp(p.lv) + (c.mp || 0)),
+      atk: Math.round(baseAtk(p.lv) + w.atk + (c.atk || 0)),
+      def: Math.round(baseDef(p.lv) + a.def + (c.def || 0)),
+      speed: HERO_SPEED * a.spd * (c.spd || 1),
+      w, a, c,
     };
+  },
 
-    switch (m.id) {
-      case 'land': {
-        eachInR((x, y) => {
-          const t = World.get(x, y);
-          if (isWater(t)) {
-            const edge = [World.get(x + 1, y), World.get(x - 1, y), World.get(x, y + 1), World.get(x, y - 1)].some(isWater);
-            if (World.edit(G, x, y, edge ? T.SAND : T.PLAIN)) { ok = true; terrain = true; }
-          }
-        });
-        if (!ok) toast('ここは海ではない', 'bad');
-        break;
+  updatePlayer(dt) {
+    const G = this.G, p = G.p;
+    const st = this.stats();
+    p.hp = Math.min(p.hp, st.maxhp);
+    p.mp = Math.min(p.mp + dt * (2.6 + p.lv * 0.14), st.maxmp);
+
+    p.iframe = Math.max(0, p.iframe - dt);
+    p.ward = Math.max(0, p.ward - dt);
+    for (let i = 0; i < p.cool.length; i++) p.cool[i] = Math.max(0, p.cool[i] - dt);
+
+    /* --- ねらう向き --- */
+    if (!Input.isTouch) {
+      const wx = Input.mouse.x + R.cam.x, wy = Input.mouse.y + R.cam.y;
+      p.aim = Math.atan2(wy - p.y, wx - p.x);
+    }
+
+    /* --- 動く --- */
+    const ax = Input.axis();
+    if (p.roll > 0) {
+      p.roll -= dt;
+      this.moveEnt(p, p.rdx * ROLL_SPEED * dt, p.rdy * ROLL_SPEED * dt, 11);
+      p.wob += dt * 22;
+      if (Math.random() < 0.6) FX.list.push({ x: p.x, y: p.y + 6, vx: 0, vy: 0, life: 0.28, max: 0.28, color: 'rgba(210,230,255,.6)', r: 5, g: 0 });
+    } else {
+      let sp = st.speed;
+      if (p.swing > 0) sp *= 0.45;
+      const dx = ax.x * sp * dt, dy = ax.y * sp * dt;
+      this.moveEnt(p, dx, dy, 11);
+      if (ax.x || ax.y) {
+        p.wob += dt * 9;
+        if (Input.isTouch) p.aim = Math.atan2(ax.y, ax.x);
+      } else p.wob += dt * 1.6;
+
+      /* ころがる */
+      if (Input.hit('Shift') && (ax.x || ax.y)) {
+        p.roll = ROLL_TIME; p.iframe = Math.max(p.iframe, ROLL_TIME + 0.06);
+        p.rdx = ax.x; p.rdy = ax.y;
       }
-      case 'sea': {
-        const tw = G.towns.find((t) => Math.hypot(t.tx - tx, t.ty - ty) < r + 2);
-        if (tw) { toast(`${tw.name} がある。沈められない`, 'bad'); return; }
-        eachInR((x, y) => {
-          const t = World.get(x, y);
-          if (isLand(t)) { if (World.edit(G, x, y, T.SHALLOW)) { ok = true; terrain = true; } }
-        });
-        if (!ok) toast('ここは陸ではない', 'bad');
-        break;
+    }
+
+    /* タッチのときは、指でふれた場所のほうへ剣をふる。
+       ふれていないあいだは、歩いている向き。 */
+    if (Input.isTouch && Input.mouse.down) {
+      const wx = Input.mouse.x + R.cam.x, wy = Input.mouse.y + R.cam.y;
+      if (dist(wx, wy, p.x, p.y) > 24) p.aim = Math.atan2(wy - p.y, wx - p.x);
+    }
+    p.face = Math.cos(p.aim) >= 0 ? 1 : -1;
+
+    /* --- 斬る --- */
+    if (p.swing > 0) {
+      const before = p.swing;
+      p.swing -= dt;
+      /* ふりはじめの 65% にあたり判定 */
+      if (before / p.swingMax > 0.35) this.swingHit();
+      if (p.swing <= 0) p.hitIds.length = 0;
+    } else if (!UI.talkOn && (Input.mouse.down || Input.held(' '))) {
+      p.swing = st.w.spd; p.swingMax = st.w.spd; p.hitIds = [];
+      if (!Input.isTouch) {
+        const wx = Input.mouse.x + R.cam.x, wy = Input.mouse.y + R.cam.y;
+        p.aim = Math.atan2(wy - p.y, wx - p.x);
       }
-      case 'forest': {
-        eachInR((x, y) => {
-          const t = World.get(x, y);
-          if ([T.PLAIN, T.GRASS, T.FLOWER, T.HILL, T.MARSH, T.SAND].includes(t)) {
-            if (World.edit(G, x, y, T.FOREST)) { ok = true; terrain = true; }
-          }
-        });
-        if (!ok) toast('木の育つ土がない', 'bad');
-        break;
+    }
+
+    /* --- 近くの村びと --- */
+    G.nearNpc = null;
+    let best = 999;
+    for (const n of G.npcs) {
+      const d = dist(n.x, n.y, p.x, p.y);
+      if (d < 56 && d < best) { best = d; G.nearNpc = n; }
+    }
+    /* 村の中では、すこしずつ回復する */
+    if (World.villageAt(p.x, p.y, 150)) {
+      p.hp = Math.min(st.maxhp, p.hp + dt * 6);
+    }
+  },
+
+  /* その場に立てるか。体を四角とみなして四隅をしらべる。
+     左右で判定がちがうと、水ぎわで身動きがとれなくなるので対称にする。 */
+  canStand(x, y, r) {
+    const h = r * 0.6;
+    return World.walkPx(x - r, y - h) && World.walkPx(x + r, y - h)
+        && World.walkPx(x - r, y + h) && World.walkPx(x + r, y + h);
+  },
+
+  /* あたり判定つきで動かす。縦横を別々に見るので、壁ぞいに滑る。 */
+  moveEnt(e, dx, dy, r) {
+    /* めりこんでいるときは、どこへでも逃げられるようにする */
+    const trapped = !this.canStand(e.x, e.y, r);
+    if (dx && (trapped || this.canStand(e.x + dx, e.y, r))) e.x += dx;
+    if (dy && (trapped || this.canStand(e.x, e.y + dy, r))) e.y += dy;
+    e.x = clamp(e.x, 20, World.pxW() - 20);
+    e.y = clamp(e.y, 20, World.pxH() - 20);
+  },
+
+  /* 剣のあたり判定 */
+  swingHit() {
+    const G = this.G, p = G.p, st = this.stats();
+    const w = st.w;
+    for (const m of G.mobs) {
+      if (p.hitIds.includes(m.id)) continue;
+      const d = dist(m.x, m.y, p.x, p.y);
+      const reach = w.range + 12 * (m.scale || 1);
+      if (d > reach) continue;
+      let da = Math.atan2(m.y - p.y, m.x - p.x) - p.aim;
+      while (da > Math.PI) da -= TAU;
+      while (da < -Math.PI) da += TAU;
+      if (Math.abs(da) > w.arc / 2 + 0.25) continue;
+
+      p.hitIds.push(m.id);
+      const crit = Math.random() < 0.09;
+      let dmg = st.atk * (0.9 + Math.random() * 0.2) * (crit ? 1.9 : 1) - m.def.def * 0.9;
+      dmg = Math.max(1, Math.round(dmg));
+      this.hurtMob(m, dmg, crit, Math.cos(p.aim), Math.sin(p.aim));
+    }
+  },
+
+  /* ============================ 魔法 ============================ */
+  cast(i) {
+    const G = this.G, p = G.p;
+    const s = SKILLS[i];
+    if (!s || p.lv < s.lv) { toast('まだ覚えていない魔法だ', 'bad'); return; }
+    if (p.cool[i] > 0) return;
+    if (p.mp < s.mp) { toast('MPがたりない', 'bad'); return; }
+    p.mp -= s.mp; p.cool[i] = s.cool; p.skill = i;
+    const mag = 1 + (p.lv - 1) * 0.12;
+
+    if (s.kind === 'bolt') {
+      this.shoot(p.x, p.y, p.aim, s.speed, Math.round(s.dmg * mag), s.color, s.r, true);
+    } else if (s.kind === 'spread') {
+      for (let k = 0; k < s.n; k++) {
+        const a = p.aim + (k - (s.n - 1) / 2) * s.spread;
+        const b = this.shoot(p.x, p.y, a, s.speed, Math.round(s.dmg * mag), s.color, s.r, true);
+        b.slow = s.slow;
       }
-      case 'rain': case 'sun': {
-        const hit = G.towns.filter((t) => Math.hypot(t.tx - tx, t.ty - ty) <= r + 3);
-        if (!hit.length) { toast('とどく街がない', 'bad'); return; }
-        for (const t of hit) {
-          if (m.id === 'rain') { t.rain = 5; t.happy = clamp(t.happy + 4, 0, 100); }
-          else { t.sun = 5; t.happy = clamp(t.happy + 14, 0, 100); }
+    } else if (s.kind === 'heal') {
+      const mx = this.stats().maxhp;
+      const h = Math.round(s.heal * mag);
+      p.hp = Math.min(mx, p.hp + h);
+      FX.text(p.x, p.y - 26, '+' + h, '#8ef0a8');
+      FX.ring(p.x, p.y, 'rgba(142,240,168,.9)', 14, 70, 0.6);
+    } else if (s.kind === 'nova') {
+      const dmg = Math.round(s.dmg * mag);
+      G.novas.push({ x: p.x, y: p.y, r: s.r, life: 0.45, max: 0.45, color: s.color });
+      for (const m of G.mobs) {
+        if (dist(m.x, m.y, p.x, p.y) > s.r) continue;
+        const a = Math.atan2(m.y - p.y, m.x - p.x);
+        this.hurtMob(m, Math.max(1, dmg - m.def.def), false, Math.cos(a), Math.sin(a));
+      }
+      FX.ring(p.x, p.y, s.color, 20, s.r * 1.6, 0.5);
+      document.body.classList.add('shake');
+      setTimeout(() => document.body.classList.remove('shake'), 200);
+    } else if (s.kind === 'ward') {
+      p.ward = s.time;
+      FX.ring(p.x, p.y, s.color, 16, 60, 0.7);
+      toast('まもりの光をまとった', 'good');
+    }
+    UI.refreshSkills(G);
+  },
+
+  shoot(x, y, a, speed, dmg, color, r, mine, home) {
+    const b = {
+      x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+      dmg, color, r, mine: !!mine, life: 2.4, home: home || 0,
+    };
+    this.G.bullets.push(b);
+    return b;
+  },
+
+  /* ============================ 道具 ============================ */
+  useItem(id) {
+    const G = this.G, p = G.p;
+    if (!p.bag[id]) { toast('持っていない', 'bad'); return; }
+    const it = ITEMS[id];
+    if (it.quest) return;
+    const st = this.stats();
+    p.bag[id]--;
+    if (p.bag[id] <= 0) delete p.bag[id];
+    if (it.heal) { p.hp = Math.min(st.maxhp, p.hp + it.heal); FX.text(p.x, p.y - 26, '+' + Math.min(it.heal, st.maxhp), '#8ef0a8'); }
+    if (it.mana) { p.mp = Math.min(st.maxmp, p.mp + it.mana); FX.text(p.x, p.y - 40, '+MP', '#9fd8ff'); }
+    toast(it.name + ' をつかった', 'good');
+  },
+
+  /* ============================ 魔物 ============================ */
+  updateMobs(dt) {
+    const G = this.G, p = G.p;
+    for (let i = G.mobs.length - 1; i >= 0; i--) {
+      const m = G.mobs[i];
+      const d = m.def;
+      m.wob += dt * (d.fly ? 3.4 : 2.6);
+      m.hurt = Math.max(0, m.hurt - dt);
+      m.slow = Math.max(0, m.slow - dt);
+      m.cool = Math.max(0, m.cool - dt);
+      m.t += dt;
+
+      /* ノックバック */
+      if (Math.abs(m.kbx) > 1 || Math.abs(m.kby) > 1) {
+        this.moveEnt(m, m.kbx * dt, m.kby * dt, 10);
+        m.kbx *= 0.86; m.kby *= 0.86;
+      }
+
+      const dp = dist(m.x, m.y, p.x, p.y);
+      const speed = d.speed * (m.slow > 0 ? 0.45 : 1);
+      const aggro = m.boss ? 900 : 400;
+
+      if (dp > aggro && !m.boss) {
+        /* うろうろする */
+        if (m.t > 2.2) { m.t = 0; m.wx = m.x + (Math.random() - 0.5) * 180; m.wy = m.y + (Math.random() - 0.5) * 180; }
+        const a = Math.atan2(m.wy - m.y, m.wx - m.x);
+        if (dist(m.wx, m.wy, m.x, m.y) > 12) {
+          this.moveEnt(m, Math.cos(a) * speed * 0.4 * dt, Math.sin(a) * speed * 0.4 * dt, 10);
+          m.face = Math.cos(a) >= 0 ? 1 : -1;
         }
-        /* 畑をひろげる（実りの時代から） */
-        if (m.id === 'rain') {
-          for (const t of hit) {
-            if (t.era < 2) continue;
-            for (let k = 0; k < 6; k++) {
-              const a = Math.random() * TAU, rr = 2 + Math.random() * 4;
-              const x = Math.round(t.tx + Math.cos(a) * rr), y = Math.round(t.ty + Math.sin(a) * rr);
-              if ([T.PLAIN, T.GRASS, T.FLOWER].includes(World.get(x, y))) { World.edit(G, x, y, T.FIELD); terrain = true; }
+        continue;
+      }
+
+      const a = Math.atan2(p.y - m.y, p.x - m.x);
+      m.face = Math.cos(a) >= 0 ? 1 : -1;
+      const ai = m.demon ? 'demon' : (d.ai || (d.shot ? 'shoot' : 'chase'));
+
+      switch (ai) {
+        case 'shoot': {
+          const want = d.reach * 0.6;
+          if (dp > want * 1.15) this.moveEnt(m, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, 10);
+          else if (dp < want * 0.6) this.moveEnt(m, -Math.cos(a) * speed * 0.7 * dt, -Math.sin(a) * speed * 0.7 * dt, 10);
+          if (m.cool <= 0 && dp < d.reach) {
+            m.cool = d.cool;
+            const s = d.shot;
+            this.shoot(m.x, m.y, a, s.speed, s.dmg, s.color, s.r, false, s.home || 0);
+          }
+          break;
+        }
+        case 'charge': {
+          if (m.state === 'dash') {
+            this.moveEnt(m, m.dx * speed * 2.3 * dt, m.dy * speed * 2.3 * dt, 10);
+            if (m.t > 0.45) { m.state = 'idle'; m.t = 0; m.cool = d.cool; }
+            this.touchDamage(m, dp, 1.2);
+          } else if (m.cool <= 0 && dp < 220) {
+            m.state = 'dash'; m.t = 0; m.dx = Math.cos(a); m.dy = Math.sin(a);
+            FX.rise(m.x, m.y, 'rgba(255,220,160,.7)', 4, 0.5);
+          } else {
+            this.moveEnt(m, Math.cos(a) * speed * 0.8 * dt, Math.sin(a) * speed * 0.8 * dt, 10);
+            this.touchDamage(m, dp, 1);
+          }
+          break;
+        }
+        case 'burst': {
+          if (dp < 320) this.moveEnt(m, Math.cos(a) * speed * 0.5 * dt, Math.sin(a) * speed * 0.5 * dt, 10);
+          if (m.cool <= 0 && dp < 300) {
+            m.cool = d.cool;
+            const b = d.burst;
+            for (let k = 0; k < b.n; k++) {
+              this.shoot(m.x, m.y, (k / b.n) * TAU + m.t, b.speed, b.dmg, b.color, 5, false);
             }
           }
+          this.touchDamage(m, dp, 1);
+          break;
         }
-        this.log(`${hit.map((t) => t.name).join('・')} に ${m.name} をおくった。`);
-        ok = true;
-        break;
-      }
-      case 'life': {
-        const sp = G.ui.species, def = SPECIES[sp];
-        const p = def.biome.includes(World.get(tx, ty)) ? { tx, ty } : null;
-        if (!p) { toast(`${def.name} は「${def.biome.map((b) => TILE_DEF[b].name).join('・')}」にすむ`, 'bad'); return; }
-        World.spawnHerd(G, tx, ty, sp, 4);
-        this.log(`${def.name} が生まれた。`);
-        toast(`${def.icon} ${def.name} が生まれた`, 'good');
-        ok = true;
-        break;
-      }
-      case 'town': {
-        const c = World.canFoundAt(G, tx, ty);
-        if (!c.ok) { toast(c.why, 'bad'); return; }
-        const t = World.makeTown(G, tx, ty);
-        this.log(`${t.name} がひらかれた。あたらしいモコたちが目をさました。`);
-        toast(`🏠 ${t.name} をひらいた`, 'holy');
-        ok = true;
-        break;
-      }
-      case 'bless': {
-        const t = G.towns.find((x) => Math.hypot(x.tx - tx, x.ty - ty) < 7);
-        if (!t) { toast('近くに街がない', 'bad'); return; }
-        t.blessed += 3; t.happy = clamp(t.happy + 12, 0, 100);
-        this.log(`${t.name} に みちびきをさずけた。`);
-        toast(`🕊 ${t.name} に みちびき`, 'holy');
-        ok = true;
-        break;
-      }
-      case 'light': {
-        G.demon.power = Math.max(0, G.demon.power - 22);
-        let cleared = 0;
-        for (let i = G.herds.length - 1; i >= 0; i--) {
-          const h = G.herds[i];
-          if (SPECIES[h.sp].evil && Math.hypot(h.tx - tx, h.ty - ty) <= r + 2) { G.herds.splice(i, 1); cleared++; }
-        }
-        for (const t of G.towns) {
-          if (Math.hypot(t.tx - tx, t.ty - ty) <= r + 3) {
-            t.happy = clamp(t.happy + 10, 0, 100); t.event = null; t.eventLeft = 0;
+        case 'slam': {
+          if (dp > d.reach) this.moveEnt(m, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, 10);
+          else if (m.cool <= 0) {
+            m.cool = d.cool;
+            G.novas.push({ x: m.x, y: m.y, r: d.reach * 2.4, life: 0.4, max: 0.4, color: '#c8b48a' });
+            if (dp < d.reach * 2.4) this.hurtPlayer(d.atk * 1.4, a);
+            document.body.classList.add('shake');
+            setTimeout(() => document.body.classList.remove('shake'), 180);
           }
+          break;
         }
-        this.log(`奇跡の光がさし、影がしりぞいた。${cleared ? `かげむし ${cleared}群が消えた。` : ''}`);
-        toast('💫 影がしりぞいた', 'holy');
-        ok = true;
-        break;
+        case 'demon': this.demonAI(m, dt, dp, a); break;
+        default: {
+          this.moveEnt(m, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, 10);
+          this.touchDamage(m, dp, 1);
+        }
       }
-      case 'bolt': {
-        eachInR((x, y) => {
-          const t = World.get(x, y);
-          if (t === T.FOREST || t === T.FIELD || t === T.FLOWER) { World.edit(G, x, y, T.PLAIN); terrain = true; }
-        });
-        for (const t of G.towns) {
-          if (Math.hypot(t.tx - tx, t.ty - ty) <= r + 2) {
-            t.happy = clamp(t.happy - 20, 0, 100); t.pop *= 0.96; t.burnt = 3;
-            this.log(`${t.name} に雷が落ちた。モコたちはふるえている。`);
-          }
+
+      /* 主は攻撃も混ぜる */
+      if (m.guardian && d.shot && m.cool <= 0 && dp < 360) {
+        m.cool = 1.4;
+        const s = d.shot;
+        for (let k = -1; k <= 1; k++) {
+          this.shoot(m.x, m.y, a + k * 0.28, s.speed, s.dmg, s.color, s.r, false, s.home || 0);
         }
-        toast('⚡️ 雷が落ちた', 'bad');
-        ok = true;
-        break;
       }
     }
-
-    if (!ok) return;
-    G.faith -= cost;
-    if (terrain) R.thumbDirty = true;
-
-    /* 見た目のごほうび */
-    const wx = tx * TILE + 16, wy = ty * TILE + 16;
-    if (G.scene === 'ground') {
-      const col = m.id === 'bolt' ? 'rgba(255,240,150,.95)' : 'rgba(255,236,170,.9)';
-      FX.ring(wx, wy, col, 16, 90 + r * 20, 0.8);
-      FX.burst(wx, wy, col, 14, 130, 0.9, -20);
-      FX.text(wx, wy - 30, m.name, '#ffe08a');
-      if (m.id === 'rain') for (let i = 0; i < 30; i++) {
-        FX.list.push({ x: wx + (Math.random() - 0.5) * r * TILE, y: wy - 220 - Math.random() * 100, vx: 0, vy: 260, life: 1.1, max: 1.1, color: 'rgba(160,210,255,.9)', r: 1.6, g: 90 });
-      }
-      if (m.id === 'bolt') document.body.classList.add('shake');
-      setTimeout(() => document.body.classList.remove('shake'), 200);
-    } else {
-      FX.ring(G.god.x, G.god.y, 'rgba(255,236,170,.9)', 14, 90, 0.7);
-    }
-    UI.refreshHUD(G);
   },
 
-  /* =============================== 城 =============================== */
-  enterCastle() {
+  /* さわられたときのダメージ */
+  touchDamage(m, dp, mul) {
+    const reach = (m.def.reach || 26) + 10 * (m.scale || 1);
+    if (dp > reach) return;
+    if (m.cool > 0) return;
+    m.cool = m.def.cool || 1;
+    const a = Math.atan2(this.G.p.y - m.y, this.G.p.x - m.x);
+    this.hurtPlayer(m.def.atk * mul, a);
+  },
+
+  hurtMob(m, dmg, crit, kx, ky) {
+    m.hp -= dmg;
+    m.hurt = 0.14;
+    m.kbx = kx * (m.boss ? 60 : 260) / (m.scale || 1);
+    m.kby = ky * (m.boss ? 60 : 260) / (m.scale || 1);
+    FX.text(m.x + (Math.random() - 0.5) * 10, m.y - 20 * (m.scale || 1), String(dmg), crit ? '#ffd24a' : '#ffffff');
+    FX.burst(m.x, m.y, crit ? '#ffd24a' : '#ff8a8a', crit ? 10 : 5, 90, 0.4);
+    if (m.hp <= 0) this.killMob(m);
+  },
+
+  killMob(m) {
     const G = this.G;
-    if (!G.demon.alive) {
-      UI.talk('', [{ who: 'モコの城', text: '門はかたく閉じている。中の気配は、いまはない。' }]);
+    const i = G.mobs.indexOf(m);
+    if (i >= 0) G.mobs.splice(i, 1);
+    FX.burst(m.x, m.y, '#ffffff', 16, 130, 0.7);
+    G.kills++;
+
+    if (m.demon) return this.winGame(m);
+    if (m.guardian) return this.guardianDown(m);
+
+    this.addExp(m.def.exp);
+    const coin = Math.round(m.def.coin * (0.7 + Math.random() * 0.7));
+    G.drops.push({ x: m.x, y: m.y, kind: 'coin', n: coin, icon: '🪙', life: 30 });
+    if (Math.random() < 0.16) {
+      const id = Math.random() < 0.7 ? 'herb' : 'water';
+      G.drops.push({ x: m.x + 14, y: m.y + 8, kind: 'item', id, n: 1, icon: ITEMS[id].icon, life: 30 });
+    }
+  },
+
+  guardianDown(m) {
+    const G = this.G;
+    const g = GUARDIANS[m.guardian];
+    G.seals[g.seal] = true;
+    G.bossDown[m.guardian] = true;
+    this.addExp(g.exp);
+    G.p.coin += g.coin;
+    toast(`${ITEMS[g.seal].icon} ${ITEMS[g.seal].name} を手に入れた！`, 'holy');
+    UI.talk(g.name, [g.down, sealCount(G) >= 3 ? '三つの印がそろった。城の門がひらく。' : 'のこりの印を、さがしなさい。']);
+    this.refreshQuest();
+    this.save();
+  },
+
+  winGame(m) {
+    const G = this.G;
+    G.demonDown = true;
+    this.addExp(DEMON.exp);
+    G.p.coin += DEMON.coin;
+    this.refreshQuest();
+    this.save();
+    UI.talk(DEMON.name, [DEMON.defeat], () => {
+      document.getElementById('endTitle').textContent = 'おわり ― 影のあけた朝';
+      document.getElementById('endBody').innerHTML =
+        `<p>クロモコは灰になって、黒い城はしずかになった。</p>
+         <p>村へ帰ると、モコたちが門の外まで出て待っていた。だれも、あなたを神とは呼ばなかった。名前で呼んだ。</p>
+         <p class="stat">レベル ${G.p.lv} ／ たおした魔物 ${G.kills} ／ 所持金 ${G.p.coin}</p>`;
+      document.getElementById('endScreen').classList.remove('hidden');
+    });
+  },
+
+  /* --------------------------- 魔王のたたかい --------------------------- */
+  demonAI(m, dt, dp, a) {
+    const G = this.G;
+    const ph = m.hp / m.maxhp > 0.6 ? 0 : m.hp / m.maxhp > 0.3 ? 1 : 2;
+    m.phase = ph;
+    const speed = DEMON.speed * (1 + ph * 0.2) * (m.slow > 0 ? 0.5 : 1);
+
+    if (m.state === 'dash') {
+      this.moveEnt(m, m.dx * speed * 3 * dt, m.dy * speed * 3 * dt, 14);
+      if (m.t > 0.5) { m.state = 'idle'; m.t = 0; m.cool = 1.2 - ph * 0.25; }
+      if (dp < 56) this.hurtPlayer(DEMON.atk * 1.5, a);
       return;
     }
-    const start = () => {
-      G.scene = 'castle';
-      G.god.cx = 0; G.god.cy = 300;
-      G.castle = { orbs: [], shots: [], dx: 0, dy: -120, hurt: 0, face: 1, cool: 1.2, shotCool: 0, burst: 3 };
-      G.demon.hp = G.demon.maxHp = 120 + Math.floor(G.demon.power * 1.2);
-      FX.clear();
-      UI.refreshHUD(G);
-      if (!G.demon.met) {
-        G.demon.met = true;
-        this.log(`神さまが ${DEMON.name} と向かいあった。`);
+    if (dp > 90) this.moveEnt(m, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, 14);
+
+    if (m.cool > 0) return;
+    m.pat = (m.pat + 1) % (ph >= 1 ? 4 : 3);
+    m.cool = 1.5 - ph * 0.3;
+
+    if (m.pat === 0) {
+      /* 影の弾幕 */
+      const n = 10 + ph * 4;
+      for (let k = 0; k < n; k++) {
+        this.shoot(m.x, m.y, (k / n) * TAU + m.t, 170 + ph * 30, 30 + ph * 9, '#c88aff', 7, false);
       }
-      UI.talk(DEMON.name, DEMON.lines.map((t) => ({ who: `${DEMON.name}（${DEMON.title}）`, text: t })).concat([
-        { who: '', text: '光をなげてぶつける（クリック／画面右がわをタップ）。当たると信仰がへる。' },
-      ]));
-    };
-    UI.talk('', [{ who: 'モコの城', text: '黒い門がひとりでに開いた。中から、なまぬるい風。' }], start);
+    } else if (m.pat === 1) {
+      /* まっすぐ突っこむ */
+      m.state = 'dash'; m.t = 0; m.dx = Math.cos(a); m.dy = Math.sin(a);
+      FX.rise(m.x, m.y, 'rgba(255,90,140,.8)', 8, 0.5);
+    } else if (m.pat === 2) {
+      /* 追ってくる影の矢 */
+      for (let k = -1; k <= 1; k++) {
+        this.shoot(m.x, m.y, a + k * 0.3, 200, 36 + ph * 11, '#ff5a7a', 8, false, 1.8);
+      }
+    } else {
+      /* 影のモコを呼ぶ */
+      for (let k = 0; k < 3; k++) {
+        const ang = Math.random() * TAU;
+        const nm = makeMob('kagemadoushi', m.x + Math.cos(ang) * 130, m.y + Math.sin(ang) * 130);
+        if (World.walkPx(nm.x, nm.y)) G.mobs.push(nm);
+      }
+      toast('クロモコが影を呼んだ', 'bad');
+    }
   },
 
-  updateCastle(dt) {
-    const G = this.G, C = G.castle, g = G.god;
-    UI.setPrompt('');
-    const ax = Input.axis();
-    const sp = GOD_SPEED_CASTLE * dt;
-    let nx = g.cx + ax.x * sp, ny = g.cy + ax.y * sp;
-    if (!CASTLE.inside(nx, g.cy)) nx = g.cx;
-    if (!CASTLE.inside(g.cx, ny)) ny = g.cy;
-    g.cx = nx; g.cy = ny;
-    if (ax.x) g.face = ax.x > 0 ? 1 : -1;
-
-    if (g.hurt > 0) g.hurt -= dt;
-    if (C.hurt > 0) C.hurt -= dt;
-
-    /* 光をなげる */
-    C.shotCool -= dt;
-    if (Input.mouse.down && C.shotCool <= 0) {
-      C.shotCool = 0.22;
-      const mx = Input.mouse.x - R.W / 2, my = Input.mouse.y - R.H / 2;
-      const dx = mx - g.cx, dy = my - g.cy, d = Math.hypot(dx, dy) || 1;
-      C.shots.push({ x: g.cx, y: g.cy, vx: (dx / d) * 480, vy: (dy / d) * 480, life: 1.6 });
-      FX.burst(g.cx, g.cy, 'rgba(255,240,190,.9)', 3, 40, 0.3, 0);
-    }
-
-    for (let i = C.shots.length - 1; i >= 0; i--) {
-      const s = C.shots[i];
-      s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
-      if (s.life <= 0 || !CASTLE.inside(s.x, s.y)) { C.shots.splice(i, 1); continue; }
-      if (G.demon.alive && dist(s.x, s.y, C.dx, C.dy) < 42) {
-        C.shots.splice(i, 1);
-        G.demon.hp -= 5;
-        C.hurt = 0.12;
-        FX.burst(s.x, s.y, 'rgba(255,240,190,.95)', 8, 90, 0.4, 0);
-        if (G.demon.hp <= 0) { this.winCastle(); return; }
+  /* ============================ 弾 ============================ */
+  updateBullets(dt) {
+    const G = this.G, p = G.p;
+    for (let i = G.bullets.length - 1; i >= 0; i--) {
+      const b = G.bullets[i];
+      b.life -= dt;
+      if (b.life <= 0) { G.bullets.splice(i, 1); continue; }
+      if (b.home && !b.mine) {
+        const a = Math.atan2(p.y - b.y, p.x - b.x);
+        const sp = Math.hypot(b.vx, b.vy);
+        const ca = Math.atan2(b.vy, b.vx);
+        let da = a - ca;
+        while (da > Math.PI) da -= TAU;
+        while (da < -Math.PI) da += TAU;
+        const na = ca + clamp(da, -b.home * dt, b.home * dt);
+        b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp;
+      }
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (!World.walkPx(b.x, b.y)) {
+        FX.burst(b.x, b.y, b.color, 6, 70, 0.35);
+        G.bullets.splice(i, 1); continue;
+      }
+      if (b.mine) {
+        let hit = false;
+        for (const m of G.mobs) {
+          if (dist(m.x, m.y, b.x, b.y) > 14 * (m.scale || 1) + b.r) continue;
+          const a = Math.atan2(b.vy, b.vx);
+          this.hurtMob(m, Math.max(1, Math.round(b.dmg - m.def.def * 0.5)), false, Math.cos(a), Math.sin(a));
+          if (b.slow) m.slow = b.slow;
+          hit = true; break;
+        }
+        if (hit) { FX.burst(b.x, b.y, b.color, 8, 80, 0.4); G.bullets.splice(i, 1); }
+      } else if (dist(p.x, p.y, b.x, b.y) < 13 + b.r) {
+        const a = Math.atan2(b.vy, b.vx);
+        this.hurtPlayer(b.dmg, a);
+        FX.burst(b.x, b.y, b.color, 8, 80, 0.4);
+        G.bullets.splice(i, 1);
       }
     }
+  },
 
-    if (!G.demon.alive) return;
+  updateNovas(dt) {
+    const G = this.G;
+    for (let i = G.novas.length - 1; i >= 0; i--) {
+      G.novas[i].life -= dt;
+      if (G.novas[i].life <= 0) G.novas.splice(i, 1);
+    }
+  },
 
-    /* 悪魔のうごき */
-    C.dx += Math.cos(R.t * 0.7) * 40 * dt;
-    C.dy += Math.sin(R.t * 0.9) * 26 * dt;
-    C.dx = clamp(C.dx, -260, 260); C.dy = clamp(C.dy, -230, 120);
-    C.face = g.cx > C.dx ? 1 : -1;
-
-    C.cool -= dt;
-    if (C.cool <= 0) {
-      C.cool = clamp(1.35 - G.demon.power * 0.002, 0.5, 1.35);
-      const dx = g.cx - C.dx, dy = g.cy - C.dy, d = Math.hypot(dx, dy) || 1;
-      C.orbs.push({ x: C.dx, y: C.dy, vx: (dx / d) * 190, vy: (dy / d) * 190, r: 11, life: 6 });
-      C.burst -= 1;
-      if (C.burst <= 0) {
-        C.burst = 4;
-        for (let i = 0; i < 10; i++) {
-          const a = (i / 10) * TAU + R.t;
-          C.orbs.push({ x: C.dx, y: C.dy, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, r: 9, life: 6 });
+  /* ============================ 村びと ============================ */
+  updateNpcs(dt) {
+    for (const n of this.G.npcs) {
+      n.wob += dt * 2.4;
+      if (Math.random() < 0.004) { n.tx2 = n.hx + (Math.random() - 0.5) * 90; n.ty2 = n.hy + (Math.random() - 0.5) * 70; }
+      if (n.tx2 !== undefined) {
+        const a = Math.atan2(n.ty2 - n.y, n.tx2 - n.x);
+        if (dist(n.tx2, n.ty2, n.x, n.y) > 6) {
+          n.x += Math.cos(a) * 22 * dt; n.y += Math.sin(a) * 22 * dt;
+          n.face = Math.cos(a) >= 0 ? 1 : -1;
         }
       }
     }
+  },
 
-    for (let i = C.orbs.length - 1; i >= 0; i--) {
-      const o = C.orbs[i];
-      o.x += o.vx * dt; o.y += o.vy * dt; o.life -= dt;
-      if (o.life <= 0 || !CASTLE.inside(o.x, o.y)) { C.orbs.splice(i, 1); continue; }
-      if (g.hurt <= 0 && dist(o.x, o.y, g.cx, g.cy) < 20 + o.r) {
-        C.orbs.splice(i, 1);
-        g.hurt = 0.9;
-        G.faith = Math.max(0, G.faith - 12);
-        FX.burst(g.cx, g.cy, 'rgba(255,90,140,.9)', 12, 120, 0.5, 0);
-        document.body.classList.add('shake');
-        setTimeout(() => document.body.classList.remove('shake'), 200);
-        if (G.faith <= 0) { this.loseCastle(); return; }
+  /* ============================ 落ちもの ============================ */
+  updateDrops(dt) {
+    const G = this.G, p = G.p;
+    for (let i = G.drops.length - 1; i >= 0; i--) {
+      const d = G.drops[i];
+      d.life -= dt;
+      if (d.life <= 0) { G.drops.splice(i, 1); continue; }
+      const dd = dist(d.x, d.y, p.x, p.y);
+      if (dd < 90) {
+        const a = Math.atan2(p.y - d.y, p.x - d.x);
+        const pull = clamp((90 - dd) * 4, 30, 320);
+        d.x += Math.cos(a) * pull * dt; d.y += Math.sin(a) * pull * dt;
+      }
+      if (dd < 20) {
+        if (d.kind === 'coin') { p.coin += d.n; FX.text(p.x, p.y - 30, '+' + d.n + '🪙', '#ffe08a'); }
+        else { p.bag[d.id] = (p.bag[d.id] || 0) + d.n; FX.text(p.x, p.y - 30, ITEMS[d.id].name, '#9fe8ff'); }
+        G.drops.splice(i, 1);
       }
     }
   },
 
-  winCastle() {
-    const G = this.G;
-    G.demon.alive = false; G.demon.power = 0; G.demon.sealed = 0; G.demon.hp = 0;
-    G.faith += 80;
-    for (const t of G.towns) { t.happy = clamp(t.happy + 20, 0, 100); t.event = null; t.eventLeft = 0; }
-    for (let i = G.herds.length - 1; i >= 0; i--) if (SPECIES[G.herds[i].sp].evil) G.herds.splice(i, 1);
-    this.log(`${DEMON.name} を封じた。星から、こわい夢がしばらく消えた。`);
-    FX.ring(G.castle.dx, G.castle.dy, 'rgba(255,240,190,.95)', 26, 200, 1.2);
-    UI.talk('', [
-      { who: DEMON.name, text: DEMON.defeat },
-      { who: '', text: `${DEMON.name} は 城のおくに封じられた。地上のモコたちが、いっせいに空を見あげている。` },
-    ], () => { G.scene = 'sky'; this.backToCastleGate(); });
+  /* ============================ ダメージ ============================ */
+  hurtPlayer(raw, a) {
+    const G = this.G, p = G.p;
+    if (p.iframe > 0 || p.dead) return;
+    const st = this.stats();
+    /* 守りは「割合で減らす」。足し算で引くと、後半のダメージが 1 に潰れてしまう。 */
+    let dmg = raw * (0.9 + Math.random() * 0.2) * (100 / (100 + st.def * 2.2));
+    if (p.ward > 0) dmg *= 0.5;
+    dmg = Math.max(1, Math.round(dmg));
+    p.hp -= dmg;
+    p.iframe = IFRAME_HIT;
+    FX.text(p.x, p.y - 30, String(dmg), '#ff8a9a');
+    FX.burst(p.x, p.y, '#ff6a7a', 8, 90, 0.4);
+    document.body.classList.add('shake');
+    setTimeout(() => document.body.classList.remove('shake'), 160);
+    if (p.hp <= 0) this.die();
   },
 
-  loseCastle() {
+  die() {
     const G = this.G;
-    this.log('神さまの光がつきて、城からはじき出された。');
-    UI.talk('', [{ who: DEMON.name, text: 'ほら。信じられていないと、そんなものさ。' }],
-      () => { G.scene = 'sky'; this.backToCastleGate(); toast('信仰をためて、また来よう', 'bad'); });
-  },
-
-  backToCastleGate() {
-    const G = this.G;
-    const c = SKY.spots.find((s) => s.id === 'castle');
-    G.god.x = c.x; G.god.y = c.y + 140;
-    FX.clear();
-    R.snap(G.god.x, G.god.y);
-    UI.refreshHUD(G);
+    G.p.hp = 0; G.p.dead = true;
+    const lost = Math.floor(G.p.coin * 0.4);
+    G.p.coin -= lost;
+    document.getElementById('deadLost').textContent = lost > 0 ? `所持金を ${lost} 落とした。` : '落としたものはなかった。';
+    document.getElementById('deadScreen').classList.remove('hidden');
     this.save();
   },
 
-  /* ============================ すすみぐあい ============================ */
-  updateQuest() {
-    const G = this.G;
-    let q;
-    if (!G.towns.length) q = '祭壇で「街をひらく」をえらび、天窓の地図から陸をタップしよう。';
-    else if (G.year < 6) q = `${G.towns[0].name} のモコたちを見まもろう。信仰は街から集まってくる。`;
-    else if (G.demon.alive && G.demon.bridge) q = `雲のはしに黒い橋がかかっている。${DEMON.name} の城へ行ける。`;
-    else if (G.towns.some((t) => t.era >= 5)) q = 'モコたちは星へ出ていこうとしている。最後まで見とどけよう。';
-    else if (G.towns.length < 3) q = '「街をひらく」や「いのちを生む」で、星をにぎやかにしよう。';
-    else q = `${G.planet} の時代がすすんでいく。街をのぞいたり、地上を歩いたりしてみよう。`;
-    UI.setQuest(q);
+  revive() {
+    const G = this.G, p = G.p;
+    document.getElementById('deadScreen').classList.add('hidden');
+    /* いちばん近い村へ帰る */
+    let best = World.villages[0], bd = 1e9;
+    for (const v of World.villages) {
+      const d = dist(v.tx * TILE, v.ty * TILE, p.x, p.y);
+      if (d < bd) { bd = d; best = v; }
+    }
+    p.x = best.tx * TILE + 16; p.y = best.ty * TILE + 70;
+    const st = this.stats();
+    p.hp = st.maxhp; p.mp = st.maxmp;
+    p.dead = false; p.iframe = 1.4;
+    G.mobs.length = 0; G.bullets.length = 0;
+    R.follow(p.x, p.y, true);
+    toast(best.name + ' で目をさました');
   },
 
-  checkEnding() {
+  /* ============================ レベル ============================ */
+  addExp(n) {
+    const G = this.G, p = G.p;
+    p.exp += n;
+    FX.text(p.x, p.y - 44, '+' + n + ' EXP', '#c8ffb4');
+    while (p.lv < LEVEL_MAX && p.exp >= expToNext(p.lv)) {
+      p.exp -= expToNext(p.lv);
+      p.lv++;
+      const st = this.stats();
+      p.hp = st.maxhp; p.mp = st.maxmp;
+      FX.ring(p.x, p.y, '#ffe08a', 22, 140, 0.9);
+      toast(`レベル ${p.lv} になった！`, 'holy');
+      const got = SKILLS.find((s) => s.lv === p.lv);
+      if (got) {
+        toast(`${got.icon} ${got.name} をおぼえた`, 'good');
+        UI.talk('', [`${got.name} をおぼえた。${got.desc}`]);
+      }
+      UI.refreshSkills(G);
+    }
+  },
+
+  /* ============================ 話す・入る ============================ */
+  act() {
     const G = this.G;
-    if (G.flags.endShown) return;
-    const t = G.towns.find((x) => x.era >= 5);
-    if (!t) return;
-    G.flags.endShown = true;
-    const total = Math.round(G.towns.reduce((s, x) => s + x.pop, 0));
-    document.getElementById('endTitle').textContent = '星の時代';
-    document.getElementById('endBody').innerHTML = `
-      <p>${G.year}年目。<b>${t.name}</b> の塔に光がともり、モコたちは空へのぼる舟をつくりあげた。</p>
-      <p>この星の名は <b>${G.planet}</b>。街は <b>${G.towns.length}</b> つ、モコは <b>${total}</b> 人になった。
-      ${G.demon.alive ? `黒い城にはまだ ${DEMON.name} がいる。` : `${DEMON.name} は、あなたが封じた。`}</p>
-      <p>子どもたちは今夜も、まっしろなモコの話をきいて眠る。 ―― <b>${G.godName}</b> の話を。</p>
-      <p class="note">このあとも、星は続きます。見まもりつづけることができます。</p>`;
-    document.getElementById('endScreen').classList.remove('hidden');
-    this.save();
+    if (G.nearNpc) return this.talkTo(G.nearNpc);
+    toast('近くに話せる相手はいない');
+  },
+
+  talkTo(n) {
+    const G = this.G;
+    const seals = sealCount(G);
+    if (n.shop) { UI.openShop(n.shop, n.name); return; }
+    if (n.job === 'elder') {
+      G.metElder = true;
+      UI.talk('村長', ELDER_LINES[Math.min(seals, 3)]);
+      this.refreshQuest();
+      return;
+    }
+    if (n.job === 'sage') {
+      UI.talk('物知り', [SAGE_LINES[Math.floor(Math.random() * SAGE_LINES.length)]]);
+      return;
+    }
+    const lines = VILLAGE_LINES[Math.min(seals, 3)];
+    UI.talk(n.name, [lines[Math.floor(Math.random() * lines.length)]]);
+  },
+
+  /* ============================ ボス ============================ */
+  checkBosses() {
+    const G = this.G, p = G.p;
+    /* 土地の主 */
+    for (const l of World.lairs) {
+      const g = GUARDIANS[l.key];
+      if (G.seals[g.seal]) continue;
+      if (G.mobs.some((m) => m.guardian === l.key)) continue;
+      const lx = l.tx * TILE + 16, ly = l.ty * TILE + 16;
+      if (dist(lx, ly, p.x, p.y) < 190) {
+        G.mobs.push(makeGuardian(l.key, lx, ly - 40));
+        UI.talk(g.name, [g.line]);
+        toast(`${g.name} があらわれた！`, 'bad');
+      }
+    }
+    /* 魔王 */
+    if (!G.demonDown && sealCount(G) >= 3 && !G.mobs.some((m) => m.demon)) {
+      const cx = World.castle.tx * TILE + 16, cy = World.castle.ty * TILE + 16;
+      if (dist(cx, cy, p.x, p.y) < 200) {
+        G.mobs.push(makeDemon(cx, cy - 60));
+        UI.talk(DEMON.name + '（' + DEMON.title + '）', DEMON.lines);
+        toast('クロモコとの、さいごの戦い', 'bad');
+      }
+    }
+  },
+
+  refreshQuest() {
+    const G = this.G;
+    const s = sealCount(G);
+    if (G.demonDown) G.quest = 'クロモコをたおした。この星は、もうあなたのものではない。';
+    else if (s >= 3) G.quest = '印が三つそろった。北の黒い城へ。';
+    else if (!G.metElder) G.quest = '村長に話しかけよう。';
+    else {
+      const left = [];
+      if (!G.seals.seal_leaf) left.push('森の主');
+      if (!G.seals.seal_sun) left.push('砂の王');
+      if (!G.seals.seal_ice) left.push('氷の女王');
+      G.quest = `印は ${s}/3。のこりは ${left.join('・')}。`;
+    }
+  },
+
+  /* ============================ セーブ ============================ */
+  save() {
+    if (!this.G) return;
+    const G = this.G;
+    Save.write({
+      ver: 2, seed: G.seed, name: G.name, tod: G.tod,
+      p: {
+        x: G.p.x, y: G.p.y, lv: G.p.lv, exp: G.p.exp, coin: G.p.coin,
+        hp: G.p.hp, mp: G.p.mp, weapon: G.p.weapon, armor: G.p.armor, charm: G.p.charm,
+        ownW: G.p.ownW, ownA: G.p.ownA, ownC: G.p.ownC, bag: G.p.bag, skill: G.p.skill,
+      },
+      seals: G.seals, kills: G.kills, bossDown: G.bossDown,
+      demonDown: G.demonDown, metElder: G.metElder,
+    });
   },
 };
 

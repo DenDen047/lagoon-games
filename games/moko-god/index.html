@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#0d1030" />
-<title>MOKO GOD ― 雲の上の神さま</title>
+<title>MOKO GOD ― 影の城とモコの剣</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -15,39 +15,47 @@
 <!-- ============================== HUD ============================== -->
 <div id="hud" class="hidden">
   <div id="topbar">
-    <div class="panel" id="timeBox">
-      <span id="planetLabel">―</span>
+    <div class="panel" id="statBox">
+      <div class="lvBadge">Lv<span id="lvNum">1</span></div>
+      <div class="bars">
+        <div class="barRow">
+          <span class="tag hp">HP</span>
+          <div class="track"><div id="hpFill" class="fill hp"></div></div>
+          <span class="num" id="hpNum">100 / 100</span>
+        </div>
+        <div class="barRow">
+          <span class="tag mp">MP</span>
+          <div class="track"><div id="mpFill" class="fill mp"></div></div>
+          <span class="num" id="mpNum">40 / 40</span>
+        </div>
+        <div class="barRow">
+          <span class="tag ex">EX</span>
+          <div class="track thin"><div id="expFill" class="fill ex"></div></div>
+          <span class="num" id="expNum">0 / 40</span>
+        </div>
+      </div>
+    </div>
+    <div class="panel" id="infoBox">
+      <span id="zoneLabel">草の地</span>
       <span class="sep"></span>
-      <span id="eraLabel">はじまりの時代</span>
-      <span id="dayLabel">1年目</span>
-      <span id="clockLabel">06:00</span>
-    </div>
-    <div class="panel" id="faithBox">
-      <span class="faithIcon">✨</span>
-      <span id="faithNum">0</span>
-      <span id="faithRate" class="rate">+0 /年</span>
-    </div>
-    <div class="panel" id="speedBox">
-      <button class="sbtn" data-speed="0" title="とめる">❚❚</button>
-      <button class="sbtn on" data-speed="1" title="ふつう">▶</button>
-      <button class="sbtn" data-speed="3" title="はやい">▶▶</button>
-      <button class="sbtn" data-speed="8" title="とてもはやい">▶▶▶</button>
+      <span class="coin">🪙<b id="coinNum">0</b></span>
     </div>
   </div>
 
-  <div class="panel" id="quest">🕊 <span id="questText"></span></div>
+  <div class="panel" id="quest">🗡 <span id="questText"></span></div>
+
+  <div id="skillBar"></div>
 
   <div id="sidebtns">
-    <button class="rbtn" id="btnAct" title="調べる (E)">E</button>
-    <button class="rbtn" id="btnMap" title="地上を見る (M)">👁</button>
-    <button class="rbtn" id="btnMiracle" title="奇跡 (Q)">✨</button>
-    <button class="rbtn" id="btnBook" title="年代記 (R)">📜</button>
+    <button class="rbtn" id="btnAct" title="話す (E)">E</button>
+    <button class="rbtn" id="btnRoll" title="ころがる (Shift)">💨</button>
+    <button class="rbtn" id="btnHerb" title="やくそう (F)">🌿<b id="herbNum">0</b></button>
+    <button class="rbtn" id="btnBag" title="もちもの (I)">🎒</button>
+    <button class="rbtn" id="btnMap" title="地図 (M)">🗺</button>
     <button class="rbtn" id="btnMenu" title="メニュー (Esc)">☰</button>
   </div>
 
-  <div id="prompt"><span class="key">E</span><span id="promptText"></span></div>
-  <div id="miracleBar"></div>
-  <div id="bossBar"><span id="bossName">クロモコ</span><div class="track"><div id="bossFill"></div></div></div>
+  <div id="bossBar"><span id="bossName">―</span><div class="track"><div id="bossFill"></div></div></div>
 </div>
 
 <div id="toasts"></div>
@@ -76,14 +84,13 @@
 <!-- ============================ タイトル ============================ -->
 <div id="titleScreen">
   <div class="tcard">
-    <div class="halo"></div>
+    <div class="blade"><i></i></div>
     <h1>MOKO GOD</h1>
-    <p class="sub">雲の上の神さま</p>
+    <p class="sub">影の城とモコの剣</p>
     <p class="lead">
-      雲の上には、まっしろなモコがいる。天使の輪をつけた、モコたちの神さま ― あなたのことだ。
-      海に土をもりあげ、森を生やし、いのちを置き、モコの街がうまれるのを見まもる。
-      ときどきは雲から降りて、モコたちのあいだを歩いてもいい。
-      ただし雲のはしには、黒い城がひとつ建っている。
+      星のはしに黒い城が建った日から、野には魔物がわくようになった。城の主クロモコはみずからを神と名のり、
+      モコたちの夢に影をおくっている。剣をとったのは、村のはずれにいた一匹のモコ ― あなただ。
+      草の地から森へ、砂へ、凍る峰へ。魔物を斬り、強くなり、三つの印を集めて、城の門をこじあけろ。
     </p>
     <div class="tbtns">
       <button class="btn primary" id="btnNew">はじめから</button>
@@ -93,57 +100,53 @@
     <p id="newWarn">いまのセーブは消えます。もう一度おすと、最初からはじまります。</p>
     <div id="titleHelp">
       <div class="kgrid">
-        <div><b>WASD / 矢印</b><span>神さまが歩く</span></div>
-        <div><b>E</b><span>調べる・入る・話す</span></div>
-        <div><b>M</b><span>地上を見る（世界地図）</span></div>
-        <div><b>Q</b><span>奇跡をえらぶ</span></div>
-        <div><b>左クリック</b><span>奇跡を起こす・光をなげる</span></div>
-        <div><b>R</b><span>年代記</span></div>
-        <div><b>1〜9</b><span>奇跡をすばやく選ぶ</span></div>
-        <div><b>Esc</b><span>メニュー</span></div>
+        <div><b>WASD / 矢印</b><span>歩く</span></div>
+        <div><b>左クリック / スペース</b><span>剣をふる（向きはマウス）</span></div>
+        <div><b>1〜6</b><span>おぼえた魔法をつかう</span></div>
+        <div><b>Shift</b><span>ころがってよける（無敵）</span></div>
+        <div><b>E</b><span>村びとと話す・店にはいる</span></div>
+        <div><b>F</b><span>やくそうをつかう</span></div>
+        <div><b>I</b><span>もちもの・そうび</span></div>
+        <div><b>M</b><span>地図</span></div>
       </div>
-      <p class="hint">スマホ・タブレットでは、画面の左半分をなぞって歩き、右半分をタップして奇跡を起こします。セーブは自動で、この端末のブラウザにだけ残ります。</p>
+      <p class="hint">スマホ・タブレットでは、画面の左半分をなぞって歩き、右半分をタップして剣をふります。魔法と道具は右下のボタンから。セーブは自動で、この端末のブラウザにだけ残ります。</p>
     </div>
   </div>
 </div>
 
-<!-- =========================== 惑星に名前 =========================== -->
+<!-- =========================== 名前をつける =========================== -->
 <div id="nameScreen" class="hidden">
   <div class="tcard">
-    <h1 class="small">あたらしい星</h1>
-    <p class="lead">これからあなたが世話をする星に、名前をつけてください。</p>
+    <h1 class="small">旅立ち</h1>
+    <p class="lead">剣をとったモコに、名前をつけてください。</p>
     <div class="nameRow">
-      <input id="planetInput" type="text" maxlength="14" placeholder="ほしの なまえ" autocomplete="off" />
-      <button class="btn ghost" id="btnRandName">おまかせ</button>
-    </div>
-    <p class="lead small" id="godNameLead">神さまの名前も決められます。</p>
-    <div class="nameRow">
-      <input id="godInput" type="text" maxlength="10" placeholder="かみさまの なまえ" autocomplete="off" />
+      <input id="heroInput" type="text" maxlength="10" placeholder="なまえ" autocomplete="off" />
     </div>
     <div class="tbtns">
-      <button class="btn primary" id="btnCreate">この星をつくる</button>
+      <button class="btn primary" id="btnStart">村を出る</button>
       <button class="btn ghost" id="btnNameBack">もどる</button>
     </div>
   </div>
 </div>
 
-<!-- ============================= えほん ============================= -->
-<div id="bookScreen" class="hidden">
-  <canvas id="bookCanvas"></canvas>
-  <div id="bookText"></div>
-  <div id="bookBtns">
-    <button class="btn ghost" id="btnSkip">とばす</button>
-    <button class="btn primary" id="btnNext">つぎへ ▶</button>
+<!-- ============================= やられた ============================= -->
+<div id="deadScreen" class="hidden">
+  <div class="tcard">
+    <h1 class="small red">ちからつきた</h1>
+    <p class="lead">目のまえがまっ暗になった。……でも、まだ終わりじゃない。<br><span id="deadLost"></span></p>
+    <div class="tbtns">
+      <button class="btn primary" id="btnRevive">村で目をさます</button>
+    </div>
   </div>
 </div>
 
-<!-- ============================ エンディング ============================ -->
+<!-- ============================ おわり ============================ -->
 <div id="endScreen" class="hidden">
   <div class="tcard">
-    <h1 id="endTitle">星の時代</h1>
+    <h1 class="small" id="endTitle">おわり</h1>
     <div id="endBody"></div>
     <div class="tbtns">
-      <button class="btn primary" id="btnEndClose">この星を見まもりつづける</button>
+      <button class="btn primary" id="btnEndClose">この世界を歩きつづける</button>
       <button class="btn ghost" id="btnEndTitle">タイトルへ</button>
     </div>
   </div>
@@ -152,9 +155,7 @@
 <script src="core.js"></script>
 <script src="data.js"></script>
 <script src="world.js"></script>
-<script src="sky.js"></script>
 <script src="render.js"></script>
-<script src="book.js"></script>
 <script src="ui.js"></script>
 <script src="main.js"></script>
 </body>

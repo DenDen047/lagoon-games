@@ -1,134 +1,177 @@
 /* =========================================================================
-   MOKO GOD ― 星そのもの
-   地形をつくる / 街をひらく / 一年ごとの移りかわりを計算する
+   MOKO GOD ― 世界そのもの
+   地形をつくる / 村と主の住みかを置く / 魔物をわかせる
    ========================================================================= */
 'use strict';
 
-const TILE = 32;          /* 1マスの大きさ（地上の座標） */
-const WW = 200, WH = 150; /* 世界のマス数 */
+const TILE = 32;
+const WW = 340, WH = 340;
+
+/* 中心からの遠さで土地が変わる。村を出るほど強い魔物が出る。 */
+const RINGS = [
+  { to: 0.20, kind: 'field' },
+  { to: 0.40, kind: 'forest' },
+  { to: 0.60, kind: 'waste' },
+  { to: 0.80, kind: 'frost' },
+  { to: 0.93, kind: 'castle' },
+];
 
 const World = {
   w: WW, h: WH,
   tiles: new Uint8Array(WW * WH),
   seed: 1,
+  villages: [],
+  lairs: [],
+  castle: null,
 
   idx(tx, ty) { return ty * this.w + tx; },
   inside(tx, ty) { return tx >= 0 && ty >= 0 && tx < this.w && ty < this.h; },
   get(tx, ty) { return this.inside(tx, ty) ? this.tiles[ty * this.w + tx] : T.SEA; },
   set(tx, ty, v) { if (this.inside(tx, ty)) this.tiles[ty * this.w + tx] = v; },
   atPx(x, y) { return this.get(Math.floor(x / TILE), Math.floor(y / TILE)); },
-  walkableAtPx(x, y) { return TILE_DEF[this.atPx(x, y)].walk; },
+  walkPx(x, y) { return TILE_DEF[this.atPx(x, y)].walk; },
+  zonePx(x, y) { return TILE_DEF[this.atPx(x, y)].zone; },
   pxW() { return this.w * TILE; },
   pxH() { return this.h * TILE; },
 
-  /* ----------------------------- 地形生成 ----------------------------- */
+  /* ============================ 地形生成 ============================ */
   generate(seed) {
     this.seed = seed >>> 0;
-    const nElev = makeNoise(this.seed);
-    const nMoist = makeNoise(this.seed ^ 0x9e3779b9);
-    const nTemp = makeNoise(this.seed ^ 0x45d9f3b);
+    const rng = new RNG(this.seed ^ 0x1f83d9ab);
+    const nR = makeNoise(this.seed);            /* 帯のゆらぎ */
+    const nD = makeNoise(this.seed ^ 0x9e3779b9); /* 土地のこまかい差 */
     const cx = this.w / 2, cy = this.h / 2;
+    const maxR = Math.min(cx, cy);
 
     for (let ty = 0; ty < this.h; ty++) {
       for (let tx = 0; tx < this.w; tx++) {
-        /* まん中ほど高く、へりは海になるようにする */
-        const dx = (tx - cx) / (this.w * 0.5), dy = (ty - cy) / (this.h * 0.5);
-        const fall = clamp(1 - Math.hypot(dx * 1.05, dy * 1.15), 0, 1);
-        let e = fbm(nElev, tx * 0.035, ty * 0.035, 5) * 0.78 + fall * 0.48;
-        e += (fbm(nElev, tx * 0.11, ty * 0.11, 3) - 0.5) * 0.12;
+        const dx = tx - cx, dy = ty - cy;
+        let d = Math.hypot(dx, dy) / maxR;
+        /* 帯のさかいめをゆらす。まん丸に見えないように。 */
+        d += (fbm(nR, tx * 0.018, ty * 0.018, 4) - 0.5) * 0.085;
+        d += (fbm(nR, tx * 0.06, ty * 0.06, 2) - 0.5) * 0.03;
 
-        const m = fbm(nMoist, tx * 0.045 + 100, ty * 0.045 + 100, 4);
-        /* 気温は緯度（南北）できまる。まん中があたたかい。 */
-        const lat = Math.abs(ty - cy) / cy;
-        const temp = clamp(1 - lat * 1.25 + (fbm(nTemp, tx * 0.05, ty * 0.05, 3) - 0.5) * 0.5, 0, 1);
+        let kind = 'sea';
+        for (const r of RINGS) { if (d < r.to) { kind = r.kind; break; } }
 
+        const v = fbm(nD, tx * 0.075 + 40, ty * 0.075 + 40, 4);
         let t;
-        if (e < 0.40) t = T.SEA;
-        else if (e < 0.455) t = T.SHALLOW;
-        else if (e < 0.485) t = T.SAND;
-        else if (e > 0.86) t = temp < 0.42 ? T.SNOW : T.ROCK;
-        else if (e > 0.76) t = temp < 0.24 ? T.SNOW : T.HILL;
-        else if (temp < 0.2) t = T.SNOW;
-        else if (m < 0.32 && temp > 0.62) t = T.DESERT;
-        else if (m > 0.70) t = (e < 0.53 ? T.MARSH : T.FOREST);
-        else if (m > 0.56) t = T.FOREST;
-        else if (m > 0.46) t = T.GRASS;
-        else if (m > 0.40 && temp > 0.5) t = T.FLOWER;
-        else t = T.PLAIN;
+        switch (kind) {
+          case 'field':
+            t = v > 0.62 ? T.FOREST : v > 0.54 ? T.FLOWER : v > 0.40 ? T.GRASS : v > 0.30 ? T.PLAIN : T.HILL;
+            break;
+          case 'forest':
+            t = v > 0.60 ? T.MARSH : v > 0.34 ? T.FOREST : v > 0.26 ? T.GRASS : T.HILL;
+            break;
+          case 'waste':
+            t = v > 0.66 ? T.ROCK : v > 0.30 ? T.DESERT : T.SAND;
+            break;
+          case 'frost':
+            t = v > 0.62 ? T.ROCK : v > 0.34 ? T.SNOW : v > 0.24 ? T.HILL : T.ROCK;
+            break;
+          case 'castle':
+            t = v > 0.72 ? T.ROCK : T.ASH;
+            break;
+          default:
+            t = d > 0.92 ? T.SEA : T.SHALLOW;
+        }
         this.tiles[this.idx(tx, ty)] = t;
       }
     }
-  },
 
-  /* セーブから戻すとき、奇跡でいじった場所だけ上書きする */
-  applyEdits(edits) {
-    if (!edits) return;
-    for (const [i, v] of edits) this.tiles[i] = v;
-  },
-
-  /* 奇跡での書きかえ。edits に残しておくとセーブが軽い。 */
-  edit(G, tx, ty, v) {
-    if (!this.inside(tx, ty)) return false;
-    const i = this.idx(tx, ty);
-    if (this.tiles[i] === v) return false;
-    this.tiles[i] = v;
-    G.edits.push([i, v]);
-    if (G.edits.length > 20000) G.edits.splice(0, 5000);
-    return true;
-  },
-
-  /* --------------------------- 場所をさがす --------------------------- */
-  /* 街をひらけるか。陸で、ほかの街から離れていること。 */
-  canFoundAt(G, tx, ty) {
-    const t = this.get(tx, ty);
-    if (!TILE_DEF[t].build) return { ok: false, why: 'ここには街をひらけない' };
-    for (const tw of G.towns) {
-      if (Math.hypot(tw.tx - tx, tw.ty - ty) < 14) return { ok: false, why: 'ほかの街に近すぎる' };
-    }
-    /* まわりに十分な陸があること */
-    let land = 0;
-    for (let y = ty - 3; y <= ty + 3; y++) for (let x = tx - 3; x <= tx + 3; x++) {
-      if (TILE_DEF[this.get(x, y)].walk) land++;
-    }
-    if (land < 28) return { ok: false, why: 'ここは陸がせますぎる' };
-    return { ok: true };
-  },
-
-  /* 最初の街にふさわしい場所（実り豊かで、海が近い） */
-  findCradle(rng) {
-    let best = null, bestScore = -1;
-    for (let k = 0; k < 4000; k++) {
-      const tx = rng.i(12, this.w - 13), ty = rng.i(12, this.h - 13);
-      const t = this.get(tx, ty);
-      if (!TILE_DEF[t].build || t === T.SNOW || t === T.DESERT) continue;
-      let score = 0, sea = 0;
-      for (let y = ty - 4; y <= ty + 4; y++) for (let x = tx - 4; x <= tx + 4; x++) {
-        const tt = this.get(x, y);
-        score += TILE_DEF[tt].fer;
-        if (isWater(tt)) sea++;
+    /* --- 湖をいくつか。まわりは浅瀬にする。 --- */
+    for (let k = 0; k < 80; k++) {
+      const a = rng.f(0, TAU), r = rng.f(0.18, 0.72) * maxR;
+      const lx = Math.round(cx + Math.cos(a) * r), ly = Math.round(cy + Math.sin(a) * r);
+      const rad = rng.i(3, 8);
+      for (let y = ly - rad - 1; y <= ly + rad + 1; y++) {
+        for (let x = lx - rad - 1; x <= lx + rad + 1; x++) {
+          const dd = Math.hypot(x - lx, y - ly);
+          if (dd > rad + 1) continue;
+          if (this.get(x, y) === T.ASH) continue;
+          this.set(x, y, dd > rad - 0.4 ? T.SHALLOW : T.SEA);
+        }
       }
-      if (sea > 0 && sea < 26) score += 8;
-      if (score > bestScore) { bestScore = score; best = { tx, ty }; }
     }
-    return best || { tx: this.w >> 1, ty: this.h >> 1 };
+
+    /* --- 村・主の住みか・城 --- */
+    this.villages = [];
+    this.lairs = [];
+    const centerV = this.clearCircle(Math.round(cx), Math.round(cy), 6, T.GRASS);
+    this.villages.push({ tx: centerV.tx, ty: centerV.ty, name: VILLAGE_NAMES[0], main: true });
+
+    /* 主は、それぞれの帯の中に一つずつ */
+    const lairAngles = { mori: rng.f(0, TAU), suna: 0, koori: 0 };
+    lairAngles.suna = lairAngles.mori + rng.f(1.9, 2.6);
+    lairAngles.koori = lairAngles.suna + rng.f(1.9, 2.6);
+    const lairRing = { mori: 0.30, suna: 0.50, koori: 0.70 };
+    for (const key of ['mori', 'suna', 'koori']) {
+      const a = lairAngles[key], r = lairRing[key] * maxR;
+      const p = this.clearCircle(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 5, null);
+      this.lairs.push({ key, tx: p.tx, ty: p.ty });
+    }
+
+    /* 城は、いちばん外の灰の地。北の方角に立てる。 */
+    const ca = -Math.PI / 2 + rng.f(-0.35, 0.35);
+    const cr = 0.87 * maxR;
+    const cp = this.clearCircle(Math.round(cx + Math.cos(ca) * cr), Math.round(cy + Math.sin(ca) * cr), 6, T.ASH);
+    this.castle = { tx: cp.tx, ty: cp.ty };
+
+    /* --- 村から外へ、道をのばす --- */
+    const v0 = this.villages[0];
+    for (const l of this.lairs) this.road(v0.tx, v0.ty, l.tx, l.ty);
+    this.road(v0.tx, v0.ty, this.castle.tx, this.castle.ty);
+
+    /* 外れの村を二つ。旅の途中で休めるように。 */
+    const outNames = [VILLAGE_NAMES[1], VILLAGE_NAMES[2], VILLAGE_NAMES[3]];
+    const outRing = [0.33, 0.53, 0.73];
+    for (let i = 0; i < 3; i++) {
+      const a = lairAngles.mori + 3.14 + i * 2.1 + rng.f(-0.4, 0.4);
+      const r = outRing[i] * maxR;
+      const p = this.clearCircle(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 5, null);
+      this.villages.push({ tx: p.tx, ty: p.ty, name: outNames[i], main: false });
+      this.road(v0.tx, v0.ty, p.tx, p.ty);
+    }
   },
 
-  /* まわりの実りやすさの合計 */
-  fertilityAround(tx, ty, r = 5) {
-    let sum = 0;
-    for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) {
-      if (Math.hypot(x - tx, y - ty) > r) continue;
-      sum += TILE_DEF[this.get(x, y)].fer;
+  /* 歩ける丸い広場をつくる。fill を渡すとその地面で塗る。 */
+  clearCircle(tx, ty, r, fill) {
+    tx = clamp(tx, r + 2, this.w - r - 3);
+    ty = clamp(ty, r + 2, this.h - r - 3);
+    for (let y = ty - r; y <= ty + r; y++) {
+      for (let x = tx - r; x <= tx + r; x++) {
+        if (Math.hypot(x - tx, y - ty) > r) continue;
+        const cur = this.get(x, y);
+        if (fill) this.set(x, y, fill);
+        else if (!TILE_DEF[cur].walk) this.set(x, y, cur === T.SEA || cur === T.SHALLOW ? T.SAND : T.PLAIN);
+      }
     }
-    return sum;
+    return { tx, ty };
   },
 
-  /* 歩ける場所をその近くからさがす（降臨するときに使う） */
+  /* まっすぐな道。海の上は橋がわりに砂を敷く。 */
+  road(x0, y0, x1, y1) {
+    const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0)) * 2;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = Math.round(lerp(x0, x1, t)), y = Math.round(lerp(y0, y1, t));
+      for (let k = -1; k <= 1; k++) {
+        for (let j = -1; j <= 1; j++) {
+          const cur = this.get(x + k, y + j);
+          if (cur === T.ASH) continue;
+          if (Math.abs(k) + Math.abs(j) > 1) { if (!TILE_DEF[cur].walk) this.set(x + k, y + j, T.SAND); continue; }
+          this.set(x + k, y + j, T.ROAD);
+        }
+      }
+    }
+  },
+
+  /* 歩ける場所を近くからさがす */
   findWalkableNear(tx, ty) {
     if (TILE_DEF[this.get(tx, ty)].walk) return { tx, ty };
-    for (let r = 1; r < 40; r++) {
-      for (let a = 0; a < 24; a++) {
-        const ang = (a / 24) * TAU;
+    for (let r = 1; r < 50; r++) {
+      for (let a = 0; a < 32; a++) {
+        const ang = (a / 32) * TAU;
         const x = Math.round(tx + Math.cos(ang) * r), y = Math.round(ty + Math.sin(ang) * r);
         if (TILE_DEF[this.get(x, y)].walk) return { tx: x, ty: y };
       }
@@ -136,192 +179,78 @@ const World = {
     return { tx, ty };
   },
 
-  /* ------------------------------ 街 ------------------------------ */
-  makeTown(G, tx, ty, name) {
-    const t = {
-      id: G.nextTownId++,
-      name: name || this.pickTownName(G),
-      tx, ty,
-      pop: 6, food: 12, tech: 0, happy: 62, era: 0,
-      born: G.year, blessed: 0, rain: 0, sun: 0, shrine: 0,
-      event: null, eventLeft: 0, burnt: 0,
-      houses: [],
-    };
-    this.rebuildHouses(t);
-    G.towns.push(t);
-    return t;
-  },
-
-  pickTownName(G) {
-    const used = new Set(G.towns.map((t) => t.name));
-    for (const n of TOWN_NAMES) if (!used.has(n)) return n;
-    return 'もこ里' + (G.towns.length + 1);
-  },
-
-  /* 家のならびは街ごとに決まっていて、時代と人の数でふえる */
-  rebuildHouses(t) {
-    const rng = new RNG(t.id * 7919 + 13);
-    const n = clamp(3 + Math.floor(t.pop / 7), 3, 26);
-    t.houses = [];
-    for (let i = 0; i < n; i++) {
-      const a = rng.f(0, TAU), r = 18 + Math.sqrt(rng.f()) * (46 + n * 2.4);
-      t.houses.push({
-        dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.8,
-        rot: rng.f(-0.12, 0.12), size: rng.f(0.85, 1.2), kind: rng.i(0, 2),
-      });
+  villageAt(x, y, r = 200) {
+    for (const v of this.villages) {
+      if (dist(v.tx * TILE + 16, v.ty * TILE + 16, x, y) < r) return v;
     }
-    t.houses.sort((a, b) => a.dy - b.dy);
+    return null;
   },
 
-  /* --------------------------- いきものの群れ --------------------------- */
-  spawnHerd(G, tx, ty, sp, n = 4) {
-    const h = { id: G.nextHerdId++, sp, tx, ty, n, wob: Math.random() * TAU };
-    G.herds.push(h);
-    return h;
+  /* ========================= 魔物をわかせる =========================
+     プレイヤーのまわりだけに湧かせ、遠ざかったら消す。               */
+  spawnRing(G, px, py) {
+    const cap = 18;
+    if (G.mobs.length >= cap) return;
+    /* 立っている土地と同じ土地の魔物だけ出す。
+       帯のさかいめで、いきなり格上が湧かないようにするため。 */
+    const here = this.zonePx(px, py);
+    for (let k = 0; k < 14; k++) {
+      const a = Math.random() * TAU;
+      const r = 420 + Math.random() * 280;
+      const x = px + Math.cos(a) * r, y = py + Math.sin(a) * r;
+      if (x < 64 || y < 64 || x > this.pxW() - 64 || y > this.pxH() - 64) continue;
+      if (!this.walkPx(x, y)) continue;
+      if (this.villageAt(x, y, 340)) continue;
+      const zone = this.zonePx(x, y);
+      if (!zone) continue;
+      if (here && zone !== here) continue;
+      /* 主の住みかのすぐそばには雑魚を出さない */
+      let nearLair = false;
+      for (const l of this.lairs) if (dist(l.tx * TILE, l.ty * TILE, x, y) < 260) nearLair = true;
+      if (nearLair) continue;
+
+      const pool = Object.keys(MONSTERS).filter((k2) => MONSTERS[k2].zone === zone);
+      if (!pool.length) continue;
+      const sp = pool[Math.floor(Math.random() * pool.length)];
+      G.mobs.push(makeMob(sp, x, y));
+      return;
+    }
   },
 
-  herdsNear(G, tx, ty, r = 12) {
-    return G.herds.filter((h) => Math.hypot(h.tx - tx, h.ty - ty) <= r);
-  },
-
-  /* ============================ 一年の流れ ============================ */
-  yearTick(G, log) {
-    const rng = new RNG((G.seed ^ (G.year * 2654435761)) >>> 0);
-    let faithGain = 0;
-
-    /* --- 群れがすこし動き、ふえたりへったりする --- */
-    for (let i = G.herds.length - 1; i >= 0; i--) {
-      const h = G.herds[i];
-      const def = SPECIES[h.sp];
-      const nx = clamp(h.tx + rng.i(-2, 2), 1, this.w - 2);
-      const ny = clamp(h.ty + rng.i(-2, 2), 1, this.h - 2);
-      const okNow = def.biome.includes(this.get(h.tx, h.ty));
-      const okNext = def.biome.includes(this.get(nx, ny));
-      if (okNext) { h.tx = nx; h.ty = ny; }
-      if (okNow || okNext) { if (rng.chance(0.35) && h.n < 40) h.n++; }
-      else if (rng.chance(0.45)) h.n--;
-      if (h.n <= 0) G.herds.splice(i, 1);
-    }
-
-    /* --- 街ごとの一年 --- */
-    for (const t of G.towns) {
-      const eraDef = ERAS[t.era];
-
-      /* 食べもの: まわりの土地 + いきもの + 雨 */
-      const fer = this.fertilityAround(t.tx, t.ty, 5 + Math.floor(t.era * 0.6));
-      let food = fer * (0.30 + t.era * 0.08);
-      for (const h of this.herdsNear(G, t.tx, t.ty, 10)) {
-        const d = SPECIES[h.sp];
-        food += (d.food || 0) * Math.min(h.n, 12) * 0.22;
-        if (d.danger) t.happy -= d.danger * Math.min(h.n, 10) * 0.35;
-        if (d.tech) t.tech += d.tech * Math.min(h.n, 12) * 0.1;
-      }
-      if (t.rain > 0) { food *= 1.35; t.rain--; }
-      if (t.burnt > 0) { food *= 0.7; t.burnt--; }
-      food *= 1 - clamp(G.demon.power * 0.0018, 0, 0.35);
-
-      /* 人の数は「食べられる数」に近づいていく */
-      const cap = food / 0.85;
-      t.pop += (cap - t.pop) * 0.16 * (0.55 + t.happy / 160);
-      t.pop = clamp(t.pop, 0, 4000);
-      t.food = food;
-
-      /* 気もち */
-      let target = 52 + clamp((cap - t.pop) * 1.6, -22, 22) + t.era * 2.2;
-      if (t.sun > 0) { target += 16; t.sun--; }
-      if (t.shrine) target += 6;
-      target -= clamp(G.demon.power * 0.06, 0, 26);
-      t.happy += (target - t.happy) * 0.3;
-
-      /* 知恵 */
-      const tg = t.pop * 0.07 * (0.4 + t.happy / 140) * (1 + t.era * 0.22);
-      t.tech += tg + t.blessed * 2.2;
-      t.blessed = Math.max(0, t.blessed - 1);
-      t.happy = clamp(t.happy, 4, 100);
-
-      /* 時代がすすむ */
-      const nx = ERAS[t.era + 1];
-      if (nx && t.pop >= nx.pop && t.tech >= nx.tech) {
-        t.era++;
-        if (t.era >= 3) t.shrine = 1;
-        this.rebuildHouses(t);
-        log(`${t.name} が「${ERAS[t.era].name}」にはいった。${ERAS[t.era].line}`, 'era');
-        toast(`${t.name} ― ${ERAS[t.era].name}`, 'holy');
-      } else if (Math.floor(t.pop / 7) !== Math.floor((t.pop - 1) / 7)) {
-        this.rebuildHouses(t);
-      }
-
-      /* 信仰 */
-      faithGain += 0.5 + t.pop * 0.11 * (t.happy / 100) * (1 + (t.shrine ? 0.5 : 0)) * (1 + t.era * 0.1);
-
-      /* わざわい */
-      const risk = 0.035 + G.demon.power * 0.0016 + (t.happy < 35 ? 0.03 : 0);
-      if (t.eventLeft > 0) t.eventLeft--;
-      else if (rng.chance(risk) && G.year > 6) {
-        const d = rng.pick(DISASTERS);
-        t.event = d.id; t.eventLeft = 2 + rng.i(0, 3);
-        if (d.pop) t.pop *= 1 + d.pop;
-        if (d.food) t.food *= 1 + d.food;
-        if (d.happy) t.happy = clamp(t.happy + d.happy, 4, 100);
-        if (d.tech) t.tech = Math.max(0, t.tech + d.tech);
-        log(d.text.replace('{town}', t.name), 'bad');
-        toast(`${d.icon} ${d.text.replace('{town}', t.name)}`, 'bad');
-      } else if (t.eventLeft === 0) t.event = null;
-
-      /* 街がおおきくなると、となりに分かれ村ができる */
-      if (t.era >= 2 && t.pop > 40 && G.towns.length < 9 && rng.chance(0.07)) {
-        for (let k = 0; k < 30; k++) {
-          const a = rng.f(0, TAU), r = rng.f(16, 26);
-          const nxT = Math.round(t.tx + Math.cos(a) * r), nyT = Math.round(t.ty + Math.sin(a) * r);
-          if (this.canFoundAt(G, nxT, nyT).ok) {
-            const child = this.makeTown(G, nxT, nyT);
-            child.era = Math.max(0, t.era - 1);
-            child.tech = ERAS[child.era].tech;
-            this.rebuildHouses(child);
-            log(`${t.name} から人がわかれて、${child.name} ができた。`, 'town');
-            toast(`あたらしい街 ― ${child.name}`, 'good');
-            break;
-          }
-        }
-      }
-    }
-
-    /* --- 城の力 --- */
-    const D = G.demon;
-    if (D.alive) {
-      D.power = Math.min(220, D.power + 0.4 + G.towns.length * 0.08);
-      if (D.power > 40 && !D.bridge) {
-        D.bridge = true;
-        log('雲のはしに、黒い橋がかかった。城へ行けるようになった。', 'demon');
-        toast('黒い橋がかかった ― モコの城へ行ける', 'bad');
-      }
-      /* 影のいきものを流す */
-      if (D.power > 60 && G.herds.filter((h) => h.sp === 'kagemushi').length < 4 && rng.chance(0.25)) {
-        const tw = rng.pick(G.towns);
-        if (tw) {
-          const tx = clamp(tw.tx + rng.i(-9, 9), 1, this.w - 2);
-          const ty = clamp(tw.ty + rng.i(-9, 9), 1, this.h - 2);
-          if (TILE_DEF[this.get(tx, ty)].walk) {
-            this.spawnHerd(G, tx, ty, 'kagemushi', 3);
-            log('城から影がこぼれ、地上に「かげむし」がわいた。', 'demon');
-          }
-        }
-      }
-    } else {
-      D.sealed++;
-      if (D.sealed > 26) { D.alive = true; D.power = 24; D.hp = D.maxHp; D.sealed = 0;
-        log(`${DEMON.name} が、また城で目をさました。`, 'demon');
-        toast('黒い城に、また灯りがついた', 'bad'); }
-    }
-
-    G.faith += faithGain;
-    G.faithRate = faithGain;
-    G.year++;
-
-    /* 星の時代にとどいたら、おわりの合図 */
-    if (!G.flags.ending && G.towns.some((t) => t.era >= 5)) {
-      G.flags.ending = true;
-      log('モコたちは、星へ出ていく舟をつくりはじめた。', 'era');
+  cullFar(G, px, py) {
+    for (let i = G.mobs.length - 1; i >= 0; i--) {
+      const m = G.mobs[i];
+      if (m.boss) continue;
+      if (dist(m.x, m.y, px, py) > 1500) G.mobs.splice(i, 1);
     }
   },
 };
+
+/* ---------------------- 魔物・主・魔王をつくる ---------------------- */
+let MOB_ID = 1;
+
+function makeMob(sp, x, y) {
+  const d = MONSTERS[sp];
+  return {
+    id: MOB_ID++, sp, def: d, x, y, vx: 0, vy: 0, face: 1, wob: Math.random() * TAU,
+    hp: d.hp, maxhp: d.hp, state: 'idle', t: Math.random() * 2, cool: Math.random() * d.cool,
+    hurt: 0, slow: 0, kbx: 0, kby: 0, wx: x, wy: y, scale: 1, boss: false,
+  };
+}
+
+function makeGuardian(key, x, y) {
+  const d = GUARDIANS[key];
+  return {
+    id: MOB_ID++, sp: key, def: d, x, y, vx: 0, vy: 0, face: 1, wob: 0,
+    hp: d.hp, maxhp: d.hp, state: 'idle', t: 0, cool: 1.4, hurt: 0, slow: 0,
+    kbx: 0, kby: 0, wx: x, wy: y, scale: d.scale, boss: true, guardian: key, phase: 0,
+  };
+}
+
+function makeDemon(x, y) {
+  return {
+    id: MOB_ID++, sp: 'demon', def: DEMON, x, y, vx: 0, vy: 0, face: 1, wob: 0,
+    hp: DEMON.hp, maxhp: DEMON.hp, state: 'idle', t: 0, cool: 1.6, hurt: 0, slow: 0,
+    kbx: 0, kby: 0, wx: x, wy: y, scale: 2.4, boss: true, demon: true, phase: 0, pat: 0,
+  };
+}
