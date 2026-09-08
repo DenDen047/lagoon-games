@@ -15,30 +15,84 @@ const CHIEF_LOOK = { suit: '#4a4438', trim: '#ffcf4a', skin: '#dcb089', cap: tru
 
 const SHIP_NAME = 'LGN-04 アークライト';
 
-/* ---------------- 艦内の見取り図 ----------------
-   左端が下部格納デッキ（輸送機が降りてくる場所）、右端が運転室。
-   歩いて扉の前に立ち、↑ で入る。                                        */
-const DECK = { w: 2620, floorY: 306, ceilY: 54, spawn: 312 };
+/* ---------------- 艦内の見取り図（真上から見た平面図） ----------------
+   艦尾（左）が下部格納デッキ。そこから艦首（右）へ中央通路が伸び、
+   通路の上下に各室が並ぶ。突き当たりが運転室。                          */
+const DECK = {
+  w: 2470, h: 380,
+  corr: { x0: 460, x1: 2300, y0: 148, y1: 232 },   // 中央通路
+  bay:  { x0: 84,  x1: 520,  y0: 46,  y1: 334 },   // 下部格納デッキ
+  spawn: { x: 300, y: 190 },
+};
+const ROOM_UP = { y0: 34, y1: 136 };     // 通路の上側に並ぶ部屋
+const ROOM_DN = { y0: 244, y1: 346 };    // 通路の下側に並ぶ部屋
+const ROOM_LABEL = 36;                   // 部屋名を出す帯（奥側）の高さ
+const ROOM_HW = 106;                     // 部屋の横半分
+const PILOT_R = 15;                      // パイロットの当たり半径
+
+/* 歩ける範囲。格納デッキと中央通路が x=460..520 で重なってつながる */
+const AREAS = [DECK.bay, { x0: DECK.corr.x0, x1: DECK.corr.x1, y0: DECK.corr.y0, y1: DECK.corr.y1 }];
+
+function walkable(x, y) {
+  for (const a of AREAS) {
+    if (x > a.x0 + PILOT_R && x < a.x1 - PILOT_R && y > a.y0 + PILOT_R && y < a.y1 - PILOT_R) return true;
+  }
+  return false;
+}
+/* 歩けない所をクリックされたら、いちばん近い床へ寄せる */
+function snapWalkable(x, y) {
+  let best = null, bd = Infinity;
+  for (const a of AREAS) {
+    const cx = clamp(x, a.x0 + PILOT_R + 2, a.x1 - PILOT_R - 2);
+    const cy = clamp(y, a.y0 + PILOT_R + 2, a.y1 - PILOT_R - 2);
+    const d = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+    if (d < bd) { bd = d; best = { x: cx, y: cy }; }
+  }
+  return best;
+}
+
+/* クリックした点がどの部屋の中か */
+function inRoom(d, x, y) {
+  if (d.side === 'fore') return x > DECK.corr.x1 && x < 2410 && y > 130 && y < 250;
+  const r = d.side === 'up' ? ROOM_UP : ROOM_DN;
+  return x > d.x - ROOM_HW && x < d.x + ROOM_HW && y > r.y0 && y < r.y1;
+}
+
+/* 船体の外形（真上から）。艦尾の格納ブロックから艦首へ細る */
+function hullPath(ctx) {
+  ctx.beginPath();
+  ctx.moveTo(2460, 190);
+  ctx.lineTo(2380, 130); ctx.lineTo(2260, 60); ctx.lineTo(2160, 18); ctx.lineTo(640, 18);
+  ctx.lineTo(560, 6); ctx.lineTo(28, 6); ctx.lineTo(4, 50);
+  ctx.lineTo(4, 330); ctx.lineTo(28, 374); ctx.lineTo(560, 374);
+  ctx.lineTo(640, 362); ctx.lineTo(2160, 362); ctx.lineTo(2260, 320); ctx.lineTo(2380, 250);
+  ctx.closePath();
+}
 
 const DOORS = [
-  { id: 'launch',   x: 560,  name: '発進口',       sub: 'LAUNCH BAY', icon: '▶', kind: 'go',
+  { id: 'launch',   x: 600,  side: 'up',   name: '発進口',       sub: 'LAUNCH BAY', icon: '▶', kind: 'go',
     line: 'セクターを選んで出撃する。' },
-  { id: 'hangar',   x: 800,  name: '整備ハンガー', sub: 'HANGAR',     icon: '▚', kind: 'go',
+  { id: 'hangar',   x: 840,  side: 'down', name: '整備ハンガー', sub: 'HANGAR',     icon: '▚', kind: 'go',
     line: '機体の編成・改造。武装と外装を組み替える。' },
-  { id: 'supply',   x: 1040, name: '補給廠',       sub: 'SUPPLY',     icon: '◆', kind: 'go',
+  { id: 'supply',   x: 1080, side: 'up',   name: '補給廠',       sub: 'SUPPLY',     icon: '◆', kind: 'go',
     line: 'チケットで補給ガチャを回す。' },
-  { id: 'lab',      x: 1280, name: '研究室',       sub: 'LAB',        icon: '⌬', kind: 'panel',
+  { id: 'lab',      x: 1320, side: 'down', name: '研究室',       sub: 'LAB',        icon: '⌬', kind: 'panel',
     line: '持ち帰った能力データから、新しいコアや装備を作る。' },
-  { id: 'training', x: 1520, name: '訓練場',       sub: 'TRAINING',   icon: '◎', kind: 'go',
+  { id: 'training', x: 1560, side: 'up',   name: '訓練場',       sub: 'TRAINING',   icon: '◎', kind: 'go',
     line: '的と動く相手で撃ち心地を確かめる。' },
-  { id: 'quarters', x: 1760, name: '自室',         sub: 'QUARTERS',   icon: '⌂', kind: 'panel',
+  { id: 'quarters', x: 1800, side: 'down', name: '自室',         sub: 'QUARTERS',   icon: '⌂', kind: 'panel',
     line: 'パイロットの部屋。戦績と手持ちの外装を眺める。' },
-  { id: 'command',  x: 2000, name: '指令室',       sub: 'COMMAND',    icon: '★', kind: 'panel',
+  { id: 'command',  x: 2040, side: 'up',   name: '指令室',       sub: 'COMMAND',    icon: '★', kind: 'panel',
     line: '司令官に会う。次の方針を聞ける。' },
-  { id: 'bridge',   x: 2150, name: '運転室',       sub: 'BRIDGE',     icon: '✦', kind: 'panel',
+  { id: 'bridge',   x: 2300, side: 'fore', name: '運転室',       sub: 'BRIDGE',     icon: '✦', kind: 'panel',
     line: '艦の操舵室。航路と艦の状態を見る。' },
 ];
-const DOOR_REACH = 64;      // 扉の前と見なす距離
+/* 扉の前に立つ位置 */
+for (const d of DOORS) {
+  d.sx = d.side === 'fore' ? DECK.corr.x1 - 36 : d.x;
+  d.sy = d.side === 'up' ? DECK.corr.y0 + 26 : d.side === 'down' ? DECK.corr.y1 - 26 : 190;
+}
+const DOOR_REACH = 62;      // 扉の前と見なす距離
 
 /* ---------------- 司令官のせりふ ----------------
    制圧数で内容が変わる。最後の 1 本は繰り返し使う。 */
@@ -514,15 +568,19 @@ class Base {
     this.craftMsg = null;
     this.t = 0;
     this.raf = null;
-    this.px = DECK.spawn;      // パイロットの位置
+    this.px = DECK.spawn.x;    // パイロットの位置（真上から見た床の座標）
+    this.py = DECK.spawn.y;
     this.pvx = 0;
-    this.face = 1;
+    this.pvy = 0;
+    this.face = 0;             // 向き（ラジアン。0 で右）
     this.step = 0;
     this.camX = 0;
-    this.targetX = null;       // クリックで歩く先
+    this.target = null;        // クリックで歩く先
+    this.stuck = 0;
     this.keys = new Set();
     this.lo = null;
-    this.stars = makeStars(90, 900, 300);
+    this.stars = makeStars(220, 1600, DECK.h);
+    this.winStars = makeStars(12, 60, 40);   // 小窓ごしの星は疎に
     this.bind();
   }
 
@@ -532,7 +590,7 @@ class Base {
       const b = e.target.closest('.roomchip'); if (!b) return;
       /* ショートカット。その扉の前へ移してから入る */
       const d = DOORS.find((x) => x.id === b.dataset.room);
-      if (d) { this.px = d.x; this.pvx = 0; this.targetX = null; }
+      if (d) { this.px = d.sx; this.py = d.sy; this.pvx = this.pvy = 0; this.target = null; }
       this.enter(b.dataset.room);
     });
     el('btn-base-close').addEventListener('click', () => this.leaveRoom());
@@ -559,8 +617,8 @@ class Base {
         if (e.code === 'Escape') { e.preventDefault(); this.leaveRoom(); }
         return;
       }
-      if (['ArrowUp', 'KeyW', 'Space', 'Enter', 'KeyE'].indexOf(e.code) >= 0) {
-        e.preventDefault();
+      if (/^Arrow|^Space$/.test(e.code)) e.preventDefault();
+      if (['Space', 'Enter', 'KeyE'].indexOf(e.code) >= 0) {
         const d = this.doorNear();
         if (d) this.enter(d.id);
       }
@@ -572,14 +630,20 @@ class Base {
     cv.addEventListener('click', (e) => {
       if (this.room) return;
       const r = cv.getBoundingClientRect();
-      const scale = cv.height / 380;
+      const scale = cv.height / DECK.h;
       const wx = this.camX + ((e.clientX - r.left) / r.width) * (cv.width / scale);
-      this.targetX = clamp(wx, 90, DECK.w - 90);
+      const wy = ((e.clientY - r.top) / r.height) * DECK.h;
+      /* 部屋をクリックしたら、その扉の前まで歩く */
+      const d = DOORS.find((dd) => inRoom(dd, wx, wy));
+      this.target = d ? { x: d.sx, y: d.sy } : snapWalkable(wx, wy);
+      this.stuck = 0;
     });
   }
 
   doorNear() {
-    for (const d of DOORS) if (Math.abs(d.x - this.px) < DOOR_REACH) return d;
+    for (const d of DOORS) {
+      if (Math.hypot(d.sx - this.px, d.sy - this.py) < DOOR_REACH) return d;
+    }
     return null;
   }
 
@@ -593,8 +657,8 @@ class Base {
     if (id === 'training') return a.startMission(D.TRAINING);
     if (id === 'launch') return a.go('sector');
     this.room = id;
-    this.targetX = null;
-    this.pvx = 0;
+    this.target = null;
+    this.pvx = this.pvy = 0;
     if (id === 'command') this.talk = 0;
     if (id === 'lab') this.craftMsg = null;
     this.render();
@@ -613,7 +677,7 @@ class Base {
       this.lo = window.MRField.buildLoadout(1, s);
     }
     this.room = null;
-    this.targetX = null;
+    this.target = null;
     this.keys.clear();
     this.render();
     this.startScene();
@@ -631,7 +695,7 @@ class Base {
     const cur = DOORS.find((d) => d.id === this.room);
     el('base-caption').textContent = cur
       ? `${cur.name}（${cur.sub}）― ${cur.line}　Esc か「閉じる」で通路へ戻る`
-      : `${SHIP_NAME} 艦内 ― 制圧 ${cleared} / ${D.SECTORS.length} セクター　（← → で歩く／↑ で入る）`;
+      : `${SHIP_NAME} 艦内 ― 制圧 ${cleared} / ${D.SECTORS.length} セクター　（← ↑ ↓ → で歩く／Space で入る）`;
 
     el('base-rooms').innerHTML = DOORS.map((d) => `
       <button class="roomchip ${this.room === d.id ? 'on' : ''}" data-room="${d.id}" title="${d.line}">
@@ -814,7 +878,7 @@ class Base {
       last = now;
       this.t += dt;
       this.fit(cv);
-      this.walk(dt, cv.width / (cv.height / 380));
+      this.walk(dt, cv.width / (cv.height / DECK.h));
       this.drawDeck(ctx, cv.width, cv.height);
       this.raf = requestAnimationFrame(tick);
     };
@@ -830,27 +894,46 @@ class Base {
     if (cv.height !== h) cv.height = h;
   }
 
+  /* ================= 移動（真上から見た床の上を歩く） ================= */
   walk(dt, viewW) {
-    const SPD = 240;
-    let dir = 0;
+    const SPD = 215;
+    let dx = 0, dy = 0;
     if (!this.room) {
-      if (this.keys.has('ArrowLeft') || this.keys.has('KeyA')) dir -= 1;
-      if (this.keys.has('ArrowRight') || this.keys.has('KeyD')) dir += 1;
-      if (dir) this.targetX = null;
-      if (!dir && this.targetX != null) {
-        const d = this.targetX - this.px;
-        if (Math.abs(d) < 8) this.targetX = null; else dir = d > 0 ? 1 : -1;
+      if (this.keys.has('ArrowLeft') || this.keys.has('KeyA')) dx -= 1;
+      if (this.keys.has('ArrowRight') || this.keys.has('KeyD')) dx += 1;
+      if (this.keys.has('ArrowUp') || this.keys.has('KeyW')) dy -= 1;
+      if (this.keys.has('ArrowDown') || this.keys.has('KeyS')) dy += 1;
+      if (dx || dy) this.target = null;
+      if (!dx && !dy && this.target) {
+        const tx = this.target.x - this.px, ty = this.target.y - this.py;
+        const L = Math.hypot(tx, ty);
+        if (L < 8) this.target = null; else { dx = tx / L; dy = ty / L; }
       }
     }
-    this.pvx = lerp(this.pvx, dir * SPD, 1 - Math.pow(0.002, dt));
-    this.px = clamp(this.px + this.pvx * dt, 90, DECK.w - 90);
-    if (dir) this.face = dir;
-    if (Math.abs(this.pvx) > 8) this.step += Math.abs(this.pvx) * dt * 0.055; else this.step = 0;
+    const L = Math.hypot(dx, dy) || 1;
+    const k = 1 - Math.pow(0.002, dt);
+    this.pvx = lerp(this.pvx, dx / L * SPD, k);
+    this.pvy = lerp(this.pvy, dy / L * SPD, k);
+
+    /* 軸ごとに判定して、壁に沿って滑らせる */
+    const nx = this.px + this.pvx * dt;
+    if (walkable(nx, this.py)) this.px = nx; else this.pvx = 0;
+    const ny = this.py + this.pvy * dt;
+    if (walkable(this.px, ny)) this.py = ny; else this.pvy = 0;
+
+    const sp = Math.hypot(this.pvx, this.pvy);
+    if (sp > 10) { this.face = Math.atan2(this.pvy, this.pvx); this.step += sp * dt * 0.055; }
+    else this.step = 0;
+    /* 壁に阻まれて進めないままなら、クリックの目標は諦める */
+    if (this.target && sp < 26) { this.stuck += dt; if (this.stuck > 0.5) { this.target = null; this.stuck = 0; } }
+    else this.stuck = 0;
+
     this.camX = clamp(this.px - viewW / 2, 0, Math.max(0, DECK.w - viewW));
   }
 
+  /* ================= 艦内の絵（真上から） ================= */
   drawDeck(ctx, W, H) {
-    const scale = H / 380;                      // 見取り図は高さ 380 を基準に描く
+    const scale = H / DECK.h;                   // 見取り図は高さ 380 を基準に描く
     const VW = W / scale;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
@@ -858,109 +941,99 @@ class Base {
     ctx.scale(scale, scale);
     ctx.translate(-Math.round(this.camX), 0);
 
-    const floorY = DECK.floorY, ceilY = DECK.ceilY;
-    const x0 = this.camX - 60, x1 = this.camX + VW + 60;
+    const x0 = this.camX - 80, x1 = this.camX + VW + 80;
+    const c = DECK.corr;
 
-    /* 壁 */
-    const g = ctx.createLinearGradient(0, ceilY, 0, floorY);
-    g.addColorStop(0, '#1a2338'); g.addColorStop(1, '#243049');
-    ctx.fillStyle = g;
-    ctx.fillRect(x0, ceilY, x1 - x0, floorY - ceilY);
-
-    /* 天井 */
-    ctx.fillStyle = '#151d30';
-    ctx.fillRect(x0, 0, x1 - x0, ceilY);
-    ctx.fillStyle = '#0f1626';
-    for (let x = Math.floor(x0 / 120) * 120; x < x1; x += 120) {
-      roundRect(ctx, x + 20, 8, 80, 16, 4); ctx.fill();
+    /* --- 船の外は宇宙 --- */
+    ctx.fillStyle = '#05070f';
+    ctx.fillRect(x0, 0, x1 - x0, DECK.h);
+    for (let tx = Math.floor(x0 / 1600) * 1600; tx < x1; tx += 1600) {
+      drawStars(ctx, this.stars, tx, 0, 1600, DECK.h, this.t * 8, 0.5);
     }
-    /* 天井灯と光の帯 */
-    for (let x = Math.floor(x0 / 240) * 240; x < x1; x += 240) {
-      ctx.fillStyle = 'rgba(180,220,255,0.75)';
-      roundRect(ctx, x + 100, ceilY - 8, 60, 6, 3); ctx.fill();
-      const lg = ctx.createLinearGradient(0, ceilY, 0, floorY);
-      lg.addColorStop(0, 'rgba(180,220,255,0.10)'); lg.addColorStop(1, 'rgba(180,220,255,0)');
+
+    /* --- 船体の外板 --- */
+    hullPath(ctx);
+    ctx.fillStyle = '#1c2537'; ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = 'rgba(0,0,0,0.26)'; ctx.lineWidth = 2;
+    for (let x = Math.floor(x0 / 110) * 110; x < x1; x += 110) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, DECK.h); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(143,212,255,0.07)'; ctx.lineWidth = 3;
+    for (const y of [24, DECK.h - 24]) {
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    }
+    ctx.restore();
+    hullPath(ctx);
+    ctx.strokeStyle = '#54689a'; ctx.lineWidth = 6; ctx.stroke();
+
+    /* --- 中央通路 --- */
+    const cg = ctx.createLinearGradient(0, c.y0, 0, c.y1);
+    cg.addColorStop(0, '#354463'); cg.addColorStop(0.5, '#2b3853'); cg.addColorStop(1, '#354463');
+    ctx.fillStyle = cg;
+    ctx.fillRect(c.x0, c.y0, c.x1 - c.x0, c.y1 - c.y0);
+    ctx.fillStyle = 'rgba(0,0,0,0.20)';
+    for (let x = Math.max(c.x0, Math.floor(x0 / 70) * 70); x < Math.min(c.x1, x1); x += 70) {
+      ctx.fillRect(x, c.y0, 2, c.y1 - c.y0);
+    }
+    /* 天井灯の落ちる明かり */
+    for (let x = Math.max(c.x0, Math.floor(x0 / 200) * 200); x < Math.min(c.x1, x1); x += 200) {
+      const lg = ctx.createRadialGradient(x + 100, 190, 6, x + 100, 190, 100);
+      lg.addColorStop(0, 'rgba(190,225,255,0.15)'); lg.addColorStop(1, 'rgba(190,225,255,0)');
       ctx.fillStyle = lg;
-      ctx.beginPath();
-      ctx.moveTo(x + 100, ceilY); ctx.lineTo(x + 160, ceilY);
-      ctx.lineTo(x + 210, floorY); ctx.lineTo(x + 50, floorY);
-      ctx.closePath(); ctx.fill();
+      ctx.fillRect(x, c.y0, 200, c.y1 - c.y0);
     }
+    /* 中央の誘導ライン */
+    ctx.strokeStyle = 'rgba(255,207,74,0.30)'; ctx.lineWidth = 4;
+    ctx.setLineDash([30, 22]); ctx.lineDashOffset = -this.t * 22;
+    ctx.beginPath(); ctx.moveTo(c.x0, 190); ctx.lineTo(c.x1, 190); ctx.stroke();
+    ctx.setLineDash([]);
+    /* 通路と各室を隔てる隔壁 */
+    ctx.fillStyle = '#3a4a70';
+    ctx.fillRect(c.x0, ROOM_UP.y1, c.x1 - c.x0, c.y0 - ROOM_UP.y1);
+    ctx.fillRect(c.x0, c.y1, c.x1 - c.x0, ROOM_DN.y0 - c.y1);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(c.x0, c.y0 - 3, c.x1 - c.x0, 3);
+    ctx.fillRect(c.x0, c.y1, c.x1 - c.x0, 3);
+    /* 艦首側の突き当たり */
+    ctx.fillStyle = '#3a4a70';
+    ctx.fillRect(c.x1, c.y0 - 8, 16, c.y1 - c.y0 + 16);
 
-    /* 壁のリブとパイプ */
-    ctx.strokeStyle = 'rgba(143,212,255,0.10)'; ctx.lineWidth = 3;
-    for (let x = Math.floor(x0 / 120) * 120; x < x1; x += 120) {
-      ctx.beginPath(); ctx.moveTo(x, ceilY); ctx.lineTo(x, floorY); ctx.stroke();
-    }
-    ctx.strokeStyle = 'rgba(90,120,160,0.32)'; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(x0, ceilY + 26); ctx.lineTo(x1, ceilY + 26); ctx.stroke();
-    ctx.strokeStyle = 'rgba(90,120,160,0.20)'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(x0, ceilY + 40); ctx.lineTo(x1, ceilY + 40); ctx.stroke();
-
-    /* 舷窓（星が流れる） */
-    for (let x = Math.floor(x0 / 240) * 240; x < x1; x += 240) {
-      const wx = x + 150;
-      if (wx < 440 || wx > 1900) continue;        // 格納デッキと艦首側は別に描く
-      ctx.save();
-      ctx.fillStyle = '#05070f';
-      roundRect(ctx, wx, ceilY + 58, 74, 44, 8); ctx.fill();
-      ctx.beginPath(); roundRect(ctx, wx, ceilY + 58, 74, 44, 8); ctx.clip();
-      drawStars(ctx, this.stars, wx, ceilY + 58, 74, 44, this.t * 14, 1);
-      ctx.restore();
-      ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 3;
-      roundRect(ctx, wx, ceilY + 58, 74, 44, 8); ctx.stroke();
-    }
-
-    /* 床 */
-    ctx.fillStyle = '#2b3752';
-    ctx.fillRect(x0, floorY, x1 - x0, 380 - floorY);
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    for (let x = Math.floor(x0 / 40) * 40; x < x1; x += 40) ctx.fillRect(x, floorY, 3, 380 - floorY);
-    ctx.fillStyle = 'rgba(143,212,255,0.16)';
-    ctx.fillRect(x0, floorY, x1 - x0, 3);
-    ctx.fillStyle = 'rgba(255,207,74,0.20)';
-    ctx.fillRect(x0, floorY + 26, x1 - x0, 4);
-
-    this.drawHangarBay(ctx, floorY, ceilY);
-    this.drawBridgeEnd(ctx, floorY, ceilY);
-
-    /* 扉 */
+    /* --- 各室 --- */
     const nearDoor = this.doorNear();
     for (const d of DOORS) {
-      if (d.x < x0 - 140 || d.x > x1 + 140) continue;
-      this.drawDoor(ctx, d, floorY, nearDoor === d);
+      if (d.x < x0 - 280 || d.x > x1 + 280) continue;
+      this.drawRoom(ctx, d, nearDoor === d);
     }
 
-    /* パイロット */
-    R.drawPilot(ctx, this.px, floorY + 30, 116, {
+    /* --- 格納デッキ --- */
+    if (x0 < DECK.bay.x1 + 80) this.drawHangarBay(ctx);
+
+    /* --- パイロット --- */
+    R.drawPilotTop(ctx, this.px, this.py, 42, {
       suit: PILOT_LOOK.suit, trim: PILOT_LOOK.trim, skin: PILOT_LOOK.skin,
-      step: this.step, wave: 0,
+      step: this.step, ang: this.face,
     });
-    ctx.fillStyle = 'rgba(143,212,255,0.55)';
-    ctx.beginPath();
-    ctx.moveTo(this.px + this.face * 30, floorY + 18);
-    ctx.lineTo(this.px + this.face * 44, floorY + 24);
-    ctx.lineTo(this.px + this.face * 30, floorY + 30);
-    ctx.closePath(); ctx.fill();
 
     ctx.restore();
 
-    /* 画面に固定する案内 */
+    /* --- 画面に固定する案内 --- */
     ctx.save();
     ctx.scale(scale, scale);
     if (!this.room && nearDoor) {
       const label = `${nearDoor.name} に入る`;
       ctx.font = '700 15px "Segoe UI", system-ui, sans-serif';
       const tw = ctx.measureText(label).width;
-      const cx = nearDoor.x - this.camX;
+      const cx = clamp(nearDoor.sx - this.camX, tw / 2 + 24, VW - tw / 2 - 24);
+      const cy = nearDoor.side === 'down' ? c.y0 - 52 : c.y1 + 26;
       ctx.fillStyle = 'rgba(8,14,22,0.9)';
-      roundRect(ctx, cx - tw / 2 - 16, floorY - 232, tw + 32, 30, 6); ctx.fill();
+      roundRect(ctx, cx - tw / 2 - 16, cy, tw + 32, 30, 6); ctx.fill();
       ctx.strokeStyle = 'rgba(143,212,255,0.75)'; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = '#dff0ff'; ctx.textAlign = 'center';
-      ctx.fillText(label, cx, floorY - 212);
+      ctx.fillText(label, cx, cy + 20);
       ctx.fillStyle = 'rgba(143,212,255,0.85)';
       ctx.font = '700 11px system-ui, sans-serif';
-      ctx.fillText('↑ / Space', cx, floorY - 240);
+      ctx.fillText('Space / Enter', cx, cy + 42);
       ctx.textAlign = 'left';
     }
     /* 現在地バー */
@@ -976,133 +1049,376 @@ class Base {
     ctx.restore();
   }
 
-  /* 左端 ― 下部格納デッキ。輸送機と自機が置いてある */
-  drawHangarBay(ctx, floorY, ceilY) {
-    /* 天井のハッチ（ここから輸送機が降りてくる） */
-    ctx.fillStyle = '#0a1020';
-    roundRect(ctx, 96, ceilY - 14, 320, 16, 4); ctx.fill();
-    ctx.fillStyle = '#39476a';
-    roundRect(ctx, 96, ceilY - 14, 150, 16, 4); ctx.fill();
-    roundRect(ctx, 266, ceilY - 14, 150, 16, 4); ctx.fill();
-    ctx.fillStyle = 'rgba(255,207,74,0.35)';
-    ctx.fillRect(246, ceilY - 12, 20, 12);
-    ctx.fillStyle = 'rgba(223,230,240,0.55)';
-    ctx.font = '700 12px system-ui, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('下部ハッチ', 256, ceilY + 26);
+  /* ---------------- 通路ぞいの部屋 ---------------- */
+  drawRoom(ctx, d, near) {
+    if (d.side === 'fore') return this.drawBridgeRoom(ctx, d, near);
+    const up = d.side === 'up';
+    const r = up ? ROOM_UP : ROOM_DN;
+    const rx = d.x - ROOM_HW, ry = r.y0, rw = ROOM_HW * 2, rh = r.y1 - r.y0;
+
+    ctx.fillStyle = '#26314a';
+    roundRect(ctx, rx, ry, rw, rh, 8); ctx.fill();
+    ctx.save();
+    ctx.beginPath(); roundRect(ctx, rx, ry, rw, rh, 8); ctx.clip();
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    for (let x = rx; x < rx + rw; x += 46) ctx.fillRect(x, ry, 2, rh);
+    this.roomProps(ctx, d, rx, up ? ry + ROOM_LABEL : ry, rw, rh - ROOM_LABEL);
+    ctx.restore();
+    ctx.strokeStyle = near ? 'rgba(143,212,255,0.85)' : '#46587e';
+    ctx.lineWidth = near ? 4 : 3;
+    roundRect(ctx, rx, ry, rw, rh, 8); ctx.stroke();
+
+    /* 部屋名 ― 通路から遠い側の帯にまとめる */
+    const ly = up ? ry : ry + rh - ROOM_LABEL;
+    ctx.fillStyle = 'rgba(9,15,26,0.62)';
+    ctx.fillRect(rx + 1, ly + (up ? 1 : 0), rw - 2, ROOM_LABEL - 1);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = near ? '#dff0ff' : 'rgba(165,195,228,0.9)';
+    ctx.font = '700 15px "Segoe UI", system-ui, sans-serif';
+    ctx.fillText(`${d.icon} ${d.name}`, d.x, ly + 17);
+    ctx.fillStyle = 'rgba(125,158,198,0.7)';
+    ctx.font = '700 9px system-ui, sans-serif';
+    ctx.fillText(d.sub, d.x, ly + 29);
     ctx.textAlign = 'left';
 
-    /* 着艦標識 */
-    ctx.strokeStyle = 'rgba(255,207,74,0.40)'; ctx.lineWidth = 3;
-    ctx.setLineDash([12, 10]); ctx.lineDashOffset = -this.t * 18;
-    ctx.beginPath(); ctx.ellipse(256, floorY + 18, 150, 22, 0, 0, TAU); ctx.stroke();
+    this.drawDoor(ctx, d, near);
+  }
+
+  /* 通路と部屋をつなぐ引き戸 */
+  drawDoor(ctx, d, near) {
+    const up = d.side === 'up';
+    const wy0 = up ? ROOM_UP.y1 : DECK.corr.y1;
+    const wy1 = up ? DECK.corr.y0 : ROOM_DN.y0;
+    const gw = 34;
+    ctx.fillStyle = near ? 'rgba(255,207,74,0.32)' : '#151d30';
+    ctx.fillRect(d.x - gw, wy0, gw * 2, wy1 - wy0);
+    const open = near ? gw - 5 : 0;
+    for (const s of [-1, 1]) {
+      const px = s < 0 ? d.x - gw - open : d.x + open;
+      ctx.fillStyle = '#33436a';
+      roundRect(ctx, px, wy0 + 1, gw, wy1 - wy0 - 2, 3); ctx.fill();
+      ctx.strokeStyle = '#5f74a4'; ctx.lineWidth = 1.6;
+      roundRect(ctx, px, wy0 + 1, gw, wy1 - wy0 - 2, 3); ctx.stroke();
+    }
+    /* 扉の前を照らす床の帯 */
+    const a = near ? 0.75 : 0.22 + 0.12 * Math.sin(this.t * 2 + d.x);
+    ctx.fillStyle = `rgba(255,207,74,${a})`;
+    ctx.fillRect(d.x - gw, up ? DECK.corr.y0 + 7 : DECK.corr.y1 - 11, gw * 2, 4);
+  }
+
+  /* 部屋ごとの中身 */
+  roomProps(ctx, d, x, y, w, h) {
+    const cx = x + w / 2, cy = y + h / 2;
+    const box = (bx, by, bw, bh, col) => {
+      ctx.fillStyle = col || '#2f3d5c';
+      roundRect(ctx, bx, by, bw, bh, 4); ctx.fill();
+      ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 1.6;
+      roundRect(ctx, bx, by, bw, bh, 4); ctx.stroke();
+    };
+    switch (d.id) {
+      case 'launch': {
+        /* 上（船外）へ抜ける射出路 */
+        ctx.fillStyle = '#141d33';
+        ctx.fillRect(cx - 34, y, 68, h);
+        ctx.fillStyle = '#04060c';
+        ctx.fillRect(cx - 30, y + 4, 60, 28);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(cx - 30, y + 4, 60, 28); ctx.clip();
+        drawStars(ctx, this.winStars, cx - 30, y + 4, 60, 28, this.t * 30, 1);
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(143,212,255,0.45)'; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - 30, y + 4, 60, 28);
+        ctx.fillStyle = 'rgba(255,207,74,0.5)';
+        for (let i = 0; i < 3; i++) {
+          const yy = y + 40 + i * 9 + (this.t * 16 % 9);
+          ctx.beginPath();
+          ctx.moveTo(cx - 18, yy + 8); ctx.lineTo(cx, yy); ctx.lineTo(cx + 18, yy + 8);
+          ctx.lineTo(cx + 18, yy + 12); ctx.lineTo(cx, yy + 4); ctx.lineTo(cx - 18, yy + 12);
+          ctx.closePath(); ctx.fill();
+        }
+        box(x + 8, y + h - 32, 30, 26); box(x + w - 38, y + h - 32, 30, 26);
+        break;
+      }
+      case 'hangar': {
+        /* 整備架台が二基 */
+        for (const ox of [-52, 52]) {
+          ctx.strokeStyle = 'rgba(255,207,74,0.35)'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(cx + ox, cy - 4, 26, 0, TAU); ctx.stroke();
+          ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(cx + ox - 34, cy - 26); ctx.lineTo(cx + ox + 34, cy - 26);
+          ctx.moveTo(cx + ox - 34, cy + 18); ctx.lineTo(cx + ox + 34, cy + 18);
+          ctx.stroke();
+        }
+        box(x + 6, y + h - 30, 26, 22); box(x + w - 32, y + h - 30, 26, 22);
+        break;
+      }
+      case 'supply': {
+        for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
+          box(x + 16 + i * 46, y + 8 + j * 32, 34, 26, j ? '#33415f' : '#2c3a58');
+          ctx.fillStyle = '#ffcf4a';
+          ctx.fillRect(x + 21 + i * 46, y + 14 + j * 32, 24, 3);
+        }
+        break;
+      }
+      case 'lab': {
+        /* 中央の解析卓 */
+        ctx.fillStyle = '#22304d';
+        ctx.beginPath(); ctx.arc(cx, cy, 30, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, 30, 0, TAU); ctx.stroke();
+        for (let i = 0; i < 3; i++) {
+          ctx.strokeStyle = `rgba(143,212,255,${0.5 - i * 0.13})`; ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 8 + i * 7, this.t * (1 + i * 0.5), this.t * (1 + i * 0.5) + 2.2);
+          ctx.stroke();
+        }
+        box(x + 8, y + 10, 26, h - 20); box(x + w - 34, y + 10, 26, h - 20);
+        break;
+      }
+      case 'training': {
+        ctx.fillStyle = 'rgba(255,207,74,0.09)';
+        roundRect(ctx, cx - 44, y + 4, 88, h - 8, 8); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,207,74,0.22)'; ctx.lineWidth = 2;
+        ctx.setLineDash([8, 7]);
+        roundRect(ctx, cx - 44, y + 4, 88, h - 8, 8); ctx.stroke();
+        ctx.setLineDash([]);
+        for (const ox of [-30, 0, 30]) {
+          ctx.fillStyle = '#d8e6f5';
+          ctx.beginPath(); ctx.arc(cx + ox, y + 22, 11, 0, TAU); ctx.fill();
+          ctx.fillStyle = '#c0392b';
+          ctx.beginPath(); ctx.arc(cx + ox, y + 22, 6, 0, TAU); ctx.fill();
+          ctx.fillStyle = '#d8e6f5';
+          ctx.beginPath(); ctx.arc(cx + ox, y + 22, 2.4, 0, TAU); ctx.fill();
+        }
+        box(x + 10, y + h - 34, 30, 24); box(x + w - 40, y + h - 34, 30, 24);
+        break;
+      }
+      case 'quarters': {
+        box(x + 12, y + 10, 44, 48, '#33415f');           // 寝台
+        ctx.fillStyle = '#c9d8ea';
+        roundRect(ctx, x + 17, y + 15, 34, 15, 3); ctx.fill();
+        box(x + w - 62, y + 10, 50, 20);                   // 机
+        ctx.fillStyle = 'rgba(143,212,255,0.6)';
+        roundRect(ctx, x + w - 52, y + 14, 20, 11, 2); ctx.fill();
+        box(x + w - 62, y + 38, 50, 18);                   // 棚
+        ctx.fillStyle = 'rgba(143,212,255,0.10)';
+        ctx.beginPath(); ctx.ellipse(cx + 4, y + h - 14, 34, 12, 0, 0, TAU); ctx.fill();
+        break;
+      }
+      case 'command': {
+        /* 作戦卓を囲む椅子と、立っている司令官 */
+        const tx = cx + 18;
+        ctx.fillStyle = '#22304d';
+        ctx.beginPath(); ctx.ellipse(tx, cy, 44, 22, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(tx, cy, 44, 22, 0, 0, TAU); ctx.stroke();
+        ctx.fillStyle = `rgba(143,212,255,${0.20 + 0.07 * Math.sin(this.t * 2)})`;
+        ctx.beginPath(); ctx.ellipse(tx, cy, 30, 14, 0, 0, TAU); ctx.fill();
+        for (const a of [0.7, 1.6, 2.5, 3.8, 4.7, 5.6]) {
+          ctx.fillStyle = '#2f3d5c';
+          ctx.beginPath(); ctx.arc(tx + Math.cos(a) * 56, cy + Math.sin(a) * 29, 7, 0, TAU); ctx.fill();
+        }
+        R.drawPilotTop(ctx, x + 26, cy, 32, {
+          suit: CHIEF_LOOK.suit, trim: CHIEF_LOOK.trim, skin: CHIEF_LOOK.skin,
+          cap: true, ang: 0, step: 0,
+        });
+        break;
+      }
+    }
+  }
+
+  /* ---------------- 艦首の運転室 ---------------- */
+  drawBridgeRoom(ctx, d, near) {
+    const pts = [[2314, 140], [2380, 166], [2398, 190], [2380, 214], [2314, 240]];
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = '#26314a'; ctx.fill();
+    ctx.save(); ctx.clip();
+    /* 前方の窓（宇宙が見える） */
+    ctx.fillStyle = '#05070f';
+    ctx.fillRect(2372, 150, 30, 80);
+    drawStars(ctx, this.winStars, 2372, 150, 30, 80, this.t * 24, 1);
+    ctx.fillStyle = 'rgba(120,180,255,0.16)';
+    ctx.beginPath(); ctx.arc(2392, 208, 22, 0, TAU); ctx.fill();
+    /* 操舵席のコンソール */
+    for (const oy of [-26, 26]) {
+      ctx.fillStyle = '#2f3d5c';
+      roundRect(ctx, 2334, 190 + oy - 11, 34, 22, 4); ctx.fill();
+      ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 1.6;
+      roundRect(ctx, 2334, 190 + oy - 11, 34, 22, 4); ctx.stroke();
+      ctx.fillStyle = `rgba(143,212,255,${0.35 + 0.25 * Math.sin(this.t * 3 + oy)})`;
+      roundRect(ctx, 2340, 190 + oy - 6, 22, 8, 2); ctx.fill();
+      ctx.fillStyle = '#2a3550';
+      ctx.beginPath(); ctx.arc(2326, 190 + oy, 7, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.strokeStyle = near ? 'rgba(143,212,255,0.85)' : '#46587e';
+    ctx.lineWidth = near ? 4 : 3; ctx.stroke();
+
+    /* 突き当たりの引き戸 */
+    const c = DECK.corr;
+    const gh = 30;
+    ctx.fillStyle = near ? 'rgba(255,207,74,0.32)' : '#151d30';
+    ctx.fillRect(c.x1, 190 - gh, 16, gh * 2);
+    const open = near ? gh - 5 : 0;
+    for (const s of [-1, 1]) {
+      const py = s < 0 ? 190 - gh - open : 190 + open;
+      ctx.fillStyle = '#33436a';
+      roundRect(ctx, c.x1 + 1, py, 14, gh, 3); ctx.fill();
+      ctx.strokeStyle = '#5f74a4'; ctx.lineWidth = 1.6;
+      roundRect(ctx, c.x1 + 1, py, 14, gh, 3); ctx.stroke();
+    }
+    const a = near ? 0.75 : 0.22 + 0.12 * Math.sin(this.t * 2);
+    ctx.fillStyle = `rgba(255,207,74,${a})`;
+    ctx.fillRect(c.x1 - 12, 190 - gh, 4, gh * 2);
+
+    ctx.fillStyle = 'rgba(9,15,26,0.62)';
+    roundRect(ctx, 2300, 102, 104, 34, 5); ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = near ? '#dff0ff' : 'rgba(165,195,228,0.9)';
+    ctx.font = '700 14px "Segoe UI", system-ui, sans-serif';
+    ctx.fillText('✦ 運転室', 2352, 119);
+    ctx.fillStyle = 'rgba(125,158,198,0.7)';
+    ctx.font = '700 9px system-ui, sans-serif';
+    ctx.fillText('BRIDGE', 2352, 131);
+    ctx.textAlign = 'left';
+  }
+
+  /* ---------------- 艦尾 ― 下部格納デッキ ---------------- */
+  drawHangarBay(ctx) {
+    const b = DECK.bay, bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+    ctx.fillStyle = '#2b3852';
+    roundRect(ctx, b.x0, b.y0, bw, bh, 12); ctx.fill();
+    ctx.save();
+    ctx.beginPath(); roundRect(ctx, b.x0, b.y0, bw, bh, 12); ctx.clip();
+
+    /* 床の目地 */
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    for (let x = b.x0; x < b.x1; x += 58) ctx.fillRect(x, b.y0, 2, bh);
+    for (let y = b.y0; y < b.y1; y += 58) ctx.fillRect(b.x0, y, bw, 2);
+
+    /* 着艦パッド（真上の下部ハッチのちょうど下） */
+    const px = 218, py = 246;
+    ctx.strokeStyle = 'rgba(255,207,74,0.35)'; ctx.lineWidth = 4;
+    ctx.setLineDash([16, 12]); ctx.lineDashOffset = -this.t * 18;
+    ctx.beginPath(); ctx.arc(px, py, 84, 0, TAU); ctx.stroke();
     ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(255,207,74,0.18)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, 60, 0, TAU); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,207,74,0.45)';
+    ctx.font = '700 10px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('下部ハッチ直下 / LANDING PAD', px, py - 96);
+    ctx.textAlign = 'left';
+    for (let i = 0; i < 8; i++) {
+      const a2 = i / 8 * TAU;
+      ctx.fillStyle = `rgba(255,207,74,${0.35 + 0.35 * Math.sin(this.t * 4 + i)})`;
+      ctx.beginPath(); ctx.arc(px + Math.cos(a2) * 84, py + Math.sin(a2) * 84, 4, 0, TAU); ctx.fill();
+    }
+
+    /* 資材 */
+    for (let i = 0; i < 5; i++) {
+      const bx = b.x0 + 14 + i * 40;
+      ctx.fillStyle = i % 2 ? '#33415f' : '#2c3a58';
+      roundRect(ctx, bx, b.y0 + 12, 32, 26, 4); ctx.fill();
+      ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 1.6;
+      roundRect(ctx, bx, b.y0 + 12, 32, 26, 4); ctx.stroke();
+      ctx.fillStyle = '#ffcf4a';
+      ctx.fillRect(bx + 5, b.y0 + 18, 22, 3);
+    }
 
     /* 駐機した輸送機 */
-    ctx.save();
-    ctx.translate(160, floorY - 30);
-    ctx.fillStyle = '#4b5766';
-    roundRect(ctx, -78, -16, 156, 32, 13); ctx.fill();
-    ctx.strokeStyle = '#2a323d'; ctx.lineWidth = 2.5; ctx.stroke();
-    ctx.fillStyle = '#6d7b8d';
-    roundRect(ctx, 54, -12, 30, 24, 11); ctx.fill();
-    ctx.fillStyle = '#8fe0ff';
-    roundRect(ctx, 62, -8, 17, 10, 5); ctx.fill();
-    ctx.fillStyle = '#39424e';
-    roundRect(ctx, -44, 2, 38, 14, 4); ctx.fill();
-    ctx.fillStyle = '#ffcf4a';
-    ctx.fillRect(-12, -16, 6, 32);
-    ctx.fillStyle = '#2f3742';
-    roundRect(ctx, -70, 14, 18, 12, 4); ctx.fill();
-    roundRect(ctx, 40, 14, 18, 12, 4); ctx.fill();
-    ctx.restore();
+    this.planeTop(ctx, px, py, 0.78, -0.35);
 
-    /* 自機 */
+    /* 自機（整備架台の上） */
+    const mx = 424, my = 108;
+    ctx.strokeStyle = 'rgba(143,212,255,0.28)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(mx, my, 52, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(mx - 58, my - 40); ctx.lineTo(mx + 58, my - 40);
+    ctx.moveTo(mx - 58, my + 40); ctx.lineTo(mx + 58, my + 40);
+    ctx.stroke();
     const lo = this.lo;
     const col = lo ? lo.colors : { body: '#5b7fa8', trim: '#9fd4ff', accent: '#ffd166' };
-    R.shadow(ctx, 382, floorY + 6, 44, 13, 0.34);
+    R.shadow(ctx, mx, my + 6, 44, 40, 0.30);
     R.drawRobot(ctx, {
-      x: 382, y: floorY - 40, r: 42,
-      ang: -0.4 + Math.sin(this.t * 0.4) * 0.05, aim: -0.4 + Math.sin(this.t * 0.5) * 0.1,
+      x: mx, y: my, r: 42,
+      ang: 1.35 + Math.sin(this.t * 0.4) * 0.06, aim: 1.35 + Math.sin(this.t * 0.5) * 0.1,
       walkPhase: 0, muzzle: 0, recoil: 0, hitFlash: 0, thrust: false,
     }, col, { shape: lo ? lo.shape : 'standard', decal: lo ? lo.decal : null, attach: lo ? lo.attachments : [] });
 
-    ctx.fillStyle = 'rgba(143,212,255,0.5)';
-    ctx.font = '700 12px system-ui, sans-serif';
-    ctx.fillText('格納デッキ  LOWER HANGAR', 100, floorY + 56);
-  }
-
-  /* 右端 ― 運転室の前方窓 */
-  drawBridgeEnd(ctx, floorY, ceilY) {
-    const x = 2210;
-    ctx.save();
-    ctx.fillStyle = '#05070f';
-    roundRect(ctx, x, ceilY + 34, 380, 150, 10); ctx.fill();
-    ctx.beginPath(); roundRect(ctx, x, ceilY + 34, 380, 150, 10); ctx.clip();
-    drawStars(ctx, this.stars, x, ceilY + 34, 380, 150, this.t * 26, 1);
-    ctx.fillStyle = '#2a3348';
-    ctx.beginPath(); ctx.ellipse(x + 190, ceilY + 256, 260, 110, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(120,180,255,0.18)';
-    ctx.beginPath(); ctx.ellipse(x + 190, ceilY + 252, 268, 114, 0, 0, TAU); ctx.fill();
     ctx.restore();
-    ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 5;
-    roundRect(ctx, x, ceilY + 34, 380, 150, 10); ctx.stroke();
-    ctx.strokeStyle = 'rgba(74,91,128,0.8)'; ctx.lineWidth = 4;
-    for (let i = 1; i < 4; i++) {
-      ctx.beginPath(); ctx.moveTo(x + i * 95, ceilY + 34); ctx.lineTo(x + i * 95, ceilY + 184); ctx.stroke();
-    }
-    /* 操舵コンソール */
-    ctx.fillStyle = '#233049';
-    roundRect(ctx, x + 40, floorY - 56, 300, 56, 8); ctx.fill();
-    ctx.strokeStyle = '#3d4c6e'; ctx.lineWidth = 2.5; ctx.stroke();
-    for (let i = 0; i < 6; i++) {
-      const a = 0.3 + 0.3 * Math.sin(this.t * 3 + i);
-      ctx.fillStyle = `rgba(143,212,255,${a})`;
-      roundRect(ctx, x + 60 + i * 46, floorY - 44, 30, 10, 3); ctx.fill();
-    }
-    ctx.fillStyle = 'rgba(143,212,255,0.5)';
-    ctx.font = '700 12px system-ui, sans-serif';
-    ctx.fillText('運転室  BRIDGE', x + 40, floorY + 56);
+    /* 外周の壁。中央通路へ抜ける口だけ開けておく */
+    const c = DECK.corr;
+    ctx.strokeStyle = '#4a5f8c'; ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(b.x1, c.y0); ctx.lineTo(b.x1, b.y0 + 12);
+    ctx.arcTo(b.x1, b.y0, b.x1 - 12, b.y0, 12);
+    ctx.lineTo(b.x0 + 12, b.y0);
+    ctx.arcTo(b.x0, b.y0, b.x0, b.y0 + 12, 12);
+    ctx.lineTo(b.x0, b.y1 - 12);
+    ctx.arcTo(b.x0, b.y1, b.x0 + 12, b.y1, 12);
+    ctx.lineTo(b.x1 - 12, b.y1);
+    ctx.arcTo(b.x1, b.y1, b.x1, b.y1 - 12, 12);
+    ctx.lineTo(b.x1, c.y1);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(143,212,255,0.45)';
+    ctx.font = '700 13px system-ui, sans-serif';
+    ctx.fillText('格納デッキ  LOWER HANGAR  D-04', b.x0 + 16, b.y0 + 58);
   }
 
-  drawDoor(ctx, d, floorY, near) {
-    const x = d.x, top = floorY - 150;
-    /* 壁のくぼみ */
-    ctx.fillStyle = '#1a2338';
-    roundRect(ctx, x - 62, top - 16, 124, 166, 8); ctx.fill();
-    ctx.strokeStyle = near ? 'rgba(143,212,255,0.9)' : 'rgba(90,120,160,0.5)';
-    ctx.lineWidth = near ? 3.5 : 2.5;
-    roundRect(ctx, x - 62, top - 16, 124, 166, 8); ctx.stroke();
-    /* 扉本体（近づくと開く） */
-    const open = near ? 22 : 0;
-    ctx.fillStyle = near ? 'rgba(255,207,74,0.28)' : 'rgba(10,16,32,0.9)';
-    ctx.fillRect(x - 52, top, 104, 150);
-    ctx.fillStyle = '#2f3d5c';
-    roundRect(ctx, x - 52 - open, top, 50, 150, 5); ctx.fill();
-    ctx.strokeStyle = '#4a5b80'; ctx.lineWidth = 2;
-    roundRect(ctx, x - 52 - open, top, 50, 150, 5); ctx.stroke();
-    ctx.fillStyle = '#2f3d5c';
-    roundRect(ctx, x + 2 + open, top, 50, 150, 5); ctx.fill();
-    roundRect(ctx, x + 2 + open, top, 50, 150, 5); ctx.stroke();
-    /* 表示板 */
-    ctx.fillStyle = near ? '#1d3350' : '#16203a';
-    roundRect(ctx, x - 56, top - 46, 112, 30, 5); ctx.fill();
-    ctx.strokeStyle = near ? 'rgba(143,212,255,0.9)' : 'rgba(90,120,160,0.5)';
-    ctx.lineWidth = 1.6;
-    roundRect(ctx, x - 56, top - 46, 112, 30, 5); ctx.stroke();
-    ctx.fillStyle = near ? '#dff0ff' : '#8ba0bb';
-    ctx.font = '700 14px "Segoe UI", system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${d.icon} ${d.name}`, x, top - 26);
-    if (!near) {                       /* 近づくと案内を出すので、そのときは伏せる */
-      ctx.fillStyle = 'rgba(120,150,190,0.75)';
-      ctx.font = '700 8px system-ui, sans-serif';
-      ctx.fillText(d.sub, x, top - 52);
+  /* 真上から見た輸送機 */
+  planeTop(ctx, x, y, s, ang) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang || 0);
+    ctx.scale(s, s);
+    ctx.strokeStyle = '#2a323d';
+    /* 主翼 */
+    for (const sgn of [-1, 1]) {
+      ctx.fillStyle = sgn < 0 ? '#4b5766' : '#44505f';
+      ctx.beginPath();
+      ctx.moveTo(12, sgn * 12); ctx.lineTo(-28, sgn * 78); ctx.lineTo(-56, sgn * 78); ctx.lineTo(-26, sgn * 12);
+      ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 2; ctx.stroke();
+      /* 発動機 */
+      ctx.fillStyle = '#39424e';
+      roundRect(ctx, -30, sgn * 50 - 10, 46, 20, 8); ctx.fill();
+      ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.fillStyle = 'rgba(127,240,255,0.55)';
+      roundRect(ctx, -34, sgn * 50 - 6, 10, 12, 4); ctx.fill();
+      /* 尾翼 */
+      ctx.fillStyle = '#525f70';
+      ctx.beginPath();
+      ctx.moveTo(-74, sgn * 8); ctx.lineTo(-98, sgn * 44); ctx.lineTo(-110, sgn * 44); ctx.lineTo(-92, sgn * 8);
+      ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 2; ctx.stroke();
     }
-    ctx.textAlign = 'left';
-    /* 足元のランプ */
-    const a = near ? 0.75 : 0.25 + 0.15 * Math.sin(this.t * 2 + x);
-    ctx.fillStyle = `rgba(255,207,74,${a})`;
-    ctx.beginPath(); ctx.arc(x, floorY + 12, 4, 0, TAU); ctx.fill();
+    /* 胴体 */
+    ctx.fillStyle = '#5b6878';
+    roundRect(ctx, -100, -21, 194, 42, 20); ctx.fill();
+    ctx.strokeStyle = '#2a323d'; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = '#6d7b8d';
+    roundRect(ctx, -60, -14, 120, 28, 12); ctx.fill();
+    /* 貨物ハッチ（開いている） */
+    ctx.fillStyle = '#2a3240';
+    roundRect(ctx, -98, -15, 30, 30, 6); ctx.fill();
+    /* 風防 */
+    ctx.fillStyle = '#8fe0ff';
+    roundRect(ctx, 58, -13, 34, 26, 11); ctx.fill();
+    ctx.fillStyle = '#ffcf4a';
+    ctx.fillRect(-16, -21, 7, 42);
+    ctx.fillStyle = 'rgba(223,230,240,0.85)';
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.fillText('SALVAGE', 4, 4);
+    ctx.restore();
   }
 }
 

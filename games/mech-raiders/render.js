@@ -795,7 +795,72 @@ function drawPilot(ctx, x, y, s, opt) {
   ctx.restore();
 }
 
-window.MRRender = { drawRobot, drawEnemy, drawBoss, drawPilot, shade, shadow, poly, SHAPES };
+/* 真上から見たパイロット。s は肩幅のめやす（px）、ang は向き（0 で右） */
+function drawPilotTop(ctx, x, y, s, opt) {
+  opt = opt || {};
+  const suit = opt.suit || '#3d5f86';
+  const body = shade(suit, 1.35);       // 上から見ると照明が当たるので明るめ
+  const trim = opt.trim || '#9fd4ff';
+  const skin = opt.skin || '#e8c39a';
+  const step = opt.step || 0;
+  const line = shade(suit, 0.40);
+  ctx.save();
+  ctx.translate(x, y);
+  /* 影は向きに関係なく落ちる */
+  ctx.fillStyle = 'rgba(0,0,0,0.26)';
+  ctx.beginPath(); ctx.ellipse(2, 3, s * 0.40, s * 0.38, 0, 0, TAU); ctx.fill();
+  ctx.rotate(opt.ang || 0);
+  ctx.scale(s / 42, s / 42);
+
+  const sw = Math.sin(step);
+  /* 足 ― 胴の前後にのぞく */
+  for (const sgn of [-1, 1]) {
+    ctx.fillStyle = '#1b212a';
+    roundRect(ctx, sgn * sw * 8 - 7, sgn * 8 - 5, 15, 10, 4); ctx.fill();
+  }
+  /* 腕 ― 肩の外側に出す */
+  for (const sgn of [-1, 1]) {
+    const ax = -sgn * sw * 6;
+    ctx.fillStyle = shade(suit, 1.05);
+    roundRect(ctx, ax - 9, sgn * 18 - 5, 21, 10, 5); ctx.fill();
+    ctx.strokeStyle = line; ctx.lineWidth = 2;
+    roundRect(ctx, ax - 9, sgn * 18 - 5, 21, 10, 5); ctx.stroke();
+    ctx.fillStyle = skin;
+    ctx.beginPath(); ctx.arc(ax + 11, sgn * 18, 4, 0, TAU); ctx.fill();
+  }
+  /* 胴 ― 肩が広く腰が狭い */
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.moveTo(-14, -11); ctx.lineTo(2, -16); ctx.lineTo(15, -10);
+  ctx.lineTo(15, 10); ctx.lineTo(2, 16); ctx.lineTo(-14, 11);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = line; ctx.lineWidth = 2.6; ctx.stroke();
+  ctx.fillStyle = trim;
+  roundRect(ctx, -11, -7, 8, 14, 2); ctx.fill();
+  /* 頭 ― 胴より小さく、前寄りに置く */
+  ctx.fillStyle = opt.cap ? shade(suit, 0.55) : (opt.helmet || shade(suit, 1.55));
+  ctx.beginPath(); ctx.arc(4, 0, 8, 0, TAU); ctx.fill();
+  ctx.strokeStyle = line; ctx.lineWidth = 2; ctx.stroke();
+  if (opt.cap) {
+    /* 士官帽のつば */
+    ctx.fillStyle = shade(suit, 0.32);
+    roundRect(ctx, 10, -6, 8, 12, 3); ctx.fill();
+    ctx.fillStyle = trim;
+    ctx.beginPath(); ctx.arc(4, 0, 2.6, 0, TAU); ctx.fill();
+  } else {
+    /* 飛行ヘルメットの面覆い。前を向いている側が光る */
+    ctx.fillStyle = 'rgba(140,230,255,0.95)';
+    ctx.beginPath(); ctx.arc(4, 0, 7, -1.05, 1.05); ctx.closePath(); ctx.fill();
+  }
+  /* 向きの目印 */
+  ctx.fillStyle = 'rgba(255,207,74,0.7)';
+  ctx.beginPath();
+  ctx.moveTo(34, 0); ctx.lineTo(24, -7); ctx.lineTo(26.5, 0); ctx.lineTo(24, 7);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+window.MRRender = { drawRobot, drawEnemy, drawBoss, drawPilot, drawPilotTop, shade, shadow, poly, SHAPES };
 
 /* ---------------------------------------------------------------- Field */
 Object.assign(Field.prototype, {
