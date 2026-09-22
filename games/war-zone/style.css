@@ -106,6 +106,8 @@ html, body {
 .tc-base-fill { position: absolute; inset: 0; background: var(--team); transform-origin: left center; transition: transform 0.15s linear; }
 .tc-basehp { grid-area: hp; font-size: 9px; font-weight: 800; opacity: 0.8; min-width: 26px; text-align: right; }
 .team-card.fallen .tc-basehp { color: #ff9a8d; opacity: 1; }
+/* 1対1には基地が無いので、基地の体力は出さない */
+.team-card.duel .tc-base, .team-card.duel .tc-basehp { display: none; }
 
 .hud-bottom {
   position: absolute;
@@ -182,7 +184,7 @@ html, body {
   position: absolute;
   top: 50px;
   left: 8px;
-  width: 232px;
+  width: 330px;
   padding: 8px 10px 9px;
   border-radius: 10px;
   border: 1px solid rgba(255, 210, 63, 0.32);
@@ -191,6 +193,36 @@ html, body {
   pointer-events: auto;
 }
 .training-panel.hidden { display: none; }
+/* ガント司令官の顔と吹き出し */
+.tp-commander { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 7px; }
+.tp-face {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 210, 63, 0.6);
+}
+.tp-talk {
+  position: relative;
+  flex: 1;
+  min-height: 64px;
+  padding: 5px 9px 6px;
+  border-radius: 9px;
+  background: #f4efd9;
+  color: #1e2414;
+  cursor: pointer;
+}
+.tp-talk::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 16px;
+  border-style: solid;
+  border-width: 7px 7px 7px 0;
+  border-color: transparent #f4efd9 transparent transparent;
+}
+.tp-name { display: block; margin-bottom: 1px; font-size: 10px; font-weight: 800; color: #7a5a12; }
+.tp-line { margin: 0; min-height: 3em; font-size: 13px; font-weight: 700; line-height: 1.5; }
 .tp-head {
   display: flex;
   align-items: baseline;
@@ -220,6 +252,17 @@ html, body {
 }
 .tp-skip:active { background: rgba(255, 255, 255, 0.18); }
 .tp-skip.hidden { display: none; }
+/* 横向きのスマホのように背の低い画面では、司令官と「とばす」だけにする。
+   下の体力表示とスティックにかぶらないよう、高さを抑える。 */
+@media (max-height: 500px) {
+  .training-panel { top: 48px; width: 300px; padding: 6px 8px 7px; }
+  .tp-commander { margin-bottom: 5px; }
+  .tp-face { width: 44px; height: 44px; }
+  .tp-talk { min-height: 44px; padding: 4px 8px 5px; }
+  .tp-name, .tp-head, .tp-steps { display: none; }
+  .tp-line { font-size: 12px; line-height: 1.4; }
+  .tp-skip { margin-top: 0; padding: 3px 6px; }
+}
 
 #minimap {
   position: absolute;
@@ -715,9 +758,15 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
   #touch-btns { right: 154px; grid-template-columns: repeat(2, 64px); }
   .tbtn { width: 64px; font-size: 11px; }
   .medal-grid { grid-template-columns: 1fr; }
-  .training-panel { top: 46px; width: 176px; padding: 6px 8px 7px; }
-  .tp-steps li { font-size: 10px; }
+  /* 縦向きのスマホ: 通知の帯 (上から120px、2行になることがある) の下に、横いっぱいで出す */
+  .training-panel { top: 178px; right: 8px; width: auto; padding: 7px 8px 8px; }
+  .tp-face { width: 52px; height: 52px; }
+  .tp-talk { min-height: 52px; }
+  .tp-line { font-size: 12.5px; }
+  .tp-steps li { font-size: 10.5px; }
+  .tp-next { display: none; }
   .tp-hint { font-size: 9px; padding-left: 11px; }
+  .tp-skip { margin-top: 5px; padding: 4px 6px; }
 }
 
 .help-classes { margin: 4px 0 12px; padding-left: 18px; font-size: 12.5px; line-height: 1.65; text-align: left; }
@@ -726,6 +775,125 @@ body.touch-ui .vehicle-hint { bottom: 226px; }
 /* 観戦中は自分用の HUD を隠す */
 body.spectating .hud-bottom,
 body.spectating .weapon { display: none; }
+
+/* ===== ステージ作り（クリエイティブ） ===== */
+.editor-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+.editor-ui.hidden { display: none; }
+.ed-top {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(10, 14, 8, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  pointer-events: auto;
+}
+.ed-title { font-size: 13px; font-weight: 800; color: var(--you); margin-right: 4px; }
+.ed-top select,
+.ed-top input {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 13px;
+}
+.ed-top input { width: 150px; }
+.ed-top select option { color: #111; }
+.ed-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ed-btn.primary { background: var(--you); color: #221a00; border-color: transparent; }
+.ed-palette {
+  position: absolute;
+  top: 64px;
+  left: 8px;
+  bottom: 34px;
+  width: 150px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(10, 14, 8, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  pointer-events: auto;
+}
+.ed-group { margin: 6px 2px 4px; font-size: 11px; font-weight: 800; color: #c6c9b6; }
+.ed-palette button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.ed-palette button span { width: 20px; text-align: center; font-size: 15px; }
+.ed-palette button.on { background: var(--you); color: #221a00; border-color: transparent; font-weight: 800; }
+.ed-status {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 16px);
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: rgba(10, 14, 8, 0.8);
+  color: #e8e8df;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+/* スマホ: 道具の欄は画面の下に横長で並べ、指で横に送る */
+@media (max-width: 700px) {
+  .ed-top { gap: 5px; padding: 5px 7px; }
+  .ed-title { display: none; }
+  .ed-top input { width: 110px; }
+  .ed-top select, .ed-top input, .ed-btn { height: 28px; font-size: 12px; }
+  .ed-btn { padding: 0 8px; }
+  .ed-palette {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 32px;
+    width: auto;
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 5px;
+  }
+  .ed-group { display: none; }
+  .ed-palette button { flex: 0 0 auto; width: auto; margin: 0; flex-direction: column; gap: 1px; font-size: 10px; padding: 4px 7px; }
+  .ed-status { font-size: 10.5px; bottom: 6px; }
+}
 
 /* ===== 拠点（庭） ===== */
 .garden-hud {

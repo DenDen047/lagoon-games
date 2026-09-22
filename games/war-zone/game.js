@@ -52,6 +52,8 @@
   const BASE_MAX_HP = 2400;
   const BASE_CORE_R = 72;
   const WIN_REWARD = 300;
+  const DUEL_GOAL = 5;            // 1対1で勝つのに必要な撃破数
+  const DUEL_SPAWN_DX = 560;      // 1対1で2人が出てくる位置 (マップの中心から左右へ)
   const RESPAWN_MS = 3200;
   const SOLDIER_R = 14;
   const DOG_R = 11;
@@ -105,6 +107,15 @@
   const NVG_NIGHT_MUL = 1.9;        // 下ろしている間、暗いところがよく見える
   const NVG_DAY_MUL = 0.62;         // 明るいところでは白飛びしてかえって見えない
   const NVG_SLIDE_MS = 260;         // 下りきる / 上がりきるまでの時間
+  // 水鉄砲。顔に水をかけられた兵士は、しばらく自分のまわりしか見えなくなる。
+  const SOAK_MS = 2600;             // 前が見えない時間 (かけられるたびに延びる)
+  const SOAK_FADE_MS = 700;         // 終わりぎわに視界が戻ってくるまでの時間
+  const SOAK_VISION_R = 70;         // 濡れている間に見える範囲
+  // 再生。紅衣の傭兵は倒されても、しばらく倒れたまま傷をふさぐ。
+  // そのあいだに体力を削り切られなければ起き上がる。
+  const REGEN_DOWN_MS = 5000;       // 起き上がるまでの時間
+  const REGEN_BODY_HP = 0.5;        // 倒れている間の体力 (最大HPに対する割合)
+  const REGEN_REVIVE_HP = 0.5;      // 起き上がったときの体力 (最大HPに対する割合)
   // ハロウィンの森のカボチャ
   const PUMPKIN_PICK_R = 30;
   const AUTO_HEAL_DELAY_MS = 5000;
@@ -216,9 +227,13 @@
     // 向き直って飛び、飛びながらもゆるく追尾する。そのぶん弾はとても遅い。
     { key: "jacklauncher", name: "ジャックランチャー", dmg: 112, interval: 1500, mag: 3, reload: 2700, spread: 0.02, pellets: 1, auto: false, speed: 330, range: 900, len: 30, kick: 4.6, rocket: true, seek: true, pumpkin: true, exclusive: "jack", snd: "sniper" },
     // 鉄拳・投擲岩: 超人ソラリス専用。素手で殴り、引き抜いた岩を投げつける。
-    { key: "ironfist", name: "鉄拳", dmg: 78, interval: 330, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true, speed: 0, range: 92, len: 20, kick: 3.4, melee: true, arc: 1.15, style: "fist", cutsBullets: true, exclusive: "hero", snd: "melee" },
+    { key: "ironfist", name: "鉄拳", dmg: 78, interval: 330, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true, speed: 0, range: 92, len: 20, kick: 3.4, melee: true, arc: 1.15, style: "fist", twin: true, cutsBullets: true, exclusive: "hero", snd: "melee" },
     { key: "boulder", name: "投擲岩", dmg: 104, interval: 1350, mag: 2, reload: 2200, spread: 0.035, pellets: 1, auto: false, speed: 520, range: 760, len: 16, kick: 5.0, rocket: true, exclusive: "hero", snd: "sniper" },
     { key: "twinblade", name: "二刀流", dmg: 64, interval: 300, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true, speed: 0, range: 96, len: 26, kick: 2.6, melee: true, arc: 0.95, style: "twinblade", twin: true, cutsBullets: true, snd: "melee" },
+    // 鉤爪: 必殺技で呼ばれる爪の相棒クローだけが使う。左右の爪を交互に振る。
+    { key: "claws", name: "鉤爪", dmg: 58, interval: 240, mag: 1, reload: 0, spread: 0, pellets: 1, auto: true, speed: 0, range: 92, len: 22, kick: 2.4, melee: true, arc: 1.1, style: "claws", twin: true, exclusive: "claw", summon: true, snd: "melee" },
+    // 水鉄砲: 紅衣の傭兵専用。ダメージは無いが、顔に当たった相手はしばらく前が見えなくなる。
+    { key: "watergun", name: "水鉄砲", dmg: 0, interval: 150, mag: 30, reload: 1500, spread: 0.07, pellets: 1, auto: true, speed: 560, range: 400, len: 14, kick: 0.6, water: true, quiet: true, exclusive: "merc", snd: "water" },
   ];
   const WKEY = {}; WEAPONS.forEach((w, i) => (WKEY[w.key] = i));
   // ここまでが最初から用意してある武器。これより後ろは開発した武器が入る。
@@ -643,15 +658,29 @@
       weapons: ["jacklauncher", "pistol", "knife"],
     },
     {
-      key: "merc", name: "黒衣の傭兵 ヴァンタ", icon: "🖤", rarity: 5,
-      bodyStyle: "merc",
-      desc: "二丁拳銃と二刀流だけを持つ黒ずくめの傭兵。刀は振るたび右手と左手が入れ替わり、振っている間は飛んできた銃弾を斬り落とす。傷の治りも異常に速い。",
+      key: "merc", name: "紅衣の傭兵 ヴァンタ", icon: "❤️", rarity: 5,
+      bodyStyle: "merc", regen: true,
+      ultimate: { key: "sidekick", name: "助っ人ゲート", icon: "🌀", cooldown: 45000,
+        desc: "オレンジ色のゲートから爪の相棒クローを呼ぶ。たまに、ゲートを通らずにドッグプールが飛び出してくる。" },
+      desc: `二丁拳銃・二刀流・水鉄砲を持つ、全身赤いスーツの傭兵。刀を振っている間は飛んできた銃弾を斬り落とし、水鉄砲を顔に当てた相手はしばらく前が見えなくなる。傷の治りも異常に速く、倒されても${REGEN_DOWN_MS / 1000}秒以内にとどめを刺されなければ再生して起き上がる。必殺技「助っ人ゲート」で助っ人を呼べる。`,
       hpBonus: 20, speedMul: 1.16, gunMul: 1, meleeMul: 1.28,
       grenades: 3, mines: 2, wires: 0,
       parryWindowMul: 1.5, parryCooldownMul: 0.7,
       mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
       healMul: 2.6, noiseMul: 0.85,
-      weapons: ["dualpistol", "twinblade"],
+      weapons: ["dualpistol", "twinblade", "watergun"],
+    },
+    // ---- 紅衣の傭兵の必殺技で呼ばれる助っ人。自分では選べず、一覧にも出ない。 ----
+    {
+      key: "claw", name: "爪の相棒 クロー", icon: "🐺", rarity: 5, hidden: true, summon: true,
+      bodyStyle: "claw",
+      desc: "紅衣の傭兵の必殺技で、オレンジ色のゲートから現れる助っ人。いる間は無敵で、足も爪も強い。攻撃を受けると少しよろけて押し戻される。",
+      invincible: true,
+      hpBonus: 160, speedMul: 1.6, gunMul: 1, meleeMul: 1.7,
+      grenades: 0, mines: 0, wires: 0,
+      parryWindowMul: 1, parryCooldownMul: 1,
+      mineArmMul: 1, mineBlastMul: 1, mineStealthMul: 1, seesEnemyMines: false,
+      weapons: ["claws"],
     },
     {
       key: "shinobi", name: "影 シノビ", icon: "🥷", rarity: 5,
@@ -733,6 +762,8 @@
   // fixedLight: 明るさを固定するステージだけが持つ (null = 昼夜サイクルどおり)。
   // phase: HUD の時間帯表示を固定するステージだけが持つ。
   // monochrome: 地形・障害物・的を白と灰色だけで描くステージ。
+  // traps: そのステージの世界観に合わせた床のトラップと枚数 (種類は TRAP_KINDS)。
+  // slippery: 地面そのものがすべるステージ。
   const STAGES = [
     {
       key: "training", name: "練習場", icon: "🎯",
@@ -747,6 +778,7 @@
       desc: "建物と瓦礫が点在する見通しの良い戦場。時間帯が朝から夜へ移り変わる。",
       bgm: "bgm-battle", creature: false, training: false, fixedLight: null,
       ground: ["#3c4d28", "#41522b", "#374524"],
+      traps: { mud: 6, crater: 4, road: 4 },
     },
     {
       key: "ruins", name: "廃墟の街", icon: "🏚",
@@ -754,6 +786,7 @@
       bgm: "bgm-battle", creature: false, training: false, fixedLight: null,
       cars: true,
       ground: ["#4b4841", "#524f48", "#44413b"],
+      traps: { oil: 5, cable: 4, manhole: 4 },
     },
     {
       key: "timeforest", name: "時の森", icon: "⌛",
@@ -762,6 +795,7 @@
       phase: { key: "dusk", label: "⌛ 時の森", note: "中央の岩に剣がある" },
       sword: true,
       ground: ["#2a2f3f", "#303648", "#252a38"],
+      traps: { timebog: 5, haste: 4, fairyring: 4, thorns: 3 },
     },
     {
       key: "halloween", name: "ハロウィンの森", icon: "🎃",
@@ -770,6 +804,7 @@
       phase: { key: "night", label: "🎃 ハロウィンの森", note: "カボチャを集めよう" },
       pumpkins: 12,
       ground: ["#2d2136", "#342740", "#261c2e"],
+      traps: { web: 6, wisp: 4, witchring: 4 },
     },
     {
       key: "darkforest", name: "暗黒の森", icon: "🌲",
@@ -777,16 +812,79 @@
       bgm: "bgm-darkforest", creature: true, training: false, fixedLight: 0.1,
       phase: { key: "night", label: "🌲 暗黒の森", note: "何かが見ている" },
       ground: ["#1b2416", "#1f291a", "#161e12"],
+      traps: { bog: 5, thorns: 4, twigs: 6 },
+    },
+    {
+      key: "ice", name: "氷の国", icon: "❄️",
+      desc: "一面が氷におおわれた国。地面がつるつるで、歩くとすべって止まりにくい。雪の吹きだまりの上だけは足がふんばれる。",
+      bgm: "bgm-battle", creature: false, training: false, fixedLight: null,
+      slippery: true, backdrop: "#9fb9ca",
+      ground: ["#cfe2ec", "#d9eaf2", "#c3d8e5"],
+      traps: { snowdrift: 7, icehole: 4, icecave: 4 },
     },
   ];
   const STAGE_BY_KEY = {};
   STAGES.forEach((s) => (STAGE_BY_KEY[s.key] = s));
-  const stageDef = () => STAGE_BY_KEY[G && G.stage ? G.stage : playerStage] || STAGE_BY_KEY.field;
+  const stageDef = () => {
+    const key = G && G.stage ? G.stage : playerStage;
+    return STAGE_BY_KEY[key] || (isCustomStageKey(key) ? customStageDef(key) : STAGE_BY_KEY.field);
+  };
   const stageIsTraining = (key) => !!(STAGE_BY_KEY[key] && STAGE_BY_KEY[key].training);
   const isTraining = () => !!stageDef().training;
   const isMonochrome = () => !!stageDef().monochrome;
   const hasSword = () => !!stageDef().sword;
   const pumpkinQuota = () => stageDef().pumpkins || 0;
+
+  // ---- 自作ステージ (ステージ作りで作ったもの) ----
+  // キーは "custom:世界観:番号"。世界観をキーに入れておくと、そのステージを持っていない
+  // オンラインの参加者にも、地面の色やすべりやすさが伝わる。
+  const CUSTOM_PREFIX = "custom:";
+  const CUSTOM_STAGE_KEY = "wz-custom-stages";
+  const CUSTOM_STAGE_MAX = 12;
+  const CUSTOM_THEMES = ["field", "ruins", "timeforest", "halloween", "darkforest", "ice"];
+  const isCustomStageKey = (key) => typeof key === "string" && key.startsWith(CUSTOM_PREFIX);
+  const customStageKey = (c) => `${CUSTOM_PREFIX}${c.theme}:${c.id}`;
+  let customStages = loadCustomStages();
+
+  function loadCustomStages() {
+    try {
+      const list = JSON.parse(store.getItem(CUSTOM_STAGE_KEY) || "[]");
+      if (!Array.isArray(list)) return [];
+      return list
+        .filter((c) => c && typeof c.id === "string" && CUSTOM_THEMES.includes(c.theme) &&
+          Array.isArray(c.obstacles) && Array.isArray(c.traps))
+        .slice(0, CUSTOM_STAGE_MAX)
+        .map((c) => ({ ...c, name: String(c.name || "マイステージ").slice(0, 16) }));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveCustomStages() {
+    store.setItem(CUSTOM_STAGE_KEY, JSON.stringify(customStages));
+    for (const k of Object.keys(customDefCache)) delete customDefCache[k];
+  }
+
+  const customStageOf = (key) =>
+    isCustomStageKey(key) ? customStages.find((c) => customStageKey(c) === key) || null : null;
+
+  // 自作ステージの設定。見た目 (地面の色・明るさ・すべる地面) は選んだ世界観のステージを借り、
+  // そのステージだけの仕掛け (剣・カボチャ・クリーチャー・動く車・自動で散らすトラップ) は出さない。
+  const customDefCache = {};
+  function customStageDef(key) {
+    if (customDefCache[key]) return customDefCache[key];
+    const theme = key.slice(CUSTOM_PREFIX.length).split(":")[0];
+    const base = STAGE_BY_KEY[theme] && !STAGE_BY_KEY[theme].training ? STAGE_BY_KEY[theme] : STAGE_BY_KEY.field;
+    const own = customStageOf(key);
+    const name = own ? own.name : "自作ステージ";
+    const def = {
+      ...base, key, name, icon: "🛠", custom: true, theme: base.key,
+      creature: false, sword: false, pumpkins: 0, cars: false, traps: {},
+      phase: base.phase ? { ...base.phase, label: `🛠 ${name}`, note: "自作ステージ" } : undefined,
+    };
+    customDefCache[key] = def;
+    return def;
+  }
   const hasDrivableCars = () => !!stageDef().cars;
 
   const DIFF = {
@@ -832,6 +930,7 @@
 
   // 基地が健在な軍だけが復活でき、勝利できる。
   function teamAlive(team) {
+    if (G.duel) return G.duel.teams.includes(team);
     const base = G.bases[team];
     return !!base && base.hp > 0;
   }
@@ -963,7 +1062,7 @@
   // 別の端末へ移す手段も無いので、JSON に書き出して読み込めるようにしておく。
   const SAVE_KEYS = [
     "wz-money", "wz-shop", "wz-medals", "wz-stats", "wz-inventory",
-    "wz-class", "wz-name", "wz-team", "wz-army", "wz-stage", "wz-skin",
+    "wz-class", "wz-name", "wz-team", "wz-army", "wz-stage", "wz-skin", "wz-custom-stages", "wz-mode",
   ];
   const SAVE_FORMAT = 1;
 
@@ -1139,6 +1238,23 @@
       g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
       osc.start(t); osc.stop(t + 0.18);
     }
+    // 水鉄砲のピュッという音。弓と同じく、撃った本人にだけ鳴らす。
+    function squirt() {
+      if (!actx || muted) return;
+      const t = actx.currentTime;
+      const g = actx.createGain();
+      g.connect(master);
+      const bp = actx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.Q.value = 2.2;
+      bp.frequency.setValueAtTime(1600, t);
+      bp.frequency.exponentialRampToValueAtTime(3400, t + 0.07);
+      const src = noise(0.09);
+      src.connect(bp); bp.connect(g);
+      g.gain.setValueAtTime(0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      src.start(t); src.stop(t + 0.09);
+    }
 
     function shot(kind) {
       if (!actx || muted) return;
@@ -1295,6 +1411,18 @@
       src.start(t); src.stop(t + 1.2);
     }
 
+    // 練習場の司令官がしゃべる「声」。文字が出るのに合わせて、低い短い音を鳴らす。
+    function blip() {
+      if (!actx || muted) return;
+      const t = actx.currentTime;
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = "square";
+      o.frequency.setValueAtTime(140 + Math.random() * 50, t);
+      g.gain.setValueAtTime(0.05, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.06);
+    }
+
     // ---- BGM ----
     // 効果音より控えめの音量で流す。OGG が使えるブラウザなら継ぎ目なくループする
     // (MP3 はエンコーダの余白ぶん、ループ点にごく短い間が入る)。
@@ -1337,7 +1465,7 @@
         if (actx && actx.state === "suspended") actx.resume();
         // 曲はステージが決まってから読む(暗黒の森は別の曲)
       },
-      shot, bowShot, boom, hurt, levelup, heal, melee, footstep, parry, roar, heatray,
+      shot, bowShot, squirt, boom, hurt, levelup, heal, melee, footstep, parry, roar, heatray,
       startBgm(track) {
         if (track && track !== bgmTrack) {
           // ステージが変わったら曲も差し替える
@@ -1359,6 +1487,7 @@
         return muted;
       },
       get muted() { return muted; },
+      blip,
     };
   })();
 
@@ -1604,6 +1733,7 @@
   let mode = "sp";          // 'sp' | 'host' | 'client'
   let scene = "menu";       // 'menu' | 'garden' | 試合中(G.running)
   let difficulty = "normal";
+  let matchMode = "army";   // 'army' (4軍戦) | 'duel' (1対1)
   let playerName = "Soldier";
   let playerTeam = 0;
   let playerClass = "soldier";
@@ -1621,6 +1751,8 @@
   let money = 0;
   // メニューのキャラクター選択ボタンの見た目を合わせる。setupMenu で中身が入る。
   let syncMenuClassButtons = () => {};
+  // メニューのステージ一覧を作り直す。setupMenu で中身が入る。
+  let syncMenuStageButtons = () => {};
   let shopLevels = Object.fromEntries(SHOP_ITEMS.map((item) => [item.key, 0]));
   // ---- 拠点(庭)で育てる持ち物 ----
   let scrap = 0;                 // 鍛冶に使う廃材
@@ -1657,6 +1789,7 @@
       wires: [],
       airstrikes: [],
       beams: [],
+      portals: [],
       pumpkins: [],
       pumpkinsTaken: 0,
       tanks: [],
@@ -1664,6 +1797,8 @@
       particles: [],
       pickups: [],
       obstacles: [],
+      traps: [],
+      trapNoted: {},
       bases: makeBases(stageIsTraining(playerStage)),
       score: TEAMS.map(() => 0),
       goal: BASE_MAX_HP,
@@ -2226,7 +2361,7 @@
   // ============================================================
   function attachmentsFor(weaponKey) {
     const w = weaponDef(weaponKey);
-    if (!w || w.melee) return [];        // 近接武器には付けられない
+    if (!w || w.melee || w.water) return [];   // 近接武器と水鉄砲には付けられない
     const slots = weaponAttach[weaponKey] || {};
     const out = [];
     for (const slot of ATTACH_SLOTS) {
@@ -2561,8 +2696,9 @@
 
   function benchWeaponList() {
     // 使える武器 = ショップに無い初期装備 + 買った武器
+    // 水鉄砲はおもちゃなので、アタッチメントも塗装も受け付けない。助っ人の武器は自分では持てない。
     return WEAPONS.map((w, i) => ({ w, i }))
-      .filter(({ w }) => weaponUnlocked(w.key))
+      .filter(({ w }) => weaponUnlocked(w.key) && !w.water && !w.summon)
       .map(({ w }) => w.key);
   }
 
@@ -3050,7 +3186,7 @@
 
   function renderGacha(message = "", isError = false) {
     refreshWallets();
-    el.gachaRoster.innerHTML = CLASSES.map((c) => {
+    el.gachaRoster.innerHTML = CLASSES.filter((c) => !c.summon).map((c) => {
       const got = hasChar(c.key);
       const rank = charRank(c.key);
       return `<div class="gr${got ? " got" : ""}"><b>${got ? c.icon : "❔"}</b>` +
@@ -3130,7 +3266,7 @@
     refreshWallets();
     const owned = CLASSES.filter((c) => hasChar(c.key));
     el.squadCount.textContent = owned.length;
-    el.squadChars.innerHTML = CLASSES.map((c) => {
+    el.squadChars.innerHTML = CLASSES.filter((c) => !c.summon).map((c) => {
       const got = hasChar(c.key);
       const rank = charRank(c.key);
       const on = playerClass === c.key;
@@ -3222,10 +3358,117 @@
     apartment:{ solid: true,  opaque: true,  stopsBullets: true },
     rubble:   { solid: true,  opaque: false, stopsBullets: true },
     car:      { solid: true,  opaque: false, stopsBullets: true },
+    // 氷の国
+    icewall:  { solid: true,  opaque: true,  stopsBullets: true },
+    pine:     { solid: true,  opaque: false, stopsBullets: true },
+    snowman:  { solid: true,  opaque: false, stopsBullets: true },
   };
   const isSolid = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].solid : true;
   const isOpaque = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].opaque : true;
   const stopsBullets = (o) => OBSTACLE_KINDS[o.type] ? OBSTACLE_KINDS[o.type].stopsBullets : true;
+
+  // ---- 床のトラップ ----
+  // 踏むと効き目がある床。見た目と中身はステージの世界観ごとにちがう。
+  // effect が効き目の種類:
+  //   slow 足が遅くなる / fast 足が速くなる / hurt 上にいる間ダメージ / slide すべる /
+  //   warp 同じ種類・同じ色のもう1枚へ飛ぶ (置いた順に2枚で1組) / loud 足音が遠くまで響く
+  // 通り抜けられ、弾も視線も止めない。敵も味方も同じように効き、空を飛んでいる者と
+  // 乗り物に乗っている者には効かない。w, h はその種類を置くときの大きさ。
+  // どのステージにどれを何枚置くかは STAGES の traps に書く。
+  const TRAP_KINDS = {
+    // 標準戦場
+    mud:       { effect: "slow",  name: "ぬかるみ",       icon: "🟫", w: 140, h: 100, desc: "足が遅くなる" },
+    crater:    { effect: "hurt",  name: "くすぶる砲弾跡", icon: "🔥", w: 96,  h: 96,  desc: "まだ熱い。上にいるあいだ体力が減る" },
+    road:      { effect: "fast",  name: "舗装路",         icon: "🛣", w: 220, h: 60,  desc: "足が速くなる" },
+    // 廃墟の街
+    oil:       { effect: "slide", name: "油だまり",       icon: "🛢", w: 150, h: 100, desc: "すべって止まりにくい" },
+    cable:     { effect: "hurt",  name: "切れた電線",     icon: "⚡", w: 90,  h: 90,  desc: "しびれて体力が減る" },
+    manhole:   { effect: "warp",  name: "マンホール",     icon: "🕳", w: 56,  h: 56,  desc: "地下を通って、同じ色のもう1枚から出てくる" },
+    // 時の森
+    timebog:   { effect: "slow",  name: "時の沼",         icon: "⏳", w: 150, h: 110, desc: "時間がゆっくり流れ、足が遅くなる" },
+    haste:     { effect: "fast",  name: "はやての紋",     icon: "✨", w: 90,  h: 90,  desc: "時間が速く流れ、足が速くなる" },
+    fairyring: { effect: "warp",  name: "妖精の輪",       icon: "🍄", w: 64,  h: 64,  desc: "同じ色のもう1つの輪へ飛ぶ" },
+    thorns:    { effect: "hurt",  name: "いばら",         icon: "🌵", w: 110, h: 80,  desc: "トゲが刺さって体力が減る" },
+    // ハロウィンの森
+    web:       { effect: "slow",  name: "クモの巣",       icon: "🕸", w: 110, h: 110, desc: "糸がからまって足が遅くなる" },
+    wisp:      { effect: "hurt",  name: "鬼火",           icon: "👻", w: 90,  h: 90,  desc: "青い炎で体力が減る" },
+    witchring: { effect: "warp",  name: "魔女の魔法陣",   icon: "🔮", w: 64,  h: 64,  desc: "同じ色のもう1つの陣へ飛ぶ" },
+    // 暗黒の森
+    bog:       { effect: "slow",  name: "底なし沼",       icon: "🌑", w: 150, h: 110, desc: "足が遅くなる" },
+    twigs:     { effect: "loud",  name: "枯れ枝",         icon: "🪵", w: 120, h: 80,  desc: "踏むとパキパキ鳴り、足音が遠くまで響く" },
+    // 氷の国
+    snowdrift: { effect: "slow",  name: "雪の吹きだまり", icon: "⛄", w: 130, h: 100, desc: "足は遅くなるが、すべらずにふんばれる" },
+    icehole:   { effect: "hurt",  name: "氷の割れ目",     icon: "🧊", w: 90,  h: 80,  desc: "冷たい水に足が入り、体力が減る" },
+    icecave:   { effect: "warp",  name: "氷のほら穴",     icon: "🏔", w: 64,  h: 64,  desc: "中を通って、同じ色のもう1つの穴から出てくる" },
+  };
+  const trapEffect = (type) => (TRAP_KINDS[type] ? TRAP_KINDS[type].effect : null);
+  const SLOW_MUL = 0.5;          // slow の移動速度倍率
+  const FAST_MUL = 1.6;          // fast の移動速度倍率
+  const HURT_DPS = 16;           // hurt の毎秒ダメージ
+  const SLIDE_GRIP = 1.6;        // すべる床で向きを変えられる速さ (小さいほどすべる)
+  const ICE_STAGE_GRIP = 2.6;    // 氷の国の地面。油だまりよりは少しふんばれる
+  const LOUD_MUL = 2.4;          // loud の足音の届く距離の倍率
+  const WARP_COLORS = ["#b27bff", "#ff9a3c", "#3fd0e8", "#ff5fa2", "#8be04e"];
+
+  // ワープ床に組の番号を振り直す。同じ種類どうしで置いた順に 1枚目-2枚目、3枚目-4枚目… が組になり、
+  // 余った1枚はどこへも飛ばない。組の番号は種類をまたいで通しにする (色分けに使う)。
+  function linkWarps(traps) {
+    const seen = {};
+    let pairs = 0;
+    const firstPair = {};
+    for (const trap of traps) {
+      if (trapEffect(trap.type) !== "warp") continue;
+      const n = seen[trap.type] || 0;
+      seen[trap.type] = n + 1;
+      if (n % 2 === 0) firstPair[trap.type] = pairs++;
+      trap.pair = firstPair[trap.type];
+    }
+    return traps;
+  }
+
+  function warpPartner(trap, list) {
+    if (trapEffect(trap.type) !== "warp") return null;
+    return (list || G.traps).find((o) => o !== trap && o.type === trap.type && o.pair === trap.pair) || null;
+  }
+
+  // 自動で作るステージに、その世界観のトラップを散らす。基地・壁・ほかのトラップには重ねない。
+  function genTraps(obs) {
+    const traps = [];
+    const counts = stageDef().traps || {};
+    const fits = (x, y, w, h) => {
+      if (x < 60 || y < 60 || x + w > WORLD_W - 60 || y + h > WORLD_H - 60) return false;
+      if (BASE_SPOTS.some((spot) => circleRect(spot.x, spot.y, 260, x, y, w, h))) return false;
+      const pad = 20;
+      if (obs.some((o) => isSolid(o) && x - pad < o.x + o.w && x + w + pad > o.x && y - pad < o.y + o.h && y + h + pad > o.y)) return false;
+      return !traps.some((o) => x - pad < o.x + o.w && x + w + pad > o.x && y - pad < o.y + o.h && y + h + pad > o.y);
+    };
+    for (const type of Object.keys(counts)) {
+      const kind = TRAP_KINDS[type];
+      if (!kind) continue;
+      for (let placed = 0, tries = 0; placed < counts[type] && tries < 300; tries++) {
+        // 舗装路のような細長いものは、縦にも横にも置く
+        const turn = kind.w !== kind.h && Math.random() < 0.5;
+        const w = turn ? kind.h : kind.w, h = turn ? kind.w : kind.h;
+        const x = rand(80, WORLD_W - 80 - w), y = rand(80, WORLD_H - 80 - h);
+        if (!fits(x, y, w, h)) continue;
+        traps.push({ id: traps.length + 1, type, x, y, w, h });
+        placed++;
+      }
+    }
+    return linkWarps(traps);
+  }
+
+  // その位置の床にあるトラップ。ワープ床は円なので中心からの距離で見る。
+  function trapAt(x, y) {
+    for (const trap of G.traps) {
+      if (trapEffect(trap.type) === "warp") {
+        if (dist2(x, y, trap.x + trap.w / 2, trap.y + trap.h / 2) < (trap.w / 2) ** 2) return trap;
+      } else if (x >= trap.x && x <= trap.x + trap.w && y >= trap.y && y <= trap.y + trap.h) {
+        return trap;
+      }
+    }
+    return null;
+  }
 
   // ---- マップ生成 ----
   function genMap() {
@@ -3234,7 +3477,28 @@
     if (key === "timeforest") return genForestMap(SWORD_CLEARING_R);
     if (key === "training") return genTrainingMap();
     if (key === "ruins") return genRuinsMap();
+    if (key === "ice") return genIceMap();
     return genFieldMap();
+  }
+
+  // 試合の地形とトラップを用意する。練習場にはトラップを置かない。
+  // 自作ステージなら、作ったとおりの地形とトラップを外周の壁で囲んで使う。
+  function layoutStage() {
+    const custom = customStageOf(G.stage);
+    if (custom) {
+      const wt = 26;
+      G.obstacles = [
+        { x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity },
+        { x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity },
+        { x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity },
+        { x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity },
+        ...custom.obstacles.map((o) => (o.type === "barrel" ? { ...o, hp: 30, r: 16 } : { ...o, hp: Infinity })),
+      ];
+      G.traps = linkWarps(custom.traps.map((trap, i) => ({ ...trap, id: i + 1 })));
+      return;
+    }
+    G.obstacles = genMap();
+    G.traps = isTraining() ? [] : genTraps(G.obstacles);
   }
 
   // ---- 練習場のレイアウト ----
@@ -3474,6 +3738,36 @@
     return obs;
   }
 
+  // ---- 氷の国のレイアウト ----
+  // 氷のかたまりの壁と、雪をかぶった針葉樹、雪だるまが散らばる雪原。
+  // 地面がすべるので、遮蔽は少なめにして、まっすぐ走り抜けられる道を残す。
+  function genIceMap() {
+    const obs = [];
+    const wt = 26;
+    obs.push({ x: 0, y: 0, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: WORLD_H - wt, w: WORLD_W, h: wt, type: "wall", hp: Infinity });
+    obs.push({ x: 0, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+    obs.push({ x: WORLD_W - wt, y: 0, w: wt, h: WORLD_H, type: "wall", hp: Infinity });
+    const nearBase = (x, y, w, h, pad) => BASE_SPOTS.some((spot) => circleRect(spot.x, spot.y, pad, x, y, w, h));
+    const overlaps = (x, y, w, h, pad) =>
+      obs.some((o) => x - pad < o.x + o.w && x + w + pad > o.x && y - pad < o.y + o.h && y + h + pad > o.y);
+    const place = (type, count, size, pad) => {
+      for (let placed = 0, tries = 0; placed < count && tries < count * 20; tries++) {
+        const [w, h] = size();
+        const x = rand(140, WORLD_W - 140 - w), y = rand(140, WORLD_H - 140 - h);
+        if (nearBase(x, y, w, h, 320) || overlaps(x, y, w, h, pad)) continue;
+        obs.push({ x, y, w, h, type, hp: Infinity, seed: Math.random() });
+        placed++;
+      }
+    };
+    // 氷のかたまり (姿を隠せる大きな遮蔽)
+    place("icewall", 11, () => (Math.random() < 0.5 ? [rand(120, 220), rand(40, 70)] : [rand(40, 70), rand(120, 220)]), 90);
+    // 雪をかぶった針葉樹と、雪だるま
+    place("pine", 34, () => { const r = rand(48, 70); return [r, r]; }, 46);
+    place("snowman", 10, () => [40, 40], 60);
+    return obs;
+  }
+
   function genFieldMap() {
     const obs = [];
     // 外周の壁
@@ -3532,6 +3826,7 @@
   }
 
   function teamSpawn(team) {
+    if (G && G.duel) return duelSpawn(team);
     const base = G && G.bases ? G.bases[team] : makeBases()[team];
     const a = base.heading + rand(-0.85, 0.85), d = rand(55, 135);
     return {
@@ -3539,6 +3834,30 @@
       y: clamp(base.y + Math.sin(a) * d, 55, WORLD_H - 55),
     };
   }
+
+  // ---- 1対1 ----
+  // 基地・軍用犬・戦車は出さずに、2人だけで戦う。何度でも復活でき、先に DUEL_GOAL 回
+  // 倒した方の勝ち。自分の軍と、となりの色の軍 (ブルーならレッド) が向かい合う。
+  function setupDuel() {
+    if (matchMode !== "duel" || isTraining()) return;
+    G.duel = { teams: [playerTeam, playerTeam ^ 1] };
+    for (const base of G.bases) base.hidden = true;
+  }
+
+  // マップの中心から左右に離れたあたりの、壁の中でない場所
+  function duelSpawn(team) {
+    const side = G.duel.teams.indexOf(team) === 0 ? -1 : 1;
+    const cx = WORLD_W / 2 + side * DUEL_SPAWN_DX, cy = WORLD_H / 2;
+    for (let i = 0; i < 60; i++) {
+      const spread = 40 + i * 6;
+      const x = clamp(cx + rand(-spread, spread), 60, WORLD_W - 60);
+      const y = clamp(cy + rand(-spread, spread), 60, WORLD_H - 60);
+      if (!G.obstacles.some((o) => isSolid(o) && circleRect(x, y, SOLDIER_R + 6, o.x, o.y, o.w, o.h))) return { x, y };
+    }
+    return { x: cx, y: cy };
+  }
+
+  const duelGoalText = () => `⚔️ 1対1　先に${DUEL_GOAL}回倒した方の勝ち`;
 
   // 兵科の能力値を反映する。ショップ強化より先に呼ぶこと。
   function applyClass(s, key) {
@@ -3615,6 +3934,7 @@
       dropUntil: 0, sweepAt: 0, bladeSide: 0, gunSide: 0,
       flying: false, flyAlt: 0, beamUntil: 0,
       nvgOn: false, nvgT: 0,
+      soakedUntil: 0, downed: false, regenUntil: 0,
       mines: 2, maxMines: 2, lastMine: -99999,
       lastBaseSupplyAt: -99999,
       lastFootstepAt: -99999, noiseRadius: 0, heardUntil: 0,
@@ -3641,6 +3961,19 @@
     if (isTraining()) { spawnTrainingDummies(); return; }
     const used = new Set([me.name]);
     function botName() { let n; do { n = pick(BOT_NAMES); } while (used.has(n) && used.size < BOT_NAMES.length); used.add(n); return n; }
+    // 1対1は相手を1人だけ出す (オンラインでは参加した人がこの枠を受け持つ)
+    if (G.duel) {
+      const b = makeSoldier({ id: id++, team: G.duel.teams[1], name: botName() });
+      b.maxHp = Math.round(100 * D.hpMul);
+      b.hp = b.maxHp;
+      b.dmgMul = D.dmgMul;
+      applyClass(b, pick(["soldier", "samurai", "trapper", "heavy"]));
+      b.weapon = pick(b.loadout);
+      b.ammo = WEAPONS[b.weapon].mag;
+      G.soldiers.push(b);
+      G.nextId = id;
+      return;
+    }
     for (const team of TEAMS) {
       // プレイヤーが埋めた1枠ぶんだけ自軍のボットを減らす
       const count = team === playerTeam ? TEAM_SIZE - 1 : TEAM_SIZE;
@@ -4258,8 +4591,8 @@
 
   // ============================================================
   //  必殺技 (キャラクターごとの切り札)
-  //  クールタイムだけで撃てる。擲弾兵ボマーの「空爆要請」と、
-  //  超人ソラリスの「ヒートビジョン」の2つ。
+  //  クールタイムだけで撃てる。擲弾兵ボマーの「空爆要請」、
+  //  超人ソラリスの「ヒートビジョン」、紅衣の傭兵の「助っ人ゲート」の3つ。
   // ============================================================
   const ultimateOf = (s) => (s ? classDef(s.classKey).ultimate : null) || null;
 
@@ -4275,6 +4608,110 @@
     s.ultReadyAt = t + ult.cooldown;
     if (ult.key === "airstrike") callAirstrike(s, t);
     else if (ult.key === "heatray") fireHeatray(s, t);
+    else if (ult.key === "sidekick") summonSidekick(s, t);
+  }
+
+  // ---- 必殺技「助っ人ゲート」 (紅衣の傭兵) ----
+  // オレンジ色のゲートを開いて、爪の相棒クローを呼ぶ。たまにゲートを通らずに、
+  // 傭兵の体の中からドッグプールが飛び出してくる。どちらもしばらく暴れると帰っていく。
+  const SIDEKICK_MS = 12000;        // 助っ人がいる時間
+  const DOGPOOL_CHANCE = 0.25;      // ドッグプールが出てくる割合
+  const DOGPOOL_CIRCLE_MS = 2200;   // ドッグプールが傭兵のまわりを回っている時間
+  const PORTAL_MS = 1300;           // ゲートが開いている時間
+  const GAWK_MS = 1200;             // 傭兵がゲートのほうを見ている時間
+  const SHOUT_MS = 1500;            // 「WHOA!」の吹き出しが出ている時間
+  const SHOUT_TEXT = "WHOA!";
+  // クローは無敵。攻撃を受けても体力は減らず、少しよろけて (動きと攻撃が遅くなる) 押し戻される。
+  const STAGGER_MS = 450;           // よろけている時間
+  const STAGGER_MUL = 0.55;         // よろけている間の動きと攻撃の速さ
+  const STAGGER_MIN_DMG = 4;        // これより弱い攻撃 (とげの床など) ではよろけない
+  const KNOCKBACK_PER_DMG = 5;      // ダメージ1あたりの押し戻しの勢い (px/秒)
+  const KNOCKBACK_MAX = 420;        // 押し戻しの勢いの上限 (px/秒)
+  const KNOCKBACK_DECAY = 8;        // 押し戻しの勢いが弱まる速さ (1/秒)
+
+  function summonSidekick(s, t) {
+    if (Math.random() < DOGPOOL_CHANCE) { summonDogpool(s, t); return; }
+    // ゲートは向いている方向の少し先に開く。壁の向こうや中なら、足もとの近くに寄せる。
+    let gx = clamp(s.x + Math.cos(s.aimAngle) * 80, 60, WORLD_W - 60);
+    let gy = clamp(s.y + Math.sin(s.aimAngle) * 80, 60, WORLD_H - 60);
+    const blocked = (x, y) => !lineClear(s.x, s.y, x, y) ||
+      G.obstacles.some((o) => isSolid(o) && circleRect(x, y, SOLDIER_R + 4, o.x, o.y, o.w, o.h));
+    if (blocked(gx, gy)) { gx = s.x + Math.cos(s.aimAngle) * 30; gy = s.y + Math.sin(s.aimAngle) * 30; }
+    if (blocked(gx, gy)) { gx = s.x; gy = s.y; }
+    openPortal(gx, gy);
+    const c = makeSoldier({ id: G.nextId++, team: s.team, name: "クロー" });
+    applyClass(c, "claw");
+    c.hp = c.maxHp;
+    c.shield = c.maxShield = 0;      // 盾は持たずに突っこんでいく
+    c.dmgMul = s.dmgMul;
+    c.x = gx; c.y = gy; c.rx = gx; c.ry = gy;
+    c.aimAngle = s.aimAngle;
+    c.summonerId = s.id;
+    c.summonUntil = t + SIDEKICK_MS;
+    c.appearAt = t;
+    G.soldiers.push(c);
+    startGawk(s, gx, gy, t);
+    if (s.id === G.localId) banner("🌀 助っ人ゲート！　爪の相棒クローが来た");
+  }
+
+  // 傭兵がゲートのほうを向いて「WHOA!」と叫ぶ。見ている間は撃たない。
+  function startGawk(s, x, y, t) {
+    s.gawkX = x; s.gawkY = y;
+    s.gawkUntil = t + GAWK_MS;
+    s.shoutUntil = t + SHOUT_MS;
+  }
+
+  function isGawking(s, t) {
+    return t < (s.gawkUntil || 0);
+  }
+
+  // オレンジ色のゲート。見た目だけで、当たり判定は無い。ホストでもクライアントでも開く。
+  function openPortal(x, y) {
+    G.portals.push({ x, y, born: now() });
+  }
+
+  function summonDogpool(s, t) {
+    G.dogs.push({
+      kind: "dog", id: 1000 + G.nextId++, team: s.team, name: "ドッグプール",
+      handlerId: s.id, ownerId: s.id,
+      x: s.x, y: s.y, rx: s.x, ry: s.y, spawnX: s.x, spawnY: s.y, angle: s.aimAngle,
+      hp: 160, maxHp: 160, dead: false, respawnAt: 0, speed: 285,
+      damage: 36, lastAttack: -99999, biteAt: 0, kills: 0, stunnedUntil: 0, hitFlash: 0,
+      pool: true, summonUntil: t + SIDEKICK_MS, circleUntil: t + DOGPOOL_CIRCLE_MS,
+      orbit: s.aimAngle, loved: false,
+    });
+    // ゲートは開かない。傭兵の体の中から、ぽんと飛び出してくる。
+    popFromBody(s.x, s.y);
+    if (s.id === G.localId) banner("🐶 ドッグプールが飛び出してきた！");
+  }
+
+  function popFromBody(x, y) {
+    for (let i = 0; i < 12; i++) {
+      const a = Math.random() * Math.PI * 2, sp = rand(40, 140);
+      addParticle(x, y, { kind: "dust", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(300, 600), size: rand(2.5, 5) });
+    }
+  }
+
+  function showLove(x, y) {
+    for (let i = 0; i < 3; i++) {
+      addParticle(x + rand(-8, 8), y - 36 - i * 7, { kind: "heart", vx: rand(-12, 12), vy: -38, life: 1100 + i * 150, size: 7 + i });
+    }
+  }
+
+  // 時間切れになった助っ人を帰す。やられた助っ人は復活せずにそのまま消える。
+  function dismissSummons(t) {
+    for (const s of G.soldiers) {
+      if (!s.summonUntil || s.gone) continue;
+      if (s.dead) s.gone = true;
+      else if (t >= s.summonUntil) { s.gone = true; openPortal(s.x, s.y); }
+    }
+    for (const dog of G.dogs) {
+      if (!dog.pool || dog.gone) continue;
+      if (dog.dead) dog.gone = true;
+      else if (t >= dog.summonUntil) { dog.gone = true; popFromBody(dog.x, dog.y); }
+    }
+    if (G.soldiers.some((s) => s.gone)) G.soldiers = G.soldiers.filter((s) => !s.gone);
+    if (G.dogs.some((d) => d.gone)) G.dogs = G.dogs.filter((d) => !d.gone);
   }
 
   // 照準の先を目標にして輸送機を呼ぶ。機体は目標の手前から飛んできて通り抜ける。
@@ -4717,7 +5154,7 @@
   function tryShoot(s, t) {
     if (s.dead || s.reloading || s.shieldRaised || t < s.stunnedUntil) return;
     const w = wstat(s);
-    if (t - s.lastShot < w.interval) return;
+    if (t - s.lastShot < w.interval / (isStaggered(s, t) ? STAGGER_MUL : 1)) return;
     if (w.melee) { tryMelee(s, t, w); return; }
     // 弓は弾倉ではなく矢筒から引き抜く。矢が尽きたら撃てない。
     if (w.bow) {
@@ -4763,6 +5200,7 @@
           arrow: !!w.bow,
           flame: !!w.flame,
           rail: !!w.rail,
+          water: !!w.water,
           x: mx, y: my,
           vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed,
           dmg: w.dmg * s.dmgMul * (s.gunMul || 1), team: s.team, owner: s.id,
@@ -4784,16 +5222,18 @@
         range: 520, traveled: 0, pierce: 0, col: "#ffd07a", len: 11,
       });
     }
-    // マズルフラッシュ & 薬莢 (弓は火も薬莢も出ない)
-    if (!w.bow) {
+    // マズルフラッシュ & 薬莢 (弓と水鉄砲は火も薬莢も出ない)
+    if (!w.bow && !w.water) {
       addParticle(mx, my, { kind: "flash", life: 60, size: w.key === "shotgun" ? 16 : 11, a: s.aimAngle });
       const ca = s.aimAngle + Math.PI / 2 + rand(-0.3, 0.3);
       addParticle(s.x, s.y, { kind: "casing", vx: Math.cos(ca) * rand(40, 90), vy: Math.sin(ca) * rand(40, 90), life: 600, size: 2.2 });
     }
     shake = Math.min(9, shake + (s.id === G.localId ? w.kick * 0.5 : 0));
+    if (!w.water) comicHit(s, false);
     // 弓とサプレッサーは音がしない = 撃っても位置が伝わらない。
     // 弓だけは、撃った本人に手ごたえが要るので弦の音を鳴らす。
     if (w.bow) { if (s.id === G.localId) Audio.bowShot(); }
+    else if (w.water) { if (s.id === G.localId) Audio.squirt(); }
     else if (!w.quiet && (s.id === G.localId || dist2(s.x, s.y, camX + viewW() / 2, camY + viewH() / 2) < 700 * 700)) {
       Audio.shot(w.snd);
     }
@@ -4812,6 +5252,25 @@
   const BLADE_CUT_ARC = 1.5;      // 斬り落とせる正面の角度(片側)
   const BLADE_SWING_OFFSET = 0.24; // 振っている手の側へ攻撃範囲をずらす量
 
+  // ---- アメコミ風の効果文字 (紅衣の傭兵だけ) ----
+  // 刀を振ると「SHING!」、銃を撃つと「BOOM!」と、体のまわりのどこかに英語の文字が飛び出す。
+  // 水鉄砲は音がしないので文字も出さない。連射の銃は文字だらけにならないよう間引く。
+  const COMIC_BLADE_WORDS = ["SHING!", "SHING SHING!", "SLASH!", "SWISH!", "SHINK!"];
+  const COMIC_GUN_GAP_MS = 260;
+
+  function comicHit(s, melee) {
+    if (classDef(s.classKey).bodyStyle !== "merc") return;
+    const t = now();
+    if (t - (s.lastComicAt || -99999) < (melee ? 200 : COMIC_GUN_GAP_MS)) return;
+    s.lastComicAt = t;
+    const a = Math.random() * Math.PI * 2, d = rand(34, 60);
+    addParticle(s.x + Math.cos(a) * d, s.y - soldierAltitude(s) + Math.sin(a) * d * 0.8, {
+      kind: "comic", life: 620, size: melee ? rand(20, 25) : rand(22, 28),
+      a: rand(-0.35, 0.35), vy: -18,
+      text: melee ? pick(COMIC_BLADE_WORDS) : "BOOM!", col: melee ? "blade" : "gun",
+    });
+  }
+
   // 二刀流を振っている最中か。この間だけ銃弾を斬り落とせる。
   function bladeGuardActive(s) {
     const w = wstat(s);
@@ -4827,7 +5286,7 @@
     s.recoil = Math.min(8, s.recoil + w.kick);
     const sweep = w.key === "katana" && !s.moving;
     s.sweepAt = sweep ? t : 0;   // 描画で刀を一回転させるかの判定に使う
-    // 二刀流は振るたびに右手と左手が入れ替わる。当たる向きも振った手の側へ寄る。
+    // 二刀流と鉄拳は振るたびに右手と左手が入れ替わる。当たる向きも振った手の側へ寄る。
     if (w.twin) s.bladeSide = s.bladeSide ? 0 : 1;
     const swingAngle = w.twin
       ? s.aimAngle + (s.bladeSide ? 1 : -1) * BLADE_SWING_OFFSET
@@ -4900,6 +5359,7 @@
         }
       }
     }
+    comicHit(s, true);
     if (s.id === G.localId || dist2(s.x, s.y, camX + viewW() / 2, camY + viewH() / 2) < 550 ** 2) Audio.melee();
   }
 
@@ -5040,6 +5500,46 @@
     }
   }
 
+  // ---- 床のトラップの効き目 ----
+  // slow / fast / slide / loud は applyMove で速さ・すべり・足音に効く。ここでは乗っている床を
+  // 調べて、hurt のダメージと warp の移動を行う。
+  function updateTraps(dt) {
+    for (const s of G.soldiers) {
+      const off = s.dead || s.vehicleId >= 0 || s.turretId >= 0 || s.flying || isDropping(s);
+      const trap = off ? null : trapAt(s.x, s.y);
+      s.onTrap = trap ? trap.type : null;
+      // ワープで着いた床から一度降りるまでは、また飛ばない
+      if (s.warpLock != null && (!trap || trap.id !== s.warpLock)) s.warpLock = null;
+      if (!trap) continue;
+      const effect = trapEffect(trap.type);
+      if (effect === "hurt") {
+        damageSoldier(s, HURT_DPS * dt, null, { x: s.x, y: s.y, type: "explosion", bypassEquipment: true });
+      } else if (effect === "warp" && s.warpLock == null) {
+        const to = warpPartner(trap);
+        if (!to) continue;
+        const cx = to.x + to.w / 2, cy = to.y + to.h / 2;
+        for (const [px, py] of [[s.x, s.y], [cx, cy]]) {
+          addParticle(px, py, { kind: "warpRing", life: 380, size: 16, a: 0 });
+        }
+        s.x = cx; s.y = cy; s.rx = cx; s.ry = cy;
+        s.slideVx = 0; s.slideVy = 0;
+        s.warpLock = to.id;
+        if (s.id === G.localId) Audio.parry();
+      }
+    }
+  }
+
+  // 自分が初めて踏んだ種類のトラップだけ、何が起きるかを知らせる (試合ごとに1回)
+  function noteTrapUnderfoot() {
+    const me = localSoldier();
+    if (!me || me.dead || me.vehicleId >= 0 || me.flying) return;
+    const trap = trapAt(me.x, me.y);
+    if (!trap || G.trapNoted[trap.type]) return;
+    G.trapNoted[trap.type] = true;
+    const kind = TRAP_KINDS[trap.type];
+    banner(`${kind.icon} ${kind.name}：${kind.desc}`);
+  }
+
   function updateMines(t) {
     for (let i = G.mines.length - 1; i >= 0; i--) {
       const m = G.mines[i];
@@ -5109,6 +5609,8 @@
     if (target.dead) return;
     if (isDropping(target)) return "blocked";   // 降下中は無敵
     if (!hit) hit = attacker ? { x: attacker.x, y: attacker.y, type: "bullet" } : null;
+    // 無敵の助っ人 (クロー) は体力が減らない。代わりによろけて押し戻される。
+    if (classDef(target.classKey).invincible) { staggerSoldier(target, dmg, hit); return "blocked"; }
     // 足を止めて刀を振り回している間は、飛んできた銃弾を刀で弾き返す
     if (hit && hit.type === "bullet" && isSweeping(target)) {
       const a = Math.atan2(target.y - hit.y, target.x - hit.x);
@@ -5152,8 +5654,120 @@
     target.lastDamagedAt = now();
     target.hitFlash = 1;
     if (target.id === G.localId) { Audio.hurt(); shake = Math.min(12, shake + 3); }
-    if (target.hp <= 0) killSoldier(target, attacker);
+    if (target.hp <= 0) {
+      // 再生できるキャラは、1度目はその場に倒れて再生を待つ。
+      // 倒れている間にもう一度削り切られたら、そこで本当に倒れる。クリーチャーだけは再生させない。
+      const canRegen = classDef(target.classKey).regen && !target.downed && !(hit && hit.type === "creature");
+      if (canRegen) startRegen(target);
+      else killSoldier(target, attacker);
+    }
     return "hit";
+  }
+
+  // 攻撃が来た方向の反対へ押し戻し、しばらく動きと攻撃を遅くする
+  function staggerSoldier(s, dmg, hit) {
+    if (dmg < STAGGER_MIN_DMG) return;
+    s.hitFlash = 1;
+    s.staggerUntil = now() + STAGGER_MS;
+    addParticle(s.x, s.y, { kind: "armorHit", life: 160, size: 15, a: 0 });
+    if (!hit || hit.x == null) return;
+    const dx = s.x - hit.x, dy = s.y - hit.y, d = Math.hypot(dx, dy);
+    if (d < 1) return;
+    const push = Math.min(KNOCKBACK_MAX, dmg * KNOCKBACK_PER_DMG);
+    s.knockVx = (s.knockVx || 0) + dx / d * push;
+    s.knockVy = (s.knockVy || 0) + dy / d * push;
+    const sp = Math.hypot(s.knockVx, s.knockVy);
+    if (sp > KNOCKBACK_MAX) { s.knockVx *= KNOCKBACK_MAX / sp; s.knockVy *= KNOCKBACK_MAX / sp; }
+  }
+
+  function isStaggered(s, t) {
+    return t < (s.staggerUntil || 0);
+  }
+
+  function updateKnockback(dt) {
+    for (const s of G.soldiers) {
+      if (!s.knockVx && !s.knockVy) continue;
+      if (s.dead) { s.knockVx = s.knockVy = 0; continue; }
+      resolveMovement(s, s.x + s.knockVx * dt, s.y + s.knockVy * dt, false);
+      const k = Math.exp(-KNOCKBACK_DECAY * dt);
+      s.knockVx *= k; s.knockVy *= k;
+      if (Math.hypot(s.knockVx, s.knockVy) < 6) s.knockVx = s.knockVy = 0;
+    }
+  }
+
+  // ---- 再生 (紅衣の傭兵) ----
+  const DOWNED_BANNER = `倒された…　再生中！　${REGEN_DOWN_MS / 1000}秒のうちにとどめを刺されなければ起き上がる`;
+  const REVIVED_BANNER = "再生した！　もう一度戦える";
+  const SOAKED_BANNER = "💦 顔に水をかけられた！　しばらく前が見えない";
+
+  function startRegen(s) {
+    s.downed = true;
+    s.regenUntil = now() + REGEN_DOWN_MS;
+    s.hp = s.maxHp * REGEN_BODY_HP;
+    s.moving = false; s.noiseRadius = 0;
+    s.shieldRaised = false; s.reloading = false; s.parryUntil = 0;
+    if (s.turretId >= 0) dismountTurret(s);
+    setFlying(s, false);
+    addParticle(s.x, s.y, { kind: "stain", life: REGEN_DOWN_MS, size: rand(14, 20) });
+    if (s.id === G.localId) banner(DOWNED_BANNER);
+  }
+
+  function updateRegen(t) {
+    for (const s of G.soldiers) {
+      if (!s.downed || s.dead || t < s.regenUntil) continue;
+      s.downed = false;
+      s.hp = s.maxHp * REGEN_REVIVE_HP;
+      for (let i = 0; i < 12; i++) {
+        addParticle(s.x + rand(-12, 12), s.y + rand(-10, 10), {
+          kind: "heal", vx: rand(-25, 25), vy: rand(-80, -30), life: rand(500, 900), size: rand(4, 7),
+        });
+      }
+      if (s.id === G.localId) { Audio.heal(); banner(REVIVED_BANNER); }
+    }
+  }
+
+  // ---- 水鉄砲 ----
+  // 顔の濡れ具合。0 = 乾いている、1 = 前が見えない。終わりぎわに少しずつ乾く。
+  function soakLevel(s) {
+    if (!s || s.dead) return 0;
+    return clamp(((s.soakedUntil || 0) - now()) / SOAK_FADE_MS, 0, 1);
+  }
+
+  function waterSplash(x, y, count) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2, sp = rand(30, 120);
+      addParticle(x, y, { kind: "water", vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(220, 420), size: rand(1.6, 3.2) });
+    }
+  }
+
+  // 水が何かに当たったら true (弾はそこで消える)。壁や車両に当たってもはじけるだけで、
+  // 顔を濡らすのは兵士に当たったときだけ。
+  function waterHit(b) {
+    for (const o of G.obstacles) {
+      if (stopsBullets(o) && b.x >= o.x && b.x <= o.x + o.w && b.y >= o.y && b.y <= o.y + o.h) return true;
+    }
+    for (const tank of G.tanks) {
+      if (!tank.dead && tank.team !== b.team && dist2(b.x, b.y, tank.x, tank.y) < (TANK_R + 4) ** 2) return true;
+    }
+    for (const s of G.soldiers) {
+      if (s.dead || s.vehicleId >= 0 || s.team === b.team || s.id === b.owner) continue;
+      if (dist2(b.x, b.y, s.x, s.y) >= (SOLDIER_R + 2) ** 2) continue;
+      soakSoldier(s, b);
+      return true;
+    }
+    return false;
+  }
+
+  // 顔に水がかかった。盾を正面に構えているか、刀で弾いている最中なら防げる。
+  function soakSoldier(target, b) {
+    if (target.dummy || isDropping(target)) return;
+    const from = Math.atan2(b.y - b.vy * 0.04 - target.y, b.x - b.vx * 0.04 - target.x);
+    if (isSweeping(target)) return;
+    if (target.shieldRaised && target.shield > 0 && angleGap(target.aimAngle, from) < 1.05) return;
+    if (bladeGuardActive(target) && angleGap(target.aimAngle, from) <= BLADE_CUT_ARC) return;
+    const fresh = now() >= (target.soakedUntil || 0);
+    target.soakedUntil = now() + SOAK_MS;
+    if (target.id === G.localId && fresh) banner(SOAKED_BANNER);
   }
 
   function damageTank(target, dmg, attacker) {
@@ -5235,7 +5849,7 @@
     }
     if (attacker && attacker.team !== dog.team) {
       if (!attacker.kind) gainXp(attacker, 1);
-      addKillfeed(attacker, { name: `軍用犬 ${dog.name}`, team: dog.team });
+      addKillfeed(attacker, { name: dog.pool ? dog.name : `軍用犬 ${dog.name}`, team: dog.team });
     }
   }
 
@@ -5265,6 +5879,7 @@
   function killSoldier(target, attacker) {
     target.dead = true;
     target.hp = 0;
+    target.downed = false;
     target.deaths++;
     target.respawnAt = now() + (target.dummy ? DUMMY_RESPAWN_MS : RESPAWN_MS);
     if (target.dummy) {
@@ -5281,7 +5896,7 @@
     if (target.id === G.localId) noteStat("deaths");
     if (attacker && attacker.team !== target.team && (attacker.kind || attacker.id !== target.id)) {
       attacker.kills++;
-      G.score[attacker.team]++;
+      if (!G.duel) G.score[attacker.team]++;
       if (!attacker.kind) gainXp(attacker, target.isHuman ? 2 : 1);
       addKillfeed(attacker, target);
       // 実績用: 自分が倒した分だけ、倒し方ごとに数える
@@ -5295,6 +5910,13 @@
       addKillfeed({ name: "??????", team: -1 }, target);
     } else {
       addKillfeed(null, target);
+    }
+    // 1対1: 相手が倒れたら1点。自分のトラップや爆発で倒れても相手の点になる。助っ人は数えない。
+    if (G.duel && !target.summonUntil && !G.over) {
+      const winner = G.duel.teams.find((team) => team !== target.team);
+      G.score[winner]++;
+      if (G.score[winner] >= DUEL_GOAL) endMatch(winner);
+      return;
     }
     // 基地を失った軍の兵士が倒されたら、その軍は脱落したかもしれない
     if (!teamAlive(target.team)) {
@@ -5354,6 +5976,7 @@
     s.lastDamagedAt = -99999;
     s.armor = s.maxArmor; s.shield = s.maxShield; s.shieldRaised = false;
     s.parryUntil = 0; s.parryCooldownUntil = 0; s.stunnedUntil = 0;
+    s.soakedUntil = 0; s.downed = false;
     s.ammo = wstat(s).mag; s.reloading = false;
     // 自分の矢は買ったぶんしか無いので復活では戻らない (基地で補給する)。
     // ボットやオンラインの参加者は矢筒いっぱいで復活する。
@@ -5522,7 +6145,7 @@
 
   function updateHealthRecovery(dt, t) {
     for (const s of G.soldiers) {
-      if (s.dead || s.hp >= s.maxHp || t - s.lastDamagedAt < AUTO_HEAL_DELAY_MS) continue;
+      if (s.dead || s.downed || s.hp >= s.maxHp || t - s.lastDamagedAt < AUTO_HEAL_DELAY_MS) continue;
       s.hp = Math.min(s.maxHp, s.hp + AUTO_HEAL_PER_SEC * (s.healMul || 1) * dt);
     }
   }
@@ -5549,7 +6172,7 @@
         continue;
       }
       for (const s of G.soldiers) {
-        if (s.dead || s.vehicleId >= 0) continue;
+        if (s.dead || s.downed || s.vehicleId >= 0) continue;
         const needed = kit.kind === "medkit" ? s.maxHp - s.hp : kit.kind === "armor" ? s.maxArmor - s.armor : s.maxShield - s.shield;
         if (needed < 1) continue;
         if (dist2(s.x, s.y, kit.x, kit.y) > 28 ** 2) continue;
@@ -5585,7 +6208,7 @@
     G.particles.push({
       x, y, vx: opt.vx || 0, vy: opt.vy || 0,
       life: opt.life, maxLife: opt.life, size: opt.size || 3,
-      kind: opt.kind, a: opt.a || 0, arc: opt.arc,
+      kind: opt.kind, a: opt.a || 0, arc: opt.arc, text: opt.text, col: opt.col,
     });
   }
 
@@ -5643,6 +6266,8 @@
   function updateAI(s, t, dt) {
     const a = s.ai;
     const D = DIFF[difficulty];
+    // 水鉄砲で顔が濡れている間は、すぐそばの敵しか見えない。足音を頼りに撃つこともできない。
+    const soaked = t < (s.soakedUntil || 0);
 
     // 銃座に取り付いている間は撃つだけ。敵を見失って少し経ったら離れる。
     if (s.turretId >= 0) {
@@ -5650,7 +6275,8 @@
       if (!turret) { s.turretId = -1; }
       else {
         const target = a.targetId >= 0 ? G.soldiers.find((x) => x.id === a.targetId && !x.dead) : null;
-        if (target && canSee(s, target, TURRET_GUN.range, null)) {
+        const turretSight = soaked ? SOAK_VISION_R : TURRET_GUN.range;
+        if (target && canSee(s, target, turretSight, null)) {
           a.lastSeen = t;
           const aim = Math.atan2(target.y - s.y, target.x - s.x);
           turret.angle = angLerp(turret.angle, aim, clamp(dt * 7, 0, 1));
@@ -5665,7 +6291,7 @@
           for (const e of G.soldiers) {
             if (e.dead || e.team === s.team) continue;
             const d2 = dist2(s.x, s.y, e.x, e.y);
-            if (d2 < bestD && canSee(s, e, TURRET_GUN.range, null)) { bestD = d2; best = e.id; }
+            if (d2 < bestD && canSee(s, e, turretSight, null)) { bestD = d2; best = e.id; }
           }
           if (best >= 0) { a.targetId = best; a.lastSeen = t; }
         }
@@ -5676,19 +6302,29 @@
     if (t > a.think) {
       a.think = t + rand(120, 240);
       // 壁の裏 or 視野角の外なら気づかれない。足音も壁で遮られる。
-      const sight = AI_SIGHT_R * daylightVisionMul();
+      // 助っ人は暴れるために呼ばれているので、向きに関係なく広く敵を探す
+      const summoned = !!s.summonUntil;
+      const sight = soaked ? SOAK_VISION_R : summoned ? 620 : AI_SIGHT_R * daylightVisionMul();
       let best = -1, bestD = Infinity;
       for (const e of G.soldiers) {
         if (e.dead || e.team === s.team) continue;
         const d2 = dist2(s.x, s.y, e.x, e.y);
         if (d2 >= bestD) continue;
-        if (canSee(s, e, sight, AI_FOV) || canHear(s, e)) { bestD = d2; best = e.id; }
+        if (canSee(s, e, sight, summoned ? null : AI_FOV) || (!soaked && canHear(s, e))) { bestD = d2; best = e.id; }
       }
       if (best >= 0) { a.targetId = best; a.lastSeen = t; }
-      else if (t - a.lastSeen > 1400) a.targetId = -1;
+      else if (soaked || t - a.lastSeen > 1400) a.targetId = -1;
 
-      // ターゲット無し → 一番近い敵基地へ進軍
-      if (a.targetId < 0) {
+      // ターゲット無し → 一番近い敵基地へ進軍。助っ人は呼んでくれた傭兵のそばへ戻る。
+      const summoner = summoned ? G.soldiers.find((x) => x.id === s.summonerId && !x.dead) : null;
+      if (a.targetId < 0 && summoner) {
+        a.wx = summoner.x + rand(-50, 50);
+        a.wy = summoner.y + rand(-50, 50);
+      } else if (a.targetId < 0 && G.duel) {
+        // 1対1には基地が無いので、相手のいそうなあたりへ探しに行く
+        const foe = G.soldiers.find((x) => x.team !== s.team && !x.dead && !x.summonUntil);
+        if (foe) { a.wx = foe.x + rand(-90, 90); a.wy = foe.y + rand(-90, 90); }
+      } else if (a.targetId < 0) {
         const objective = nearestEnemyBase(s.x, s.y, s.team);
         if (objective) {
           a.wx = objective.x + rand(-45, 45);
@@ -5700,7 +6336,7 @@
 
     const w = wstat(s);
     const soldierTarget = a.targetId >= 0 ? G.soldiers.find((x) => x.id === a.targetId) : null;
-    const baseTarget = nearestEnemyBase(s.x, s.y, s.team);
+    const baseTarget = s.summonUntil ? null : nearestEnemyBase(s.x, s.y, s.team);
     const target = soldierTarget && !soldierTarget.dead ? soldierTarget : baseTarget;
     const targetIsBase = !!target && target.kind === "base";
     let mvx = 0, mvy = 0;
@@ -5710,13 +6346,15 @@
       const dx = target.x - s.x, dy = target.y - s.y;
       const d = Math.hypot(dx, dy) || 1;
       desiredAim = Math.atan2(dy, dx);
-      const pref = targetIsBase ? Math.max(BASE_CORE_R + 38, w.range * 0.62) : w.range * 0.62;
+      // 助っ人は暴れるために来ているので、間合いの内側まで踏み込み、横へはあまり回りこまない
+      const rush = !!s.summonUntil;
+      const pref = targetIsBase ? Math.max(BASE_CORE_R + 38, w.range * 0.62) : w.range * (rush ? 0.45 : 0.62);
       // 距離維持 + ストレイフ
       let radial = 0;
       if (d > pref * 1.15) radial = 1;
       else if (!targetIsBase && d < pref * 0.6) radial = -1;
       const perpx = -dy / d, perpy = dx / d;
-      const strafePower = targetIsBase ? 0.18 : 0.8;
+      const strafePower = targetIsBase ? 0.18 : rush ? 0.25 : 0.8;
       mvx = (dx / d) * radial + perpx * a.strafe * strafePower;
       mvy = (dy / d) * radial + perpy * a.strafe * strafePower;
       // 射撃判定
@@ -5727,7 +6365,8 @@
       }
       s.shieldRaised = wantsShield;
       const aimGap = Math.abs(((desiredAim - s.aimAngle + Math.PI) % (Math.PI * 2)) - Math.PI);
-      if (vis && d < w.range + (targetIsBase ? BASE_CORE_R : 0) && aimGap < 0.22 && Math.random() < D.fireChance) {
+      const canAim = !soaked || d < SOAK_VISION_R;
+      if (vis && canAim && d < w.range + (targetIsBase ? BASE_CORE_R : 0) && aimGap < (rush ? 0.4 : 0.22) && (rush || Math.random() < D.fireChance)) {
         // エイムにブレを加える
         const err = (Math.random() - 0.5) * D.aimErr * 2;
         const sav = s.aimAngle;
@@ -5735,12 +6374,12 @@
         tryShoot(s, t);
         s.aimAngle = sav;
       }
-      if (vis && d > 130 && d < 430 + (targetIsBase ? BASE_CORE_R : 0) && s.grenades > 0 && t - s.lastGrenade > 6500 && Math.random() < 0.008) {
+      if (vis && !soaked && d > 130 && d < 430 + (targetIsBase ? BASE_CORE_R : 0) && s.grenades > 0 && t - s.lastGrenade > 6500 && Math.random() < 0.008) {
         tryThrowGrenade(s, t, desiredAim);
       }
       if (s.ammo <= 0) startReload(s, t);
       // 近くに空いている銃座があれば取り付いて撃つ
-      if (s.vehicleId < 0 && !targetIsBase && t - (a.turretTry || 0) > 2500) {
+      if (s.vehicleId < 0 && !targetIsBase && !s.summonUntil && t - (a.turretTry || 0) > 2500) {
         a.turretTry = t;
         for (const turret of G.turrets) {
           if (turret.dead || turret.gunnerId >= 0) continue;
@@ -5838,13 +6477,30 @@
     const m = Math.hypot(mvx, mvy);
     s.moving = m > 0.05;
     s.noiseRadius = s.moving ? (dash ? 680 : 430) * (s.noiseMul || 1) : 0;
+    // 枯れ枝のような loud の床では、足音が遠くまで響く
+    if (!flying && trapEffect(s.onTrap) === "loud") s.noiseRadius *= LOUD_MUL;
     if (m > 1) { mvx /= m; mvy /= m; }
     // 熱線を出している間は踏ん張るので足が遅くなる
     const beaming = now() < (s.beamUntil || 0) ? HEATRAY_MOVE_MUL : 1;
+    // 床のトラップ: slow で遅く、fast で速くなる
+    const floor = flying ? null : trapEffect(s.onTrap);
+    const trapMul = floor === "slow" ? SLOW_MUL : floor === "fast" ? FAST_MUL : 1;
     const sp = s.speed * (flying ? FLY_SPEED_MUL : dash ? 1.55 : 1) *
-      (s.shieldRaised ? 0.62 : 1) * (s.snared ? WIRE_SLOW : 1) * beaming;
-    const nx = s.x + mvx * sp * dt;
-    const ny = s.y + mvy * sp * dt;
+      (s.shieldRaised ? 0.62 : 1) * (s.snared ? WIRE_SLOW : 1) * beaming * trapMul *
+      (isStaggered(s, now()) ? STAGGER_MUL : 1);
+    let vx = mvx * sp, vy = mvy * sp;
+    // すべる床と氷の国の地面では、勢いがなかなか変わらず、手を離してもしばらくすべっていく。
+    // 氷の国でも、雪の吹きだまりのような slow の床の上だけはふんばれる。
+    const grip = floor === "slide" ? SLIDE_GRIP
+      : stageDef().slippery && !flying && floor !== "slow" ? ICE_STAGE_GRIP : 0;
+    if (grip) {
+      const k = clamp(dt * grip, 0, 1);
+      vx = lerp(s.slideVx || 0, vx, k);
+      vy = lerp(s.slideVy || 0, vy, k);
+    }
+    s.slideVx = vx; s.slideVy = vy;
+    const nx = s.x + vx * dt;
+    const ny = s.y + vy * dt;
     resolveMovement(s, nx, ny, flying);
     if (s.moving) s.legPhase += dt * 12;
   }
@@ -6133,6 +6789,20 @@
       }
       if (dog.hitFlash > 0) dog.hitFlash = Math.max(0, dog.hitFlash - dt * 5);
       if (t < dog.stunnedUntil) { dog.moving = false; continue; }
+      // ドッグプールは、出てきてしばらく傭兵のまわりをぐるぐる回る。回り終えたらハートを出して戦いはじめる。
+      if (dog.pool && !dog.loved) {
+        const owner = G.soldiers.find((s) => s.id === dog.ownerId && !s.dead);
+        if (owner && t < dog.circleUntil) {
+          dog.orbit += dt * 4.2;
+          const r = 44;
+          resolveDogMovement(dog, owner.x + Math.cos(dog.orbit) * r, owner.y + Math.sin(dog.orbit) * r);
+          dog.angle = dog.orbit + Math.PI / 2;
+          dog.moving = true;
+          continue;
+        }
+        dog.loved = true;
+        showLove(dog.x, dog.y);
+      }
       let handler = G.soldiers.find((s) => s.id === dog.handlerId && !s.dead);
       if (!handler) {
         handler = G.soldiers.find((s) => s.team === dog.team && !s.dead) || null;
@@ -6216,7 +6886,7 @@
       if (base.hitFlash > 0) base.hitFlash = Math.max(0, base.hitFlash - dt * 4.5);
     }
     for (const s of G.soldiers) {
-      if (s.dead || !inFriendlyBase(s)) continue;
+      if (s.dead || s.downed || !inFriendlyBase(s)) continue;
       if (s.hp < s.maxHp) s.hp = Math.min(s.maxHp, s.hp + BASE_HEAL_PER_SEC * dt);
       if (s.armor < s.maxArmor) s.armor = Math.min(s.maxArmor, s.armor + 18 * dt);
       if (s.shield < s.maxShield) s.shield = Math.min(s.maxShield, s.shield + 24 * dt);
@@ -6300,10 +6970,11 @@
     for (const s of G.soldiers) {
       if (s.dead) continue;
       if (s.dummy) { updateDummy(s, dt); continue; }
-      if (isDropping(s)) { s.moving = false; s.noiseRadius = 0; continue; }
+      if (isDropping(s) || s.downed) { s.moving = false; s.noiseRadius = 0; continue; }
       const human = s.controller === "local" || (s.controller && s.controller !== "cpu");
       if (!human) updateAI(s, t, dt);
     }
+    updateKnockback(dt);
     updateTanks(dt, t);
     updateAirstrikes(dt, t);
     updateBeams(dt, t);
@@ -6314,6 +6985,7 @@
     updateSwordRock(dt);
     updateDogs(dt, t);
     updateFootsteps(dt, t);
+    dismissSummons(t);
     // リロード完了
     for (const s of G.soldiers) {
       // 倒れた / 乗り込んだ兵士は地面に降ろす
@@ -6332,9 +7004,11 @@
     updateGrenades(dt, t);
     updateMines(t);
     updateWires(dt, t);
+    updateTraps(dt);
     updateHealthRecovery(dt, t);
     updateMedkits(t);
     updateBases(dt, t);
+    updateRegen(t);
     // バレル爆発処理
     for (let i = G.obstacles.length - 1; i >= 0; i--) {
       const o = G.obstacles[i];
@@ -6383,6 +7057,15 @@
       inp.weaponWanted = -1;
       return;
     }
+    // 再生を待って倒れている間は何もできない。押したボタンは起き上がったあとへ持ち越さない。
+    if (s.downed) {
+      s.moving = false; s.noiseRadius = 0; s.shieldRaised = false;
+      inp.reloadEdge = false; inp.grenadeEdge = false; inp.interactEdge = false;
+      inp.parryEdge = false; inp.mineEdge = false; inp.wireEdge = false; inp.ultEdge = false;
+      inp.nvgEdge = false;
+      inp.weaponWanted = -1;
+      return;
+    }
     if (inp.interactEdge) { enterOrExitTank(s); inp.interactEdge = false; }
     if (s.turretId >= 0) {
       const turret = G.turrets.find((x) => x.id === s.turretId && !x.dead);
@@ -6421,13 +7104,16 @@
       inp.weaponWanted = -1;
     }
     s.aimAngle = inp.aimAngle != null ? inp.aimAngle : Math.atan2(inp.aimy, inp.aimx);
+    // 助っ人ゲートが開いた直後は、びっくりしてゲートのほうを見る
+    const gawking = isGawking(s, t);
+    if (gawking) s.aimAngle = Math.atan2(s.gawkY - s.y, s.gawkX - s.x);
     if (inp.reloadEdge) { startReload(s, t); inp.reloadEdge = false; }
     if (inp.grenadeEdge) { tryThrowGrenade(s, t); inp.grenadeEdge = false; }
     if (inp.mineEdge) { tryPlaceMine(s, t); inp.mineEdge = false; }
     if (inp.wireEdge) { tryPlaceWire(s, t); inp.wireEdge = false; }
     if (inp.ultEdge) { tryUltimate(s, t); inp.ultEdge = false; }
     if (inp.nvgEdge) { toggleNightVision(s); inp.nvgEdge = false; }
-    if (inp.shoot) tryShoot(s, t);
+    if (inp.shoot && !gawking) tryShoot(s, t);
     applyMove(s, inp.mvx, inp.mvy, dtGlobal, inp.dash && !s.shieldRaised);
   }
 
@@ -6455,6 +7141,14 @@
       if (b.traveled > b.range || b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H) {
         if (b.kind === "shell" && b.x >= 0 && b.y >= 0 && b.x <= WORLD_W && b.y <= WORLD_H) explodeProjectile(b);
         dead = true;
+      }
+      // 水鉄砲の水は、届ききるか何かに当たるとはじけて消える
+      if (b.water) {
+        if (dead || waterHit(b)) {
+          waterSplash(b.x, b.y, dead ? 3 : 6);
+          bs.splice(i, 1);
+        }
+        continue;
       }
       if (!dead) {
         // 障害物 (茂みや対戦車バリケードは弾が抜ける)
@@ -6649,6 +7343,7 @@
     ctx.translate(-camX + sx, -camY + sy);
 
     drawGround(vw, vh);
+    drawTraps();
     drawBases();
     // 影 → 車両 → 兵士 → 投擲物/弾 → パーティクル
     drawStains();
@@ -6664,6 +7359,7 @@
     for (const dog of G.dogs) if (!dog.dead && isEntityVisible(dog)) drawDogShadow(dog);
     for (const s of G.soldiers) if (!s.dead && s.vehicleId < 0 && isEntityVisible(s)) drawSoldierShadow(s);
     drawParticlesUnder();
+    drawPortals();
     for (const turret of G.turrets) if (!turret.dead && isEntityVisible(turret)) drawTurret(turret);
     for (const tank of G.tanks) if (!tank.dead && isEntityVisible(tank)) drawTank(tank);
     for (const dog of G.dogs) if (!dog.dead && isEntityVisible(dog)) drawDog(dog);
@@ -6679,6 +7375,7 @@
     drawLockOnMarks();
     drawAirstrikes();
     drawNameTags();
+    drawComicTexts();
     drawDropPlanes();
 
     ctx.restore();
@@ -6688,6 +7385,7 @@
     drawNightVisionTint(vw, vh);
     drawHuntedWarning(vw, vh);
     drawVisionMask(vw, vh);
+    drawSoakedView(vw, vh);
     drawFootstepIndicators(vw, vh);
     drawMinimap();
     updateHUD();
@@ -6775,21 +7473,32 @@
   }
 
   function currentVisionRadius() {
-    if (fullVisionNow()) return WORLD_W + WORLD_H;
     const me = localSoldier();
-    const shortSide = Math.min(viewW(), viewH());
-    // 画面サイズで頭打ちにしたうえで、時間帯の倍率をかける
-    const base = me && me.vehicleId >= 0
-      ? Math.min(TANK_VISION_R, Math.max(300, shortSide * 0.78))
-      : Math.min(PLAYER_VISION_R, Math.max(210, shortSide * 0.6));
-    return base * daylightVisionMul() * ((me && me.visionMul) || 1) * nightVisionMul(me);
+    const soak = soakLevel(me);
+    let r;
+    if (fullVisionNow()) {
+      r = WORLD_W + WORLD_H;
+    } else {
+      const shortSide = Math.min(viewW(), viewH());
+      // 画面サイズで頭打ちにしたうえで、時間帯の倍率をかける
+      const base = me && me.vehicleId >= 0
+        ? Math.min(TANK_VISION_R, Math.max(300, shortSide * 0.78))
+        : Math.min(PLAYER_VISION_R, Math.max(210, shortSide * 0.6));
+      r = base * daylightVisionMul() * ((me && me.visionMul) || 1) * nightVisionMul(me);
+    }
+    // 水鉄砲で顔が濡れている間は、自分のまわりしか見えない。乾くにつれて広がる。
+    if (soak > 0) {
+      const open = Math.min(r, Math.hypot(viewW(), viewH()));
+      r = SOAK_VISION_R + (open - SOAK_VISION_R) * (1 - soak);
+    }
+    return r;
   }
 
   function isEntityVisible(entity) {
     if (spectating) return true;   // 観戦中は全部見える
     if (entity.dummy) return true; // 練習用の的は敵ではないので常に見える
-    if (fullVisionNow()) return true;
     const me = localSoldier();
+    if (fullVisionNow() && soakLevel(me) <= 0) return true;
     if (!me || entity.team === me.team) return true;
     const bonus = entity.kind === "tank" ? 65 : 0;
     const r = currentVisionRadius() + bonus;
@@ -7291,6 +8000,61 @@
         ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
         ctx.stroke();
       }
+    } else if (o.type === "icewall") {
+      // 青く透きとおった氷のかたまり。上の面にハイライト、ふちに白い霜。
+      ctx.fillStyle = "rgba(0,30,60,0.18)";
+      ctx.fillRect(o.x + 5, o.y + 7, o.w, o.h);
+      ctx.fillStyle = "#8fc3e2";
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.fillStyle = "rgba(220,242,255,0.75)";
+      ctx.fillRect(o.x + 4, o.y + 4, o.w - 8, Math.min(10, o.h * 0.25));
+      ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(o.x + o.w * 0.2, o.y + o.h * 0.35); ctx.lineTo(o.x + o.w * 0.45, o.y + o.h * 0.7);
+      ctx.moveTo(o.x + o.w * 0.6, o.y + o.h * 0.25); ctx.lineTo(o.x + o.w * 0.8, o.y + o.h * 0.6);
+      ctx.stroke();
+      ctx.strokeStyle = "#5f97bb"; ctx.lineWidth = 2;
+      ctx.strokeRect(o.x + 1, o.y + 1, o.w - 2, o.h - 2);
+    } else if (o.type === "pine") {
+      // 上から見た針葉樹。とがった葉を重ね、てっぺんに雪が積もっている。
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w / 2;
+      ctx.fillStyle = "rgba(20,50,80,0.2)";
+      ctx.beginPath(); ctx.ellipse(cx + 4, cy + 6, r, r * 0.82, 0, 0, 6.283); ctx.fill();
+      const layers = [["#24503c", 1], ["#2f6349", 0.74], ["#3d7757", 0.5], ["#f4f9fd", 0.3]];
+      for (const [col, k] of layers) {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        for (let i = 0; i < 28; i++) {
+          const a = i / 28 * 6.283 + (o.seed || 0) * 3 + k;
+          const rr = r * k * (i % 2 ? 0.86 : 1);
+          if (i === 0) ctx.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+          else ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+        }
+        ctx.closePath(); ctx.fill();
+      }
+      // 枝に積もった雪
+      ctx.fillStyle = "rgba(244,249,253,0.85)";
+      for (let i = 0; i < 4; i++) {
+        const a = i * 1.57 + (o.seed || 0) * 5;
+        ctx.beginPath(); ctx.ellipse(cx + Math.cos(a) * r * 0.62, cy + Math.sin(a) * r * 0.62, r * 0.14, r * 0.09, a, 0, 6.283); ctx.fill();
+      }
+    } else if (o.type === "snowman") {
+      // 雪だるま。上から見ると、大きな胴に小さな頭、にんじんの鼻とバケツの帽子。
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w / 2;
+      ctx.fillStyle = "rgba(20,50,80,0.2)";
+      ctx.beginPath(); ctx.ellipse(cx + 3, cy + 5, r, r * 0.85, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = "#fbfdff";
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = "#b9cfe0"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(cx, cy - 3, r * 0.6, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = "#c9dbe8"; ctx.stroke();
+      ctx.fillStyle = "#3a6ea5";
+      ctx.beginPath(); ctx.arc(cx - 2, cy - 5, r * 0.28, 0, 6.283); ctx.fill();
+      ctx.fillStyle = "#1c1c1c";
+      ctx.beginPath(); ctx.arc(cx + 3, cy - 1, 1.6, 0, 6.283); ctx.arc(cx + 3, cy + 5, 1.6, 0, 6.283); ctx.fill();
+      ctx.fillStyle = "#f08a24";
+      ctx.beginPath(); ctx.moveTo(cx + 5, cy + 1); ctx.lineTo(cx + 13, cy + 2.5); ctx.lineTo(cx + 5, cy + 4); ctx.closePath(); ctx.fill();
     }
   }
 
@@ -7396,8 +8160,10 @@
   }
 
   function drawDog(dog) {
-    const harness = teamDef(dog.team).dogHarness;
-    const fur = teamDef(dog.team).dogFur;
+    // ドッグプールは赤いスーツを着ていて、目のまわりだけ黒い覆面をしている
+    const pool = !!dog.pool;
+    const harness = pool ? "#141416" : teamDef(dog.team).dogHarness;
+    const fur = pool ? "#b3121b" : teamDef(dog.team).dogFur;
     const bite = now() - dog.biteAt < 170;
     ctx.save();
     ctx.translate(dog.x, dog.y); ctx.rotate(dog.angle);
@@ -7411,7 +8177,7 @@
     // 胴体とハーネス
     ctx.fillStyle = fur; ctx.beginPath(); ctx.ellipse(-1, 0, 17, 10, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = harness; ctx.fillRect(-5, -10, 8, 20);
-    ctx.fillStyle = "rgba(255,255,255,0.72)"; ctx.font = "bold 7px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("K9", -1, 0);
+    if (!pool) { ctx.fillStyle = "rgba(255,255,255,0.72)"; ctx.font = "bold 7px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("K9", -1, 0); }
     // 頭・耳・口
     ctx.fillStyle = fur; ctx.beginPath(); ctx.arc(15, 0, 9, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#2c2420";
@@ -7420,6 +8186,14 @@
     ctx.fillStyle = bite ? "#d9d7c8" : "#241d19";
     ctx.beginPath(); ctx.ellipse(23, 0, bite ? 8 : 5, bite ? 5 : 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#e8d7b9"; ctx.beginPath(); ctx.arc(17, -3, 1.4, 0, Math.PI * 2); ctx.fill();
+    if (pool) {
+      for (const side of [-1, 1]) {
+        ctx.fillStyle = "#141416";
+        ctx.beginPath(); ctx.ellipse(16.5, side * 3.8, 3.8, 2.8, side * 0.4, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#f2f5f8";
+        ctx.beginPath(); ctx.ellipse(17.2, side * 3.6, 1.9, 1.2, side * 0.5, 0, 6.283); ctx.fill();
+      }
+    }
     if (dog.hitFlash > 0) {
       ctx.fillStyle = `rgba(255,255,255,${dog.hitFlash * 0.65})`;
       ctx.beginPath(); ctx.ellipse(0, 0, 23, 14, 0, 0, Math.PI * 2); ctx.fill();
@@ -7757,6 +8531,25 @@
 
   // 近接武器の見た目。原点は握り手、+X が刃先の向き。
   // paint = 塗装(なければ既定のガンメタル)。刃ではなく柄・金具の色として使う。
+  // 鉤爪を1つ描く。青い手袋の拳から、銀色の刃が3本まっすぐ伸びる。
+  function drawClaws(x, y) {
+    ctx.strokeStyle = "#dfe6ec"; ctx.lineWidth = 1.8; ctx.lineCap = "round";
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath(); ctx.moveTo(x + 3, y + i * 2.4); ctx.lineTo(x + 18, y + i * 3.2); ctx.stroke();
+    }
+    ctx.fillStyle = "#2a4fa0";
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = "#16295a"; ctx.lineWidth = 1.2; ctx.stroke();
+  }
+
+  // 丸い拳を1つ描く。塗装していれば縁取りがその色になる。
+  function drawFist(x, y, paint) {
+    ctx.fillStyle = "#e8b98a";
+    ctx.beginPath(); ctx.arc(x, y, 5.6, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = paint && paint.cost ? paint.trim : "#8a6446";
+    ctx.lineWidth = 1.4; ctx.stroke();
+  }
+
   function drawMeleeWeapon(style, paint) {
     const grip = paint && paint.cost ? paint.body : null;
     const trim = paint && paint.cost ? paint.trim : null;
@@ -7896,6 +8689,15 @@
     if (skin && skin.glow) { ctx.shadowColor = skin.glow; ctx.shadowBlur = 11; }
     // 降下中と飛行中は高度のぶんだけ上へずらして描く(影は地面に残る)
     ctx.translate(s.x, s.y - soldierAltitude(s));
+    // 再生を待って倒れている間は、体が透けて見える
+    if (s.downed) ctx.globalAlpha *= 0.6;
+    // 助っ人は、ゲートから出てくるとき小さな姿から大きくなり、帰るときは小さくなって消える
+    if (s.appearAt) {
+      const grow = clamp((now() - s.appearAt) / 450, 0, 1);
+      const shrink = s.summonUntil ? clamp((s.summonUntil - now()) / 400, 0, 1) : 1;
+      const k = Math.min(grow, shrink);
+      if (k < 1) { ctx.scale(0.35 + 0.65 * k, 0.35 + 0.65 * k); ctx.globalAlpha *= 0.4 + 0.6 * k; }
+    }
     // 専用の見た目を持つキャラは、スキンより先にそちらの体つきで描く
     const style = classDef(s.classKey).bodyStyle || (skin ? skin.style : null);
     // 脚 (歩行)
@@ -7909,7 +8711,7 @@
     const recoilBack = s.recoil * 0.6;
     drawSkinTorso(style, skin, s, c, recoilBack);
     // 防弾鎧プレート (ホログラムとボクセルは体の作りが違うので付けない)
-    if (s.armor > 0 && style !== "hologram" && style !== "voxel" && style !== "merc" && style !== "jack" && style !== "hero") {
+    if (s.armor > 0 && style !== "hologram" && style !== "voxel" && style !== "merc" && style !== "claw" && style !== "jack" && style !== "hero") {
       const ar = clamp(s.armor / s.maxArmor, 0, 1);
       ctx.fillStyle = `rgba(126,165,194,${0.35 + ar * 0.45})`;
       ctx.fillRect(-10 - recoilBack, -12, 13, 8); ctx.fillRect(-10 - recoilBack, 4, 13, 8);
@@ -7917,7 +8719,9 @@
     }
     // 武器
     const w = wstat(s);
-    if (s.shieldRaised && s.shield > 0) {
+    if (s.downed) {
+      // 倒れている間は武器を手放している
+    } else if (s.shieldRaised && s.shield > 0) {
       const sr = clamp(s.shield / s.maxShield, 0, 1);
       const parrying = s.parryUntil > 0 && now() <= s.parryUntil;
       ctx.fillStyle = parrying ? "rgba(255,226,112,0.94)" : `rgba(58,139,154,${0.72 + sr * 0.18})`;
@@ -7934,13 +8738,13 @@
       const sweeping = !!s.sweepAt && s.sweepAt === s.muzzle;
       const swingSpan = sweeping ? Math.PI * 2
         : w.style === "shovel" ? 2.5 : w.style === "hatchet" ? 2.1 : w.style === "katana" ? 2.3
-        : w.style === "twinblade" ? 2.2 : w.style === "bayonet" ? 0.5 : w.style === "fist" ? 0.7 : 1.9;
-      const swingMs = w.style === "bayonet" ? 110 : w.style === "fist" ? 130 : sweeping ? 230 : 180;
+        : w.style === "twinblade" ? 2.2 : w.style === "bayonet" ? 0.5 : w.style === "fist" || w.style === "claws" ? 0.7 : 1.9;
+      const swingMs = w.style === "bayonet" ? 110 : w.style === "fist" || w.style === "claws" ? 130 : sweeping ? 230 : 180;
       const swing = attackAge < swingMs ? -swingSpan / 2 + (attackAge / swingMs) * swingSpan : 0;
       // 銃剣と鉄拳は振らずに前へ突き出す
-      const straight = w.style === "bayonet" || w.style === "fist";
+      const straight = w.style === "bayonet" || w.style === "fist" || w.style === "claws";
       const thrust = straight && attackAge < swingMs
-        ? (w.style === "fist" ? 13 : 10) * (1 - attackAge / swingMs) : 0;
+        ? (w.style === "bayonet" ? 10 : 13) * (1 - attackAge / swingMs) : 0;
       if (w.style === "twinblade") {
         // 二刀流。振っている手だけが大きく動き、もう片方は構えたまま。
         // 振るたびに s.bladeSide が入れ替わるので、左右が交互に出る。
@@ -7953,6 +8757,18 @@
           drawMeleeWeapon("katana", w.paint);
           ctx.restore();
         }
+      } else if (w.style === "fist") {
+        // 鉄拳。左右の丸い拳を、振るたびに入れ替えて 1、2 と突き出す。
+        const active = s.bladeSide ? 1 : -1;
+        for (const side of [-1, 1]) {
+          drawFist(SOLDIER_R - 1 - recoilBack + (side === active ? thrust : 0), side * 8.5, w.paint);
+        }
+      } else if (w.style === "claws") {
+        // 鉤爪。左右の拳から3本ずつ刃が伸び、振るたびに左右を入れ替えて突き出す。
+        const active = s.bladeSide ? 1 : -1;
+        for (const side of [-1, 1]) {
+          drawClaws(SOLDIER_R - 3 - recoilBack + (side === active ? thrust : 0), side * 8.5);
+        }
       } else {
         ctx.save();
         ctx.translate(SOLDIER_R - 4 - recoilBack + thrust, 0); ctx.rotate(swing);
@@ -7964,6 +8780,8 @@
       drawDualGuns(s, w, recoilBack);
     } else if (w.bow) {
       drawBow(s, w, recoilBack);
+    } else if (w.water) {
+      drawWaterGun(w, recoilBack);
     } else {
       drawGun(s, w, recoilBack);
     }
@@ -7971,8 +8789,10 @@
     drawSkinHead(style, skin, c, s);
     // 暗視ゴーグル (持っている兵科だけ)
     if (hasNightVision(s.classKey)) drawNightVisionGoggles(s);
+    // 水鉄砲をかけられた顔
+    drawSoakedFace(s);
     // マズルフラッシュ
-    if (!s.shieldRaised && !w.melee && !w.bow && now() - s.muzzle < 55) {
+    if (!s.downed && !s.shieldRaised && !w.melee && !w.bow && !w.water && now() - s.muzzle < 55) {
       // 二丁拳銃は、いま撃った側の銃口から火を噴く
       const ml = SOLDIER_R + w.len - recoilBack - (w.dual ? 6 : 0);
       const fy = w.dual ? (s.gunSide ? 1 : -1) * DUAL_HAND_OFFSET : 0;
@@ -7989,7 +8809,60 @@
       ctx.fillStyle = `rgba(255,255,255,${s.hitFlash * 0.6})`;
       ctx.beginPath(); ctx.arc(0, 0, SOLDIER_R + 2, 0, 6.283); ctx.fill();
     }
+    if (s.downed) drawRegenRing(s);
     ctx.restore();
+  }
+
+  // 再生を待って倒れている兵士のまわりの輪。赤い部分が一周すると起き上がる。
+  function drawRegenRing(s) {
+    const left = clamp(((s.regenUntil || 0) - now()) / REGEN_DOWN_MS, 0, 1);
+    const r = SOLDIER_R + 8;
+    const pulse = 0.7 + Math.sin(now() * 0.012) * 0.3;
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = "rgba(0,0,0,0.45)";
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283); ctx.stroke();
+    // 描く向きは照準の回転に関係なく、真上から時計回りにする
+    ctx.rotate(-s.aimAngle);
+    ctx.strokeStyle = `rgba(255,77,109,${pulse})`;
+    ctx.beginPath(); ctx.arc(0, 0, r, -Math.PI / 2, -Math.PI / 2 + (1 - left) * 6.283); ctx.stroke();
+  }
+
+  // 顔にかかった水。頭を水の膜がおおい、顔の前からしずくが垂れる。
+  // ctx は照準方向へ回転済み (+x が顔の向き)。
+  function drawSoakedFace(s) {
+    const k = soakLevel(s);
+    if (k <= 0) return;
+    ctx.save();
+    ctx.globalAlpha *= k;
+    ctx.fillStyle = "rgba(120,195,255,0.6)";
+    ctx.beginPath(); ctx.ellipse(2.5, 0, 8.6, 9.6, 0, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = "rgba(220,242,255,0.9)"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath(); ctx.ellipse(5, -3.6, 2.4, 1.3, -0.5, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "rgba(140,205,255,0.95)";
+    for (let i = 0; i < 3; i++) {
+      const p = (now() / 520 + i / 3) % 1;
+      ctx.beginPath(); ctx.arc(10 + p * 8, (i - 1) * 4.6, 2 * (1 - p * 0.5), 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 水鉄砲。オレンジ色のおもちゃで、上に水の入ったタンクが載っている。
+  // ctx は照準方向へ回転済み (+x が銃口の向き)。
+  function drawWaterGun(w, recoilBack) {
+    const x0 = SOLDIER_R - 4 - recoilBack;
+    ctx.fillStyle = "#ff8a1f";
+    ctx.fillRect(x0, -3.4, w.len, 6.8);
+    ctx.fillStyle = "#3fcf6a";
+    ctx.fillRect(x0 + w.len - 1, -1.8, 5, 3.6);
+    ctx.fillStyle = "rgba(110,190,255,0.9)";
+    ctx.beginPath(); ctx.arc(x0 + 6, 0, 5.2, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = "#e8f6ff"; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath(); ctx.arc(x0 + 4.6, -1.7, 1.4, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "#caa06b";
+    ctx.beginPath(); ctx.arc(x0 - 1, 1.5, 3.4, 0, 6.283); ctx.fill();
   }
 
 
@@ -8489,12 +9362,22 @@
       ctx.fillRect(1, 4 + legSwing * 0.3, 5, 7);
       return;
     }
-    if (style === "merc") {
-      // 黒のボディスーツに濃いグレーのブーツ
-      ctx.fillStyle = "#141416";
+    if (style === "claw") {
+      // 黄色のスーツに青いブーツ
+      ctx.fillStyle = "#f2c21b";
       ctx.fillRect(-5, -11 - legSwing * 0.3, 11, 7);
       ctx.fillRect(-5, 4 + legSwing * 0.3, 11, 7);
-      ctx.fillStyle = "#3a3e45";
+      ctx.fillStyle = "#2a4fa0";
+      ctx.fillRect(2, -11 - legSwing * 0.3, 4, 7);
+      ctx.fillRect(2, 4 + legSwing * 0.3, 4, 7);
+      return;
+    }
+    if (style === "merc") {
+      // 赤のボディスーツに黒いブーツ
+      ctx.fillStyle = "#b3121b";
+      ctx.fillRect(-5, -11 - legSwing * 0.3, 11, 7);
+      ctx.fillRect(-5, 4 + legSwing * 0.3, 11, 7);
+      ctx.fillStyle = "#141416";
       ctx.fillRect(2, -11 - legSwing * 0.3, 4, 7);
       ctx.fillRect(2, 4 + legSwing * 0.3, 4, 7);
       return;
@@ -8651,8 +9534,41 @@
       ctx.fillRect(-5 - back, 10.8, 7, 3.2);
       return;
     }
+    if (style === "claw") {
+      // 黄色のスーツ。肩と脇腹は青く、脇にはとがった黒い縞が入る。
+      ctx.fillStyle = "#f2c21b";
+      ctx.beginPath();
+      ctx.ellipse(-back, 0, SOLDIER_R - 1, SOLDIER_R + 1, 0, 0, 6.283);
+      ctx.fill();
+      ctx.save();
+      ctx.clip();
+      ctx.fillStyle = "#2a4fa0";
+      ctx.fillRect(-SOLDIER_R - back, -SOLDIER_R - 2, SOLDIER_R * 2, 6);
+      ctx.fillRect(-SOLDIER_R - back, SOLDIER_R - 4, SOLDIER_R * 2, 6);
+      ctx.fillStyle = "#141416";
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 3; i++) {
+          const x0 = -8 + i * 6 - back;
+          ctx.beginPath();
+          ctx.moveTo(x0, side * (SOLDIER_R - 3)); ctx.lineTo(x0 + 3, side * (SOLDIER_R - 9)); ctx.lineTo(x0 + 5, side * (SOLDIER_R - 3));
+          ctx.closePath(); ctx.fill();
+        }
+      }
+      ctx.restore();
+      ctx.strokeStyle = "#8a6a08"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.ellipse(-back, 0, SOLDIER_R - 1, SOLDIER_R + 1, 0, 0, 6.283); ctx.stroke();
+      // 肩当て
+      ctx.fillStyle = "#2a4fa0";
+      ctx.beginPath(); ctx.ellipse(-1 - back, -10.5, 6, 4.6, 0.35, 0, 6.283); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(-1 - back, 10.5, 6, 4.6, -0.35, 0, 6.283); ctx.fill();
+      // 肩章だけチーム色
+      ctx.fillStyle = c.a;
+      ctx.fillRect(-4 - back, -13, 7, 3.4);
+      ctx.fillRect(-4 - back, 9.6, 7, 3.4);
+      return;
+    }
     if (style === "merc") {
-      // 全身黒のボディスーツ。差し色はいっさい入れず、濃淡だけで作る。
+      // 全身赤のボディスーツ。脇腹と肩だけが黒い。
       // 背中には二本の刀を交差させて背負っている。
       ctx.strokeStyle = "#2f333a"; ctx.lineWidth = 3.6; ctx.lineCap = "round";
       ctx.beginPath();
@@ -8660,21 +9576,31 @@
       ctx.moveTo(-3 - back, 12); ctx.lineTo(-18 - back, -8);
       ctx.stroke();
       ctx.lineCap = "butt";
-      ctx.fillStyle = "#141416";
+      ctx.fillStyle = "#b3121b";
       ctx.beginPath();
       ctx.ellipse(-back, 0, SOLDIER_R - 1, SOLDIER_R + 1, 0, 0, 6.283);
       ctx.fill();
-      ctx.strokeStyle = "#4c525b"; ctx.lineWidth = 1.4; ctx.stroke();
+      // 脇腹の黒いパネル
+      ctx.save();
+      ctx.clip();
+      ctx.fillStyle = "#141416";
+      ctx.fillRect(-SOLDIER_R - back, -SOLDIER_R - 2, SOLDIER_R * 2, 5);
+      ctx.fillRect(-SOLDIER_R - back, SOLDIER_R - 3, SOLDIER_R * 2, 5);
+      ctx.restore();
+      ctx.strokeStyle = "#5e0a10"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.ellipse(-back, 0, SOLDIER_R - 1, SOLDIER_R + 1, 0, 0, 6.283); ctx.stroke();
       // 肩当て
-      ctx.fillStyle = "#33373e";
+      ctx.fillStyle = "#141416";
       ctx.beginPath(); ctx.ellipse(-1 - back, -10.5, 6, 4.6, 0.35, 0, 6.283); ctx.fill();
       ctx.beginPath(); ctx.ellipse(-1 - back, 10.5, 6, 4.6, -0.35, 0, 6.283); ctx.fill();
-      // 胸のクロスベルト
-      ctx.strokeStyle = "#0a0a0b"; ctx.lineWidth = 2.8;
+      // 胸のクロスベルトと、交わるところの丸いバックル
+      ctx.strokeStyle = "#26262a"; ctx.lineWidth = 2.8;
       ctx.beginPath();
       ctx.moveTo(7 - back, -9); ctx.lineTo(-9 - back, 8);
       ctx.moveTo(7 - back, 9); ctx.lineTo(-9 - back, -8);
       ctx.stroke();
+      ctx.fillStyle = "#c7ccd3";
+      ctx.beginPath(); ctx.arc(-1 - back, 0, 2.6, 0, 6.283); ctx.fill();
       // 肩章だけチーム色。頭で隠れない位置に置いて、敵味方をここで見分ける。
       ctx.fillStyle = c.a;
       ctx.fillRect(-4 - back, -13, 7, 3.4);
@@ -8782,13 +9708,18 @@
       ctx.fillStyle = "#f0c39a";
       ctx.beginPath(); ctx.arc(1.5, 0, 7.4, 0, 6.283); ctx.fill();
       ctx.strokeStyle = "#c08c62"; ctx.lineWidth = 1; ctx.stroke();
-      // 額に垂れた一房
+      // 額に垂れた一房。目にかからないよう、髪の生えぎわから真ん中に垂らす。
       ctx.fillStyle = "#1b1b22";
-      ctx.beginPath(); ctx.ellipse(5.2, -3.4, 3.4, 2.2, -0.5, 0, 6.283); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-6.4, -2.6);
+      ctx.quadraticCurveTo(-1.2, -2, -0.8, 0.6);
+      ctx.quadraticCurveTo(-3.2, -0.4, -6.4, 2.6);
+      ctx.closePath(); ctx.fill();
+      // 左右の目は同じ形・同じ大きさ
       const beaming = isBeaming(s);
       for (const side of [-1, 1]) {
         ctx.fillStyle = beaming ? "#ff5a2a" : "#2a3550";
-        ctx.beginPath(); ctx.ellipse(4.4, side * 3.4, 2.4, 1.5, side * 0.3, 0, 6.283); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(4.2, side * 3.3, 1.8, 1.8, 0, 0, 6.283); ctx.fill();
       }
       if (beaming) {
         ctx.fillStyle = "rgba(255,140,70,0.55)";
@@ -8796,18 +9727,37 @@
       }
       return;
     }
-    if (style === "merc") {
-      // 黒い覆面。目だけが白く抜けている。
+    if (style === "claw") {
+      // 黄色い覆面。目のまわりから後ろへ、黒いツノのような形が左右にのびる。
       ctx.fillStyle = "#141416";
-      ctx.beginPath(); ctx.arc(0, 0, 8.8, 0, 6.283); ctx.fill();
-      ctx.strokeStyle = "#3a3e45"; ctx.lineWidth = 1.3;
-      ctx.beginPath(); ctx.arc(0, 0, 8.8, 0, 6.283); ctx.stroke();
-      // 覆面の縫い目
-      ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(7.5, 0); ctx.stroke();
       for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(5, side * 2.5); ctx.lineTo(-9, side * 12); ctx.lineTo(-4, side * 3); ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = "#f2c21b";
+      ctx.beginPath(); ctx.arc(0, 0, 8.6, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = "#8a6a08"; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.fillStyle = "#141416";
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(7, side * 1.5); ctx.lineTo(-7, side * 9.5); ctx.lineTo(-2, side * 2); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#f5f7fa";
+        ctx.beginPath(); ctx.ellipse(4.6, side * 3.4, 2.4, 1.2, side * 0.45, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "#141416";
+      }
+      return;
+    }
+    if (style === "merc") {
+      // 赤い覆面。目のまわりだけが黒く、その中に白い目が光る。
+      ctx.fillStyle = "#b3121b";
+      ctx.beginPath(); ctx.arc(0, 0, 8.8, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = "#5e0a10"; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(0, 0, 8.8, 0, 6.283); ctx.stroke();
+      for (const side of [-1, 1]) {
+        ctx.fillStyle = "#141416";
+        ctx.beginPath(); ctx.ellipse(3.2, side * 4.2, 4.6, 3.6, side * 0.45, 0, 6.283); ctx.fill();
         ctx.fillStyle = "#f2f5f8";
-        ctx.beginPath(); ctx.ellipse(3.6, side * 4, 3.6, 2.4, side * 0.5, 0, 6.283); ctx.fill();
-        ctx.strokeStyle = "#0a0a0b"; ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(3.8, side * 4, 2.6, 1.6, side * 0.5, 0, 6.283); ctx.fill();
       }
       return;
     }
@@ -8884,6 +9834,17 @@
         ctx.stroke();
         continue;
       }
+      // 水鉄砲の水。水色の粒が、うしろに細い水の筋を引いて飛ぶ。
+      if (b.water) {
+        ctx.strokeStyle = "rgba(160,215,255,0.55)";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - ux * 14, b.y - uy * 14); ctx.stroke();
+        ctx.fillStyle = "#8fd0ff";
+        ctx.beginPath(); ctx.arc(b.x, b.y, 3.4, 0, 6.283); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.beginPath(); ctx.arc(b.x - 1, b.y - 1, 1.2, 0, 6.283); ctx.fill();
+        continue;
+      }
       // 火炎放射器の火の玉は、進むほど大きく薄くなる
       if (b.flame) {
         const life = clamp(b.traveled / Math.max(1, b.range), 0, 1);
@@ -8908,6 +9869,342 @@
         ctx.fillStyle = "rgba(205,243,168,0.28)";
         ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, 6.283); ctx.fill();
       }
+    }
+  }
+
+  // ---- 床のトラップの絵 ----
+  // 角の丸い四角の道筋を作る (古いブラウザにも roundRect が無くても描けるように arcTo で組む)
+  function trapPath(c, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  // トラップを1枚描く。試合の画面とステージ作りの画面の両方で使う。
+  // list はワープの相方を探すトラップの一覧 (ステージ作りの画面では編集中のもの)。
+  function drawTrap(c, trap, t, list) {
+    const { x, y, w, h } = trap;
+    const cx = x + w / 2, cy = y + h / 2;
+    const type = trap.type;
+    c.save();
+    // ---- 足が遅くなる沼のたぐい (ぬかるみ・時の沼・底なし沼) ----
+    if (type === "mud" || type === "timebog" || type === "bog") {
+      // [地の色, まだらの色, 泡の色, ふちの色]。暗い森でも沼のふちが見えるよう、ふちは明るめにする。
+      const pal = type === "mud" ? ["rgba(98,66,36,0.9)", "rgba(62,40,20,0.8)", "rgba(190,150,100,0.75)", "rgba(150,108,62,0.7)"]
+        : type === "timebog" ? ["rgba(52,70,96,0.9)", "rgba(96,70,140,0.7)", "rgba(190,220,255,0.8)", "rgba(150,170,220,0.6)"]
+        : ["rgba(34,46,28,0.94)", "rgba(56,72,36,0.85)", "rgba(140,170,100,0.7)", "rgba(120,155,85,0.75)"];
+      trapPath(c, x, y, w, h, 26);
+      c.fillStyle = pal[0]; c.fill();
+      c.strokeStyle = pal[3]; c.lineWidth = 2.5; c.stroke();
+      c.fillStyle = pal[1];
+      for (const [fx, fy, fr] of [[0.25, 0.35, 0.16], [0.62, 0.3, 0.12], [0.45, 0.68, 0.18], [0.8, 0.66, 0.1]]) {
+        c.beginPath(); c.ellipse(x + fx * w, y + fy * h, fr * w, fr * h * 0.8, 0.4, 0, 6.283); c.fill();
+      }
+      if (type === "timebog") {
+        // 沼に沈んだ時計の文字盤。針がゆっくり回る。
+        const r = Math.min(w, h) * 0.3;
+        c.strokeStyle = "rgba(210,230,255,0.75)"; c.lineWidth = 2;
+        c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.stroke();
+        for (let i = 0; i < 12; i++) {
+          const a = i * Math.PI / 6;
+          c.beginPath(); c.moveTo(cx + Math.cos(a) * r * 0.82, cy + Math.sin(a) * r * 0.82);
+          c.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); c.stroke();
+        }
+        const ha = t / 4000, ma = t / 700;
+        c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(ha) * r * 0.5, cy + Math.sin(ha) * r * 0.5);
+        c.moveTo(cx, cy); c.lineTo(cx + Math.cos(ma) * r * 0.8, cy + Math.sin(ma) * r * 0.8); c.stroke();
+      }
+      // 浮いては消える泡
+      c.strokeStyle = pal[2]; c.lineWidth = 1.4;
+      for (let i = 0; i < 3; i++) {
+        const p = (t / 1600 + i / 3) % 1;
+        c.globalAlpha = 1 - p;
+        c.beginPath(); c.arc(x + w * (0.3 + i * 0.2), y + h * (0.45 + (i % 2) * 0.15), 2 + p * 5, 0, 6.283); c.stroke();
+      }
+    // ---- くすぶる砲弾跡: 黒く焦げた穴に、赤い火の粉が明滅する ----
+    } else if (type === "crater") {
+      const r = Math.min(w, h) / 2;
+      const g = c.createRadialGradient(cx, cy, r * 0.1, cx, cy, r);
+      g.addColorStop(0, "#1a1410"); g.addColorStop(0.7, "#3a2a1c"); g.addColorStop(1, "rgba(110,86,58,0.9)");
+      c.fillStyle = g;
+      c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.fill();
+      for (let i = 0; i < 7; i++) {
+        const a = i * 0.9 + 0.3, d = r * (0.2 + (i % 3) * 0.2);
+        const glow = 0.45 + 0.55 * Math.abs(Math.sin(t / 260 + i * 1.7));
+        c.fillStyle = `rgba(255,${110 + (i % 3) * 40},40,${glow})`;
+        c.beginPath(); c.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 2.2 + (i % 2), 0, 6.283); c.fill();
+      }
+      for (let i = 0; i < 2; i++) {
+        const p = (t / 1800 + i / 2) % 1;
+        c.fillStyle = `rgba(120,120,120,${0.35 * (1 - p)})`;
+        c.beginPath(); c.arc(cx + (i ? 8 : -6), cy - p * r * 0.9, 5 + p * 8, 0, 6.283); c.fill();
+      }
+    // ---- 舗装路: 灰色のアスファルトに、流れていく黄色の破線 ----
+    } else if (type === "road") {
+      trapPath(c, x, y, w, h, 6);
+      c.fillStyle = "#44474b"; c.fill();
+      c.strokeStyle = "rgba(235,235,225,0.75)"; c.lineWidth = 2; c.stroke();
+      const along = w >= h;
+      c.save(); trapPath(c, x, y, w, h, 6); c.clip();
+      c.fillStyle = "#f2c53d";
+      const gap = 34, shift = (t / 14) % gap;
+      if (along) for (let px = x - gap + shift; px < x + w; px += gap) c.fillRect(px, cy - 2, 18, 4);
+      else for (let py = y - gap + shift; py < y + h; py += gap) c.fillRect(cx - 2, py, 4, 18);
+      c.restore();
+    // ---- 油だまり: 黒くてらてらした水たまりに、虹色のぎらつき ----
+    } else if (type === "oil") {
+      c.fillStyle = "rgba(18,18,24,0.92)";
+      c.beginPath(); c.ellipse(cx, cy, w * 0.48, h * 0.46, 0, 0, 6.283); c.fill();
+      c.beginPath(); c.ellipse(x + w * 0.28, y + h * 0.7, w * 0.2, h * 0.2, 0, 0, 6.283); c.fill();
+      const sheen = c.createLinearGradient(x, y, x + w, y + h);
+      const k = (t / 3000) % 1;
+      sheen.addColorStop(0, "rgba(255,80,160,0)");
+      sheen.addColorStop(clamp(k - 0.15, 0, 1), "rgba(255,80,160,0)");
+      sheen.addColorStop(k, "rgba(120,200,255,0.45)");
+      sheen.addColorStop(clamp(k + 0.1, 0, 1), "rgba(180,255,120,0.4)");
+      sheen.addColorStop(clamp(k + 0.2, 0, 1), "rgba(255,200,80,0)");
+      sheen.addColorStop(1, "rgba(255,200,80,0)");
+      c.fillStyle = sheen;
+      c.beginPath(); c.ellipse(cx, cy, w * 0.44, h * 0.4, 0, 0, 6.283); c.fill();
+      // てらてらした照り返し
+      c.fillStyle = "rgba(255,255,255,0.35)";
+      c.beginPath(); c.ellipse(cx - w * 0.16, cy - h * 0.2, w * 0.14, h * 0.06, -0.3, 0, 6.283); c.fill();
+      c.strokeStyle = "rgba(120,110,160,0.55)"; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(cx, cy, w * 0.48, h * 0.46, 0, 0, 6.283); c.stroke();
+    // ---- 切れた電線: ひび割れた床に黒い電線がのたうち、先から火花が散る ----
+    } else if (type === "cable") {
+      trapPath(c, x, y, w, h, 10);
+      c.fillStyle = "rgba(80,80,84,0.9)"; c.fill();
+      c.strokeStyle = "rgba(40,40,44,0.8)"; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(x + 8, y + h * 0.3); c.lineTo(cx, cy); c.lineTo(x + w - 10, y + h * 0.8); c.stroke();
+      c.strokeStyle = "#141416"; c.lineWidth = 4; c.lineCap = "round";
+      c.beginPath(); c.moveTo(x - 4, y + h * 0.7); c.quadraticCurveTo(x + w * 0.3, y + h * 0.2, cx + 6, cy + 4); c.stroke();
+      const tipX = cx + 6, tipY = cy + 4;
+      if (Math.floor(t / 90) % 3 !== 0) {
+        c.strokeStyle = Math.floor(t / 60) % 2 ? "#fff47a" : "#8fd8ff"; c.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+          const a = i * 1.6 + t / 200;
+          c.beginPath(); c.moveTo(tipX, tipY);
+          c.lineTo(tipX + Math.cos(a) * 9, tipY + Math.sin(a) * 9 - 4);
+          c.lineTo(tipX + Math.cos(a) * 17, tipY + Math.sin(a) * 17); c.stroke();
+        }
+      }
+    // ---- いばら: 茶色いとげとげのつるが絡まった茂み ----
+    } else if (type === "thorns") {
+      trapPath(c, x, y, w, h, 20);
+      c.fillStyle = "rgba(40,52,30,0.9)"; c.fill();
+      c.strokeStyle = "#7a5230"; c.lineWidth = 3; c.lineCap = "round";
+      for (let i = 0; i < 4; i++) {
+        const yy = y + h * (0.2 + i * 0.2);
+        c.beginPath(); c.moveTo(x + 8, yy);
+        c.bezierCurveTo(x + w * 0.3, yy - 14, x + w * 0.6, yy + 14, x + w - 8, yy); c.stroke();
+        c.fillStyle = "#c9b089";
+        for (let j = 1; j < 6; j++) {
+          const px = x + 8 + (w - 16) * j / 6, py = yy + Math.sin(j * 1.3 + i) * 6;
+          c.beginPath(); c.moveTo(px, py - 1); c.lineTo(px + 3, py - 7); c.lineTo(px + 4, py); c.closePath(); c.fill();
+        }
+      }
+    // ---- はやての紋: 黄緑に光る魔法の円。外側の弧がくるくる回る ----
+    } else if (type === "haste") {
+      const r = Math.min(w, h) / 2 - 2;
+      const pulse = 0.55 + Math.sin(t / 300) * 0.25;
+      c.fillStyle = `rgba(120,255,140,${0.12 + pulse * 0.1})`;
+      c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.fill();
+      c.strokeStyle = `rgba(170,255,150,${pulse + 0.2})`; c.lineWidth = 2.4;
+      c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.stroke();
+      c.beginPath(); c.arc(cx, cy, r * 0.6, 0, 6.283); c.stroke();
+      const spin = t / 250;
+      c.lineWidth = 3.5;
+      for (let i = 0; i < 3; i++) {
+        c.beginPath(); c.arc(cx, cy, r * 0.8, spin + i * 2.094, spin + i * 2.094 + 0.9); c.stroke();
+      }
+      c.fillStyle = `rgba(230,255,200,${pulse + 0.2})`;
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.047 - spin * 0.5;
+        c.beginPath(); c.arc(cx + Math.cos(a) * r * 0.6, cy + Math.sin(a) * r * 0.6, 2.2, 0, 6.283); c.fill();
+      }
+    // ---- クモの巣: 放射状の糸と、うずまき状の横糸 ----
+    } else if (type === "web") {
+      const r = Math.min(w, h) / 2;
+      c.fillStyle = "rgba(20,14,28,0.35)";
+      c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.fill();
+      c.strokeStyle = "rgba(235,235,245,0.8)"; c.lineWidth = 1.3;
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + 0.2;
+        c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); c.stroke();
+      }
+      for (let ring = 1; ring <= 4; ring++) {
+        const rr = r * ring / 4.3;
+        c.beginPath();
+        for (let i = 0; i <= 8; i++) {
+          const a = i * Math.PI / 4 + 0.2;
+          const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
+          if (i === 0) c.moveTo(px, py); else c.quadraticCurveTo(cx + Math.cos(a - 0.39) * rr * 0.86, cy + Math.sin(a - 0.39) * rr * 0.86, px, py);
+        }
+        c.stroke();
+      }
+    // ---- 鬼火: 暗い地面の上で、青白い炎がゆらゆら燃える ----
+    } else if (type === "wisp") {
+      c.fillStyle = "rgba(16,20,40,0.6)";
+      c.beginPath(); c.ellipse(cx, cy, w * 0.48, h * 0.46, 0, 0, 6.283); c.fill();
+      for (let i = 0; i < 3; i++) {
+        const fx = cx + (i - 1) * w * 0.25, fy = cy + (i === 1 ? -6 : 6);
+        const flick = Math.sin(t / 120 + i * 2) * 2;
+        const g = c.createRadialGradient(fx, fy, 1, fx, fy - 4, 16);
+        g.addColorStop(0, "rgba(230,250,255,0.95)"); g.addColorStop(0.5, "rgba(110,190,255,0.75)"); g.addColorStop(1, "rgba(60,120,255,0)");
+        c.fillStyle = g;
+        c.beginPath();
+        c.moveTo(fx, fy - 20 - flick);
+        c.quadraticCurveTo(fx + 11, fy - 4, fx, fy + 9);
+        c.quadraticCurveTo(fx - 11, fy - 4, fx, fy - 20 - flick);
+        c.fill();
+      }
+    // ---- 枯れ枝: 落ち葉の上に、乾いた枝が散らばっている ----
+    } else if (type === "twigs") {
+      trapPath(c, x, y, w, h, 24);
+      c.fillStyle = "rgba(70,52,30,0.75)"; c.fill();
+      c.strokeStyle = "#a88456"; c.lineCap = "round";
+      const sticks = [[0.1, 0.3, 0.45, 0.2], [0.3, 0.7, 0.7, 0.5], [0.55, 0.2, 0.9, 0.35], [0.2, 0.55, 0.4, 0.85], [0.6, 0.8, 0.85, 0.6], [0.4, 0.4, 0.62, 0.62]];
+      for (const [a, b, e, f] of sticks) {
+        c.lineWidth = 3;
+        c.beginPath(); c.moveTo(x + a * w, y + b * h); c.lineTo(x + e * w, y + f * h); c.stroke();
+        c.lineWidth = 1.6;
+        const mx = x + (a + e) / 2 * w, my = y + (b + f) / 2 * h;
+        c.beginPath(); c.moveTo(mx, my); c.lineTo(mx + 6, my - 7); c.stroke();
+      }
+    // ---- 雪の吹きだまり: ふわっと盛り上がった白い雪 ----
+    } else if (type === "snowdrift") {
+      c.fillStyle = "rgba(150,175,200,0.45)";
+      trapPath(c, x + 4, y + 6, w, h, 40); c.fill();
+      c.fillStyle = "#f7fbff";
+      for (const [fx, fy, fr] of [[0.3, 0.45, 0.3], [0.62, 0.4, 0.32], [0.45, 0.62, 0.3], [0.75, 0.62, 0.22], [0.22, 0.66, 0.2]]) {
+        c.beginPath(); c.ellipse(x + fx * w, y + fy * h, fr * w, fr * h, 0, 0, 6.283); c.fill();
+      }
+      c.fillStyle = "rgba(200,220,240,0.7)";
+      c.beginPath(); c.ellipse(x + 0.55 * w, y + 0.7 * h, 0.25 * w, 0.08 * h, 0, 0, 6.283); c.fill();
+    // ---- 氷の割れ目: ぎざぎざの氷のふちから、冷たい水がのぞく ----
+    } else if (type === "icehole") {
+      const pts = [];
+      for (let i = 0; i < 12; i++) {
+        const a = i / 12 * 6.283, k = i % 2 ? 0.8 : 1;
+        pts.push([cx + Math.cos(a) * w / 2 * k, cy + Math.sin(a) * h / 2 * k]);
+      }
+      c.fillStyle = "#eaf6ff";
+      c.beginPath(); pts.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.closePath(); c.fill();
+      c.fillStyle = "#1f4f7a";
+      c.beginPath(); c.ellipse(cx, cy, w * 0.34, h * 0.32, 0, 0, 6.283); c.fill();
+      c.strokeStyle = "rgba(160,210,255,0.6)"; c.lineWidth = 1.5;
+      const p = (t / 1400) % 1;
+      c.beginPath(); c.ellipse(cx, cy, w * 0.3 * p, h * 0.28 * p, 0, 0, 6.283); c.stroke();
+    // ---- ワープ (マンホール・妖精の輪・魔女の魔法陣・氷のほら穴) ----
+    // 組ごとに色がちがう。組になる相手がいない1枚は灰色で止まっている。
+    } else if (trapEffect(type) === "warp") {
+      const r = w / 2;
+      const partner = list || (G && G.traps) ? warpPartner(trap, list || G.traps) : null;
+      const color = partner ? WARP_COLORS[trap.pair % WARP_COLORS.length] : "#8a8f96";
+      const spin = partner ? t / 300 : 0;
+      if (type === "manhole") {
+        c.fillStyle = "#4a4d52";
+        c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.fill();
+        c.strokeStyle = "#2e3034"; c.lineWidth = 1.5;
+        for (let i = -2; i <= 2; i++) {
+          c.beginPath(); c.moveTo(cx + i * r * 0.3, cy - r * 0.8); c.lineTo(cx + i * r * 0.3, cy + r * 0.8); c.stroke();
+          c.beginPath(); c.moveTo(cx - r * 0.8, cy + i * r * 0.3); c.lineTo(cx + r * 0.8, cy + i * r * 0.3); c.stroke();
+        }
+        c.strokeStyle = color; c.lineWidth = 3.5;
+        c.beginPath(); c.arc(cx, cy, r - 2, 0, 6.283); c.stroke();
+      } else if (type === "fairyring") {
+        c.fillStyle = hexToRgba(color, 0.22);
+        c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.fill();
+        for (let i = 0; i < 8; i++) {
+          const a = i * 0.785 + spin * 0.2;
+          const mx = cx + Math.cos(a) * r * 0.82, my = cy + Math.sin(a) * r * 0.82;
+          c.fillStyle = "#d8403a";
+          c.beginPath(); c.arc(mx, my, 5, 0, 6.283); c.fill();
+          c.fillStyle = "#fff";
+          c.beginPath(); c.arc(mx - 1.5, my - 1.2, 1.2, 0, 6.283); c.arc(mx + 1.8, my + 1, 1, 0, 6.283); c.fill();
+        }
+        c.fillStyle = hexToRgba(color, 0.55 + Math.sin(t / 250) * 0.2);
+        c.beginPath(); c.arc(cx, cy, r * 0.35, 0, 6.283); c.fill();
+      } else if (type === "witchring") {
+        c.fillStyle = "rgba(24,12,36,0.85)";
+        c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.fill();
+        c.strokeStyle = color; c.lineWidth = 2.4;
+        c.beginPath(); c.arc(cx, cy, r - 3, 0, 6.283); c.stroke();
+        // 5つの先をもつ星を、円に内接させて一筆で描く
+        c.beginPath();
+        for (let i = 0; i <= 5; i++) {
+          const a = spin * 0.3 - Math.PI / 2 + i * 2 * 2 * Math.PI / 5;
+          const px = cx + Math.cos(a) * (r - 6), py = cy + Math.sin(a) * (r - 6);
+          if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+        }
+        c.stroke();
+      } else {
+        // 氷のほら穴: 雪の小山に、暗い入り口
+        c.fillStyle = "#e6f2fb";
+        c.beginPath(); c.arc(cx, cy, r, 0, 6.283); c.fill();
+        c.strokeStyle = "rgba(150,185,210,0.9)"; c.lineWidth = 1.5; c.stroke();
+        c.fillStyle = "#16324d";
+        c.beginPath(); c.ellipse(cx, cy + 2, r * 0.5, r * 0.4, 0, 0, 6.283); c.fill();
+        c.strokeStyle = color; c.lineWidth = 3;
+        c.beginPath(); c.ellipse(cx, cy + 2, r * 0.58, r * 0.48, 0, 0, 6.283); c.stroke();
+      }
+      if (partner && type !== "fairyring") {
+        // 相方がいるあいだは、入り口に色つきの渦がゆっくり回る
+        c.strokeStyle = hexToRgba(color, 0.8); c.lineWidth = 2;
+        c.beginPath(); c.arc(cx, cy, r * 0.28, spin, spin + 3.6); c.stroke();
+      }
+    }
+    c.restore();
+  }
+
+  // 助っ人ゲート。オレンジ色の火花が輪になって回る。見た目だけで、当たり判定は無い。
+  function drawPortals() {
+    const t = now();
+    G.portals = G.portals.filter((p) => t - p.born < PORTAL_MS);
+    for (const p of G.portals) {
+      const age = t - p.born;
+      const open = age < 260 ? age / 260 : age > PORTAL_MS - 320 ? (PORTAL_MS - age) / 320 : 1;
+      const r = 34 * open;
+      if (r < 1) continue;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      const g = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r);
+      g.addColorStop(0, "rgba(60,20,0,0.85)");
+      g.addColorStop(0.8, "rgba(255,120,20,0.35)");
+      g.addColorStop(1, "rgba(255,150,40,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283); ctx.fill();
+      ctx.shadowColor = "#ff8a1f"; ctx.shadowBlur = 12;
+      ctx.strokeStyle = "#ffb04a"; ctx.lineWidth = 2; ctx.lineCap = "round";
+      for (let k = 0; k < 30; k++) {
+        const a = k / 30 * 6.283 + t / 160;
+        const rr = r * (0.92 + ((k * 37) % 7) / 60);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        ctx.lineTo(Math.cos(a + 0.18) * (rr + 3), Math.sin(a + 0.18) * (rr + 3));
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#ffd27a";
+      for (let k = 0; k < 6; k++) {
+        const a = k * 1.05 + t / 90;
+        const d = r + ((t / 3 + k * 40) % 18);
+        ctx.fillRect(Math.cos(a) * d - 1, Math.sin(a) * d - 1, 2, 2);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawTraps() {
+    const t = now(), vw = viewW(), vh = viewH();
+    for (const trap of G.traps) {
+      if (trap.x > camX + vw || trap.x + trap.w < camX || trap.y > camY + vh || trap.y + trap.h < camY) continue;
+      drawTrap(ctx, trap, t);
     }
   }
 
@@ -9061,6 +10358,48 @@
     }
   }
 
+  // 効果文字の網点。色ごとに1回だけ作って使い回す。
+  const comicPatterns = {};
+  function comicPattern(key) {
+    if (comicPatterns[key]) return comicPatterns[key];
+    const [base, dot] = key === "gun" ? ["#ffd23f", "#ff4b1f"] : ["#eaf6ff", "#3a86ff"];
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = 5;
+    const tc = tile.getContext("2d");
+    tc.fillStyle = base; tc.fillRect(0, 0, 5, 5);
+    tc.fillStyle = dot;
+    tc.beginPath(); tc.arc(2.5, 2.5, 1.7, 0, 6.283); tc.fill();
+    comicPatterns[key] = ctx.createPattern(tile, "repeat");
+    return comicPatterns[key];
+  }
+
+  // アメコミ風の効果文字。太い黒の縁取りに、中身は網点。出た瞬間に大きく弾んで、最後に薄れて消える。
+  function drawComicText(p, lr) {
+    const age = 1 - lr;
+    const pop = age < 0.14 ? 1.5 - (age / 0.14) * 0.5 : 1;
+    const k = pop * p.size / 20;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.a);
+    ctx.scale(k, k);
+    ctx.globalAlpha = lr < 0.3 ? lr / 0.3 : 1;
+    ctx.font = "italic 900 20px 'Arial Black', Impact, 'Helvetica Neue', sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#141416"; ctx.lineWidth = 7;
+    ctx.strokeText(p.text, 0, 0);
+    ctx.fillStyle = comicPattern(p.col);
+    ctx.fillText(p.text, 0, 0);
+    ctx.restore();
+  }
+
+  // 効果文字は名札に隠れないよう、名札を描いたあとにまとめて描く
+  function drawComicTexts() {
+    for (const p of G.particles) {
+      if (p.kind === "comic") drawComicText(p, clamp(p.life / p.maxLife, 0, 1));
+    }
+  }
+
   function drawParticlesOver() {
     for (const p of G.particles) {
       const lr = clamp(p.life / p.maxLife, 0, 1);
@@ -9069,6 +10408,17 @@
       } else if (p.kind === "blood") {
         // 白と灰色だけのステージでは血の色を使わず、砕けた破片として描く
         ctx.fillStyle = isMonochrome() ? `rgba(238,238,238,${lr})` : `rgba(150,15,15,${lr})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.283); ctx.fill();
+      } else if (p.kind === "heart") {
+        const r = p.size;
+        ctx.fillStyle = `rgba(255,90,140,${lr})`;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y + r * 0.9);
+        ctx.bezierCurveTo(p.x - r * 1.6, p.y - r * 0.3, p.x - r * 0.6, p.y - r * 1.4, p.x, p.y - r * 0.5);
+        ctx.bezierCurveTo(p.x + r * 0.6, p.y - r * 1.4, p.x + r * 1.6, p.y - r * 0.3, p.x, p.y + r * 0.9);
+        ctx.fill();
+      } else if (p.kind === "water") {
+        ctx.fillStyle = `rgba(150,210,255,${lr * 0.9})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.283); ctx.fill();
       } else if (p.kind === "spark") {
         ctx.fillStyle = `rgba(255,${180 + Math.random() * 60 | 0},80,${lr})`;
@@ -9198,9 +10548,9 @@
 
   function drawVisionMask(vw, vh) {
     if (spectating) return;        // 観戦中は視界制限なし
-    if (fullVisionNow()) return;   // 朝は戦場全体が見える
     const me = localSoldier();
     if (!me) return;
+    if (fullVisionNow() && soakLevel(me) <= 0) return;   // 朝は戦場全体が見える (顔が濡れていなければ)
     const px = me.x - camX, py = me.y - camY;
     // 倒れて復活も見込めない間は、選択待ちのあいだも少し広く見せる
     const eliminatedView = me.dead && !teamAlive(me.team);
@@ -9210,6 +10560,50 @@
     ctx.beginPath(); ctx.rect(0, 0, vw, vh); ctx.arc(px, py, radius, 0, Math.PI * 2, true); ctx.fill("evenodd");
     ctx.strokeStyle = "rgba(3,6,2,0.32)"; ctx.lineWidth = 76;
     ctx.beginPath(); ctx.arc(px, py, Math.max(30, radius - 38), 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // 水鉄砲をかけられた本人の画面。水滴が画面に張りついて、ゆっくり垂れていく。
+  // 水滴の並びは固定で、かけられた瞬間から数えた時間でずり落ちる。
+  const SOAK_DROPS = [
+    [0.12, 0.18, 46], [0.31, 0.08, 30], [0.52, 0.22, 58], [0.74, 0.12, 38], [0.9, 0.3, 50],
+    [0.06, 0.52, 36], [0.24, 0.44, 62], [0.44, 0.58, 40], [0.63, 0.47, 54], [0.84, 0.6, 34],
+    [0.16, 0.8, 52], [0.37, 0.76, 34], [0.58, 0.84, 48], [0.78, 0.82, 60], [0.95, 0.9, 32],
+  ];
+
+  function drawSoakedView(vw, vh) {
+    const me = localSoldier();
+    const k = soakLevel(me);
+    if (k <= 0) return;
+    const age = now() - (me.soakedUntil - SOAK_MS);
+    ctx.save();
+    ctx.fillStyle = `rgba(60,120,190,${0.22 * k})`;
+    ctx.fillRect(0, 0, vw, vh);
+    const scale = Math.min(vw, vh) / 700;
+    for (let i = 0; i < SOAK_DROPS.length; i++) {
+      const [fx, fy, size] = SOAK_DROPS[i];
+      const r = size * scale;
+      const x = fx * vw;
+      const slide = age * (0.018 + (i % 4) * 0.007);
+      const y = fy * vh + slide;
+      // 垂れた跡。水滴は半分透けているので、水滴の上端より上にだけ描く。
+      const trailTop = fy * vh - r * 0.5, trailBottom = y - r * 0.85;
+      if (trailBottom > trailTop) {
+        const tg = ctx.createLinearGradient(0, trailTop, 0, trailBottom);
+        tg.addColorStop(0, "rgba(190,225,255,0)");
+        tg.addColorStop(1, `rgba(190,225,255,${0.22 * k})`);
+        ctx.fillStyle = tg;
+        ctx.fillRect(x - r * 0.11, trailTop, r * 0.22, trailBottom - trailTop);
+      }
+      // 水滴本体。ふちが明るく、まん中は透ける。
+      const g = ctx.createRadialGradient(x - r * 0.25, y - r * 0.3, r * 0.1, x, y, r);
+      g.addColorStop(0, `rgba(255,255,255,${0.5 * k})`);
+      g.addColorStop(0.35, `rgba(170,215,255,${0.18 * k})`);
+      g.addColorStop(0.85, `rgba(120,185,245,${0.38 * k})`);
+      g.addColorStop(1, `rgba(220,240,255,${0.55 * k})`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(x, y, r * 0.85, r, 0, 0, 6.283); ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -9231,6 +10625,25 @@
     }
   }
 
+  // 頭の上に出る吹き出し。x, y は吹き出しのしっぽの先。
+  function drawShout(x, y, text) {
+    ctx.save();
+    ctx.font = "900 15px 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif";
+    const w = ctx.measureText(text).width + 18, h = 24;
+    trapPath(ctx, x - w / 2, y - h - 6, w, h, 10);
+    ctx.fillStyle = "#ffffff"; ctx.fill();
+    ctx.strokeStyle = "#141416"; ctx.lineWidth = 2.2; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y - 7); ctx.lineTo(x, y); ctx.lineTo(x + 5, y - 7);
+    ctx.fillStyle = "#ffffff"; ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(x - 4, y - 8, 8, 2.5);
+    ctx.fillStyle = "#141416";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y - h / 2 - 6);
+    ctx.restore();
+  }
+
   function drawNameTags() {
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
@@ -9241,23 +10654,29 @@
       // 本体が上にずれているぶん名札も持ち上げる。降下中は傘に重ならない高さへ。
       const alt = soldierAltitude(s);
       const tx = s.x, ty = s.y - alt - (isDropping(s) ? 58 : SOLDIER_R + 16);
-      // HPバー: 味方は緑、それ以外はその軍の色
+      // HPバー: 味方は緑、それ以外はその軍の色。
+      // 再生を待って倒れている間は、とどめまでの残り体力を赤で出す。
       const bw = 38, bh = 4;
-      const ratio = clamp(s.hp / s.maxHp, 0, 1);
+      const ratio = s.downed ? clamp(s.hp / (s.maxHp * REGEN_BODY_HP), 0, 1) : clamp(s.hp / s.maxHp, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.55)";
       ctx.fillRect(tx - bw / 2 - 1, ty + 3, bw + 2, bh + 2);
-      ctx.fillStyle = s.dummy ? "#d9c98f" : s.team === mine ? "#46d36a" : def.flag;
+      // 無敵の助っ人は金色のバーにして、削れないことがわかるようにする
+      ctx.fillStyle = s.downed ? "#ff4d6d" : s.dummy ? "#d9c98f" : classDef(s.classKey).invincible ? "#ffd23f"
+        : s.team === mine ? "#46d36a" : def.flag;
       ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, bh);
       // 名前 + Lv (味方には◆を付けて見分けやすく)
       ctx.font = "bold 12px -apple-system, sans-serif";
       const mark = s.id === G.localId ? "▼ " : s.team === mine ? "◆ " : "";
       const cls = classDef(s.classKey);
+      const status = s.downed ? ` 再生まで${Math.ceil(Math.max(0, s.regenUntil - now()) / 1000)}秒`
+        : soakLevel(s) > 0 ? " 💦" : "";
       const label = s.dummy ? s.name
-        : mark + (cls.key === "soldier" ? "" : cls.icon + " ") + s.name + " Lv" + s.level;
+        : mark + (cls.key === "soldier" ? "" : cls.icon + " ") + s.name + " Lv" + s.level + status;
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.8)";
       ctx.strokeText(label, tx, ty);
       ctx.fillStyle = s.dummy ? "#e6dcbb" : s.id === G.localId ? YOU_ACCENT : def.text;
       ctx.fillText(label, tx, ty);
+      if (now() < (s.shoutUntil || 0)) drawShout(tx, ty - 20, SHOUT_TEXT);
     }
     for (const dog of G.dogs) {
       if (dog.dead || !isEntityVisible(dog)) continue;
@@ -9267,7 +10686,7 @@
       ctx.fillStyle = "rgba(0,0,0,0.58)"; ctx.fillRect(tx - bw / 2 - 1, ty + 3, bw + 2, 6);
       ctx.fillStyle = def.dogBar; ctx.fillRect(tx - bw / 2, ty + 4, bw * ratio, 4);
       ctx.font = "bold 10px -apple-system, sans-serif";
-      const label = `K9 ${dog.name}`;
+      const label = dog.pool ? dog.name : `K9 ${dog.name}`;
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.8)"; ctx.strokeText(label, tx, ty);
       ctx.fillStyle = def.text; ctx.fillText(label, tx, ty);
     }
@@ -9311,13 +10730,22 @@
     }
     // 障害物
     for (const o of G.obstacles) {
-      if (o.type === "wall" || o.type === "ruin" || o.type === "apartment") {
+      if (o.type === "wall" || o.type === "ruin" || o.type === "apartment" || o.type === "icewall") {
         mctx.fillStyle = "rgba(255,255,255,0.22)";
         mctx.fillRect(o.x * sx, o.y * sy, Math.max(1, o.w * sx), Math.max(1, o.h * sy));
-      } else if (o.type === "bush" || o.type === "tree") {
+      } else if (o.type === "bush" || o.type === "tree" || o.type === "pine") {
         mctx.fillStyle = "rgba(110,190,110,0.24)";
         mctx.fillRect(o.x * sx, o.y * sy, Math.max(1, o.w * sx), Math.max(1, o.h * sy));
       }
+    }
+    // 床のトラップ。ワープ床は組の色、ほかは効き目ごとの色で小さく出す。
+    for (const trap of G.traps) {
+      const effect = trapEffect(trap.type);
+      mctx.fillStyle = effect === "slow" ? "rgba(150,110,70,0.8)" : effect === "hurt" ? "rgba(230,80,70,0.8)"
+        : effect === "fast" ? "rgba(160,255,100,0.8)" : effect === "slide" ? "rgba(190,235,255,0.8)"
+        : effect === "loud" ? "rgba(200,170,120,0.8)"
+        : WARP_COLORS[(trap.pair || 0) % WARP_COLORS.length];
+      mctx.fillRect(trap.x * sx, trap.y * sy, Math.max(2, trap.w * sx), Math.max(2, trap.h * sy));
     }
     for (const kit of G.pickups) {
       if (!kit.active) continue;
@@ -9425,10 +10853,19 @@
     for (const team of TEAMS) {
       const c = teamCards[team];
       const base = G.bases[team];
-      // 練習場には他の軍がいないのでカードごと隠す
-      const absent = !!(base && base.hidden);
+      // 練習場には他の軍がいないのでカードごと隠す。1対1は向かい合う2人だけを出す。
+      const absent = G.duel ? !G.duel.teams.includes(team) : !!(base && base.hidden);
       c.card.classList.toggle("hidden", absent);
+      c.card.classList.toggle("duel", !!G.duel);
       if (absent) continue;
+      if (G.duel) {
+        const fighter = G.soldiers.find((s) => s.team === team && !s.summonUntil);
+        c.name.textContent = fighter ? fighter.name : teamDef(team).short;
+        c.kills.textContent = `${G.score[team]} / ${DUEL_GOAL}`;
+        c.card.classList.toggle("mine", team === mine);
+        c.card.classList.remove("fallen");
+        continue;
+      }
       const fallen = !base || base.hp <= 0;
       // 既定名のままなら短縮名を出す(狭いHUDで省略されないように)
       const def = teamDef(team);
@@ -9471,7 +10908,7 @@
       el.hpFill.style.width = (ratio * 100) + "%";
       el.hpFill.style.background = ratio > 0.5 ? "linear-gradient(90deg,#46d36a,#8cf06a)" : ratio > 0.25 ? "linear-gradient(90deg,#e3b341,#f0d36a)" : "linear-gradient(90deg,#e3413f,#ff7a6a)";
       const canRespawn = teamAlive(me.team);
-      el.hpText.textContent = me.dead ? (canRespawn ? "復活中" : "戦死") : Math.max(0, Math.ceil(active.hp));
+      el.hpText.textContent = me.dead ? (canRespawn ? "復活中" : "戦死") : me.downed ? "再生中" : Math.max(0, Math.ceil(active.hp));
       const armorRatio = clamp((me.armor || 0) / (me.maxArmor || 100), 0, 1);
       const shieldRatio = clamp((me.shield || 0) / (me.maxShield || 160), 0, 1);
       el.armorFill.style.transform = `scaleX(${armorRatio})`;
@@ -9490,6 +10927,9 @@
       if (me.dead) {
         el.recovery.textContent = canRespawn ? "" : "基地を失ったため復活できません（観戦中）";
         el.recovery.classList.toggle("waiting", !canRespawn);
+      } else if (me.downed) {
+        el.recovery.textContent = `再生まで ${Math.ceil(Math.max(0, me.regenUntil - now()) / 1000)}秒・とどめを刺されるな`;
+        el.recovery.classList.add("waiting");
       } else if (!canRespawn) {
         el.recovery.textContent = "基地陥落・次に倒れたら脱落";
         el.recovery.classList.add("waiting");
@@ -9646,47 +11086,59 @@
 
   // ============================================================
   //  チュートリアル (練習場)
-  //  1項目ずつ案内し、実際にその操作をしたら次へ進む。
+  //  ガント司令官が1項目ずつしゃべって案内し、実際にその操作をしたら次へ進む。
   //  判定は毎フレームの状態監視だけで行い、戦闘処理には手を入れない。
+  //  talk = 司令官の指示、tip = しばらくできずにいるときのヒント、chapter = 章の区切り。
   // ============================================================
   const TRAINING_STEPS = [
     {
       key: "move", label: "歩いて動いてみる",
-      hint: "W A S D キーで前後左右に動きます。",
-      hintTouch: "画面左下のスティックを指で倒すと動きます。",
+      chapter: "move",
+      talk: "W・A・S・D キーで歩いてみろ。", talkTouch: "左下のスティックを指で倒して、歩いてみろ。",
+      tip: "W・A・S・D のどれかを押しっぱなしにするんだ。", tipTouch: "左下の丸を指で押さえて、好きな向きへずらすんだ。",
       reset: (c) => { c.movedFor = 0; },
       done: (c) => c.movedFor > 0.8,
     },
     {
       key: "aim", label: "向きを変える",
-      hint: "マウスを動かすと、その方向を向きます。",
-      hintTouch: "画面右下のスティックを倒した方向を向きます。",
+      talk: "次はマウスを動かして、まわりを見回してみろ。", talkTouch: "右下のスティックを倒すと、その向きを向くぞ。ぐるっと回してみろ。",
+      tip: "マウスをぐるっと大きく回してみろ。", tipTouch: "右下の丸を指で押さえて、ぐるっと回すんだ。",
       reset: (c) => { c.turned = 0; },
       done: (c) => c.turned > 1.8,
     },
     {
+      key: "dash", label: "ダッシュで走る",
+      talk: "Shift を押しながら動くと走れる。速いが、足音も大きくなるぞ。", talkTouch: "スティックをいっぱいまで倒すと走れる。速いが、足音も大きくなるぞ。",
+      tip: "Shift を押したまま W・A・S・D だ。", tipTouch: "左のスティックを、円のふちまで倒しきるんだ。",
+      reset: (c) => { c.dashedFor = 0; },
+      done: (c) => c.dashedFor > 0.5,
+    },
+    {
       key: "attack", label: "マップ中央の的まで行って攻撃する",
-      hint: "的は右上のミニマップの真ん中に集まっています。マウスの左ボタンを押している間、撃ち続けます。",
-      hintTouch: "的は右上のミニマップの真ん中に集まっています。右下のスティックを倒している間、自動で撃ちます。",
+      chapter: "attack",
+      talk: "マップの真ん中に的が並んでいる。近くまで行って、左クリックで攻撃しろ。", talkTouch: "マップの真ん中に的が並んでいる。近くまで行って、右のスティックを倒して攻撃しろ。",
+      tip: "的の場所は、右上の地図の真ん中だ。着いたら左クリックだぞ。", tipTouch: "的の場所は、右上の地図の真ん中だ。着いたら右のスティックを倒せ。",
       reset: (c) => { c.attacked = false; },
       done: (c) => c.attacked,
     },
     {
       key: "hit", label: "的に当てる",
-      hint: "遠いと当たりません。近づいてから撃つと当てやすいです。",
+      talk: "今度は的に当ててみろ。",
+      tip: "もっと近づけ。的の目の前なら、まず外さない。",
       reset: (c) => { c.hitTarget = false; },
       done: (c) => c.hitTarget,
     },
     {
       key: "kill", label: "的を1つ壊す",
-      hint: "壊れた的は数秒で立て直ります。何度でも練習できます。",
+      talk: "当て続けて、的を1つ壊してみろ。壊れても、すぐ立て直るぞ。",
+      tip: "的の体力がなくなるまで、当て続けるんだ。",
       reset: (c, me) => { c.killsAtStart = me.kills; },
       done: (c, me) => me.kills > c.killsAtStart,
     },
     {
       key: "reload", label: "弾を入れかえる（リロード）",
-      hint: "R キーでリロードします。撃ち切ったときも自動で始まります。",
-      hintTouch: "右下の「リロード」ボタンを押します。",
+      talk: "R キーで弾を入れかえろ。撃ち切ったときも、自動で入れかわる。", talkTouch: "右下の「リロード」で弾を入れかえろ。",
+      tip: "キーボードの R を1回押すだけだ。", tipTouch: "右下の「リロード」ボタンを押すんだ。",
       // 近接武器と弓は弾倉を使わないので、それしか持っていないならこの項目は出さない
       applies: (me) => me.loadout.some((i) => !WEAPONS[i].melee && !WEAPONS[i].bow),
       reset: (c) => { c.reloaded = false; },
@@ -9694,74 +11146,273 @@
     },
     {
       key: "swap", label: "武器を持ちかえる",
-      hint: "1〜3 キー、またはマウスホイールで切り替えます。",
-      hintTouch: "右下の「武器」ボタンで切り替えます。",
+      talk: "1〜3 キーかマウスホイールで、武器を持ちかえてみろ。", talkTouch: "「武器」ボタンで、武器を持ちかえてみろ。",
+      tip: "数字の 1・2・3 のどれかを押せ。", tipTouch: "右下の「武器」ボタンを押すんだ。",
       applies: (me) => me.loadout.length > 1,
       reset: (c) => { c.swapped = false; },
       done: (c) => c.swapped,
     },
     {
-      key: "dash", label: "ダッシュで走る",
-      hint: "Shift を押しながら動くと速く走れます。そのぶん足音は大きくなります。",
-      hintTouch: "スティックをいっぱいまで倒すと走ります。足音は大きくなります。",
-      reset: (c) => { c.dashedFor = 0; },
-      done: (c) => c.dashedFor > 0.5,
-    },
-    {
       key: "grenade", label: "グレネードを投げる",
-      hint: "G キーで、向いている方向へ投げます。自分も巻きこまれるので離れて投げましょう。",
-      hintTouch: "「💣 投げる」ボタンで投げます。自分も巻きこまれるので離れて投げましょう。",
+      chapter: "gear",
+      talk: "G キーで、向いている方へグレネードを投げろ。自分も巻きこまれるから、離れて投げるんだぞ。", talkTouch: "「💣 投げる」でグレネードを投げろ。自分も巻きこまれるから、離れて投げるんだぞ。",
+      tip: "G を1回押すだけだ。", tipTouch: "「💣 投げる」ボタンを押すんだ。",
       applies: (me) => (me.maxGrenades || 0) > 0,
       reset: (c) => { c.threwGrenade = false; },
       done: (c) => c.threwGrenade,
     },
     {
       key: "mine", label: "地雷を置く",
-      hint: "F キーで足元に置きます。約1秒後に作動するので、置いたらすぐ離れましょう。",
-      hintTouch: "「🧨 地雷」ボタンで足元に置きます。置いたらすぐ離れましょう。",
+      chapter: "gear",
+      talk: "F キーで足元に地雷を置け。置いたら、すぐ離れろ。", talkTouch: "「🧨 地雷」で足元に地雷を置け。置いたら、すぐ離れろ。",
+      tip: "F を1回押せ。約1秒で作動するぞ。", tipTouch: "「🧨 地雷」ボタンを押すんだ。",
       applies: (me) => (me.maxMines || 0) > 0,
       reset: (c) => { c.placedMine = false; },
       done: (c) => c.placedMine,
     },
     {
       key: "wire", label: "有刺鉄線を張る",
-      hint: "C キーで張ります。踏んだ敵の足が止まり、じわじわ体力が減ります。",
-      hintTouch: "「🪤 鉄線」ボタンで張ります。踏んだ敵の足が止まります。",
+      chapter: "gear",
+      talk: "C キーで有刺鉄線を張れ。踏んだ敵は足が止まる。", talkTouch: "「🪤 鉄線」で有刺鉄線を張れ。踏んだ敵は足が止まる。",
+      tip: "C を1回押せ。", tipTouch: "「🪤 鉄線」ボタンを押すんだ。",
       applies: (me) => (me.maxWires || 0) > 0,
       reset: (c) => { c.placedWire = false; },
       done: (c) => c.placedWire,
     },
     {
       key: "shield", label: "盾を構える",
-      hint: "Q を押すとパリィ、押しっぱなしで防御します。",
-      hintTouch: "「🛡 盾」を押すとパリィ、押しっぱなしで防御します。",
+      chapter: "gear",
+      talk: "Q で盾を構えろ。攻撃が来る直前に押せば、はね返せる（パリィ）。", talkTouch: "「🛡 盾」で盾を構えろ。攻撃が来る直前に押せば、はね返せる（パリィ）。",
+      tip: "Q を押しっぱなしにしてみろ。", tipTouch: "「🛡 盾」を押したままにするんだ。",
       reset: (c) => { c.usedShield = false; },
       done: (c) => c.usedShield,
     },
     {
       key: "turret", label: "機関銃座に取り付く",
-      hint: "射撃場のまわりに3つあります。近づいて E キーです。",
-      hintTouch: "射撃場のまわりに3つあります。近づいて「アクション」ボタンです。",
+      chapter: "ride",
+      talk: "射撃場のまわりに機関銃座が3つある。近づいて E で取り付け。", talkTouch: "射撃場のまわりに機関銃座が3つある。近づいて「アクション」で取り付け。",
+      tip: "的のまわりを探せ。銃座のすぐそばで E だ。", tipTouch: "的のまわりを探せ。銃座のすぐそばで「アクション」だ。",
       done: (c, me) => me.turretId >= 0,
     },
     {
       key: "tank", label: "戦車に乗る",
-      hint: "自分の基地のそばにあります。近づいて E キーです。",
-      hintTouch: "自分の基地のそばにあります。近づいて「アクション」ボタンです。",
+      chapter: "ride",
+      talk: "次は戦車だ。E で銃座から離れて、自分の基地のそばの戦車に乗りこめ。", talkTouch: "次は戦車だ。「アクション」で銃座から離れて、自分の基地のそばの戦車に乗りこめ。",
+      tip: "戦車のすぐそばで E を押せ。乗り降りはどれも E だ。", tipTouch: "戦車のすぐそばで「アクション」を押すんだ。",
       done: (c, me) => !!ridingVehicle(me, false),
     },
     {
       key: "mech", label: "ロボットに乗る",
-      hint: "戦車とは反対がわの基地わきに配備されています。近づいて E キーです。",
-      hintTouch: "戦車とは反対がわの基地わきに配備されています。近づいて「アクション」ボタンです。",
+      chapter: "ride",
+      talk: "最後はロボットだ。E で戦車を降りて、基地の反対がわにいるロボットに乗れ。", talkTouch: "最後はロボットだ。「アクション」で戦車を降りて、基地の反対がわにいるロボットに乗れ。",
+      tip: "ロボットは、基地をはさんで戦車と反対がわだ。すぐそばで E を押せ。", tipTouch: "ロボットは、基地をはさんで戦車と反対がわだ。すぐそばで「アクション」だ。",
       done: (c, me) => !!ridingVehicle(me, true),
     },
     {
       key: "base", label: "自分の基地に戻る",
-      hint: "基地の円の中に入ると、体力・弾薬・グレネードが回復します。",
+      chapter: "finish",
+      talk: "仕上げだ。自分の基地の円の中に戻れ。体力も弾も回復するぞ。",
+      tip: "地図で自分の基地を探せ。円の中に入ればいい。",
       done: (c, me) => inFriendlyBase(me),
     },
   ];
+
+  // ---- ガント司令官 (練習場の案内役) ----
+  // 左上の吹き出しで、セリフを1文字ずつしゃべる。文字が出ている間は口が動き、低い声の音が鳴る。
+  // 吹き出しを押すと、いまのセリフを最後まで出す / 次のセリフへ進む。押さなくても、
+  // 読み終わるころに自動で進む (画面を押すと撃ってしまうので、押さないと進まない作りにはしない)。
+  const TALK_CHAR_MS = 38;          // 1文字を出す間隔
+  const TALK_HOLD_MS = 1300;        // 出しきってから次のセリフへ進むまでの基本の間
+  const TALK_HOLD_PER_CHAR = 45;    // 長いセリフほど長く見せる
+  const TRAINING_TIP_MS = 12000;    // これだけできずにいると、司令官がヒントを言う
+
+  const TRAINING_WELCOME = [
+    "ようこそ、新兵。俺はガント司令官だ。",
+    "今日はここで、ひととおり動けるようになってもらう。俺の言うとおりにやってみろ。",
+  ];
+  // 章が変わるとき、最初の指示の前にひとこと入れる
+  const TRAINING_CHAPTERS = {
+    move: "まずは体を動かすところからだ。",
+    attack: "よし、次は攻撃だ。的を相手に練習するぞ。",
+    gear: "次は道具の使い方を教える。",
+    ride: "ここからは乗り物だ。",
+    finish: "よくやった。あと1つで修了だ。",
+  };
+  const TRAINING_GRADUATE = [
+    "見事だ、新兵！　これで基本はひととおり身についた。",
+    "次はソロ戦だ。メニューから出撃しろ。",
+    "もちろん、ここで好きなだけ練習してもいいぞ。",
+  ];
+  const TRAINING_CHEERS = ["いいぞ！", "上出来だ！", "その調子だ！", "やるじゃないか！", "よし、完璧だ！"];
+
+  const tpFace = document.getElementById("tp-face");
+  const tpFaceCtx = tpFace ? tpFace.getContext("2d") : null;
+  const tpLine = document.getElementById("tp-line");
+  const tpTalk = document.getElementById("tp-talk");
+
+  // queue に積んだセリフを順に出す。line = いま出しているセリフ、shown = 出した文字数。
+  // step を持つセリフは、その項目の指示 (これが出るまで項目の判定を始めない)。
+  const talk = { queue: [], line: null, shown: 0, typedAt: 0, nextCharAt: 0, lastT: 0, drawn: -1 };
+
+  function resetTalk() {
+    talk.queue = []; talk.line = null; talk.shown = 0; talk.drawn = -1;
+    if (tpLine) tpLine.textContent = "";
+  }
+
+  function say(text, step) { talk.queue.push({ text, step: step || null }); }
+
+  // 順番待ちを捨てて、すぐにしゃべる (ほめ言葉とヒント)
+  function sayNow(text) { talk.queue = []; startLine({ text, step: null }, now()); }
+
+  function startLine(line, t) {
+    talk.line = line; talk.shown = 0; talk.nextCharAt = t; talk.typedAt = 0;
+    if (tpLine) tpLine.textContent = "";
+  }
+
+  const talkTyping = () => !!talk.line && talk.shown < talk.line.text.length;
+
+  function finishLine(t) {
+    talk.shown = talk.line.text.length;
+    talk.typedAt = t;
+    if (tpLine) tpLine.textContent = talk.line.text;
+  }
+
+  function updateCommander(t) {
+    // 一時停止などで間があいたら、そのぶん待ち時間を後ろへずらす (再開した瞬間に進みすぎないように)。
+    // 一時停止は最後に撃った時刻もずらすので、撃ったと見まちがえないよう見張りをやり直す。
+    const gap = t - talk.lastT;
+    if (talk.lastT && gap > 250) {
+      talk.nextCharAt += gap; talk.typedAt += gap;
+      if (training) { training.stepAt += gap; training.lastShot = null; }
+    }
+    talk.lastT = t;
+    if (!talk.line && talk.queue.length) startLine(talk.queue.shift(), t);
+    const line = talk.line;
+    if (line && talkTyping()) {
+      let added = 0;
+      while (talk.shown < line.text.length && t >= talk.nextCharAt) {
+        talk.shown++; added++;
+        talk.nextCharAt += TALK_CHAR_MS;
+      }
+      if (added) {
+        if (tpLine) tpLine.textContent = line.text.slice(0, talk.shown);
+        // 声は2文字に1回。記号や空白では鳴らさない。
+        const ch = line.text[talk.shown - 1];
+        if (talk.shown % 2 === 0 && !/[\s、。！？!?「」（）・…]/.test(ch)) Audio.blip();
+        if (talk.shown >= line.text.length) talk.typedAt = t;
+      }
+    } else if (line && talk.queue.length && t - talk.typedAt >= TALK_HOLD_MS + line.text.length * TALK_HOLD_PER_CHAR) {
+      startLine(talk.queue.shift(), t);
+    }
+    drawCommander(t);
+  }
+
+  // 吹き出しを押したら、いまのセリフを最後まで出す。出しきっていれば次のセリフへ。
+  if (tpTalk) {
+    tpTalk.addEventListener("click", () => {
+      if (!talk.line) return;
+      if (talkTyping()) finishLine(now());
+      else if (talk.queue.length) startLine(talk.queue.shift(), now());
+    });
+  }
+
+  function drawCommander(t) {
+    if (!tpFaceCtx) return;
+    const open = talkTyping() ? 0.5 + Math.sin(t / 45) * 0.5 : 0;
+    const key = Math.round(open * 6);
+    if (key === talk.drawn) return;   // 口の開き具合が変わったときだけ描き直す
+    talk.drawn = key;
+    drawCommanderFace(tpFaceCtx, open);
+  }
+
+  // ガント司令官の顔。128×128 の中に、制帽・サングラス・口ひげ・勲章を描く。
+  // open = 口の開き具合 (0〜1)。
+  function drawCommanderFace(c, open) {
+    const bg = c.createLinearGradient(0, 0, 0, 128);
+    bg.addColorStop(0, "#44532f");
+    bg.addColorStop(1, "#1b2214");
+    c.fillStyle = bg;
+    c.fillRect(0, 0, 128, 128);
+    // 軍服の肩と、シャツ・ネクタイ
+    c.fillStyle = "#4f5e34";
+    c.beginPath(); c.moveTo(2, 128); c.quadraticCurveTo(8, 100, 40, 97); c.lineTo(88, 97); c.quadraticCurveTo(120, 100, 126, 128); c.closePath(); c.fill();
+    c.fillStyle = "#ddd6bb";
+    c.beginPath(); c.moveTo(50, 97); c.lineTo(64, 114); c.lineTo(78, 97); c.closePath(); c.fill();
+    c.fillStyle = "#28301c";
+    c.beginPath(); c.moveTo(61, 103); c.lineTo(67, 103); c.lineTo(66, 124); c.lineTo(62, 124); c.closePath(); c.fill();
+    // 肩章と勲章 (リボン3本と金のメダル)
+    c.fillStyle = "#e0b43a";
+    c.fillRect(12, 104, 22, 5); c.fillRect(94, 104, 22, 5);
+    ["#c0392b", "#2f6fb5", "#e0b43a"].forEach((col, i) => { c.fillStyle = col; c.fillRect(22 + i * 8, 112, 7, 5); });
+    c.fillStyle = "#f2c94c";
+    c.beginPath(); c.arc(29, 122, 3.5, 0, 6.283); c.fill();
+    c.beginPath(); c.arc(40, 122, 3.5, 0, 6.283); c.fill();
+    // 首と耳
+    c.fillStyle = "#d6a27a";
+    c.fillRect(52, 84, 24, 16);
+    c.fillStyle = "#e3b089";
+    c.beginPath(); c.ellipse(35, 70, 5, 8, 0, 0, 6.283); c.fill();
+    c.beginPath(); c.ellipse(93, 70, 5, 8, 0, 0, 6.283); c.fill();
+    // 顔 (角ばったあご)
+    c.fillStyle = "#ecbd94";
+    c.beginPath();
+    c.moveTo(37, 48); c.lineTo(91, 48); c.lineTo(91, 78);
+    c.quadraticCurveTo(89, 97, 64, 98); c.quadraticCurveTo(39, 97, 37, 78);
+    c.closePath(); c.fill();
+    // 太い眉
+    c.fillStyle = "#4e3f31";
+    c.fillRect(40, 54, 21, 5); c.fillRect(67, 54, 21, 5);
+    // サングラス
+    c.fillStyle = "#14181d";
+    for (const x of [39, 67]) {
+      c.beginPath();
+      c.moveTo(x, 59); c.lineTo(x + 22, 59); c.lineTo(x + 20, 70);
+      c.quadraticCurveTo(x + 11, 75, x + 2, 70);
+      c.closePath(); c.fill();
+    }
+    c.fillRect(60, 60, 8, 3);
+    c.strokeStyle = "rgba(255,255,255,0.45)"; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(43, 62); c.lineTo(50, 62); c.moveTo(71, 62); c.lineTo(78, 62); c.stroke();
+    // 鼻
+    c.fillStyle = "#d9a57c";
+    c.beginPath(); c.moveTo(64, 66); c.lineTo(58, 80); c.lineTo(69, 80); c.closePath(); c.fill();
+    // 口。しゃべっている間は開いたり閉じたりする。
+    const mh = 1.5 + open * 6;
+    c.fillStyle = "#5a1f1a";
+    c.beginPath(); c.ellipse(64, 90, 8, mh, 0, 0, 6.283); c.fill();
+    if (open > 0.3) {
+      c.fillStyle = "#c9534a";
+      c.beginPath(); c.ellipse(64, 90 + mh * 0.45, 5, mh * 0.45, 0, 0, 6.283); c.fill();
+    }
+    // 口ひげ (口の上にかぶさる)
+    c.fillStyle = "#6e5a46";
+    c.beginPath();
+    c.moveTo(64, 79);
+    c.quadraticCurveTo(51, 77, 41, 89);
+    c.quadraticCurveTo(52, 86, 64, 86);
+    c.quadraticCurveTo(76, 86, 87, 89);
+    c.quadraticCurveTo(77, 77, 64, 79);
+    c.fill();
+    // 制帽: 山・帯・金のひも・帽章・つば
+    c.fillStyle = "#3e4d2b";
+    c.beginPath(); c.moveTo(24, 46); c.quadraticCurveTo(22, 14, 64, 12); c.quadraticCurveTo(106, 14, 104, 46); c.closePath(); c.fill();
+    c.fillStyle = "#28321d";
+    c.fillRect(29, 37, 70, 10);
+    c.fillStyle = "#e0b43a";
+    c.fillRect(29, 44, 70, 2);
+    c.beginPath(); c.arc(64, 28, 7, 0, 6.283); c.fill();
+    c.fillStyle = "#a8322a";
+    c.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 2.2 : 5;
+      c.lineTo(64 + Math.cos(a) * r, 28 + Math.sin(a) * r);
+    }
+    c.closePath(); c.fill();
+    c.fillStyle = "#101316";
+    c.beginPath(); c.moveTo(27, 46); c.lineTo(101, 46); c.quadraticCurveTo(64, 60, 27, 46); c.fill();
+    c.strokeStyle = "rgba(255,255,255,0.22)"; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(36, 48); c.quadraticCurveTo(64, 56, 92, 48); c.stroke();
+  }
 
   let training = null;
 
@@ -9787,7 +11438,11 @@
       threwGrenade: false, placedMine: false, placedWire: false, usedShield: false,
       lastAim: null, lastShot: null, lastWeapon: null,
       lastGrenades: null, lastMines: null, lastWires: null, dummyHp: null,
+      chapter: "", announced: false, stepAt: 0, cheer: 0,
     } : null;
+    // 司令官のあいさつから始める
+    resetTalk();
+    if (training) for (const line of TRAINING_WELCOME) say(line);
     renderTrainingPanel();
   }
 
@@ -9824,7 +11479,9 @@
   }
 
   function updateTraining(dt, t) {
-    if (!training || training.done) return;
+    if (!training) return;
+    updateCommander(t);
+    if (training.done) return;
     const me = localSoldier();
     if (!me || me.dead) return;
     trackTrainingInput(me, dt, t);
@@ -9832,19 +11489,44 @@
     for (let guard = 0; guard <= TRAINING_STEPS.length; guard++) {
       const step = TRAINING_STEPS[training.idx];
       if (!step) { finishTraining(); return; }
-      if (step.applies && !step.applies(me)) { training.idx++; training.armed = false; continue; }
-      // 案内を出したフレームでは判定しない(前の操作で即クリアさせないため)
+      if (step.applies && !step.applies(me)) { training.idx++; training.armed = false; training.announced = false; continue; }
       if (!training.armed) {
+        // 章の最初ならひとこと添えてから、この項目の指示をしゃべる
+        if (!training.announced) {
+          training.announced = true;
+          if (step.chapter && step.chapter !== training.chapter) {
+            training.chapter = step.chapter;
+            say(TRAINING_CHAPTERS[step.chapter]);
+          }
+          say(isTouch && step.talkTouch ? step.talkTouch : step.talk, step.key);
+        }
+        // 司令官が指示を言い始めるまでは判定しない(説明を聞く前にクリアさせないため)
+        if (!talk.line || talk.line.step !== step.key) return;
         training.armed = true;
+        training.stepAt = t;
         if (step.reset) step.reset(training, me);
         renderTrainingPanel();
         return;
       }
-      if (!training.skip && !step.done(training, me)) return;
+      if (!training.skip && !step.done(training, me)) {
+        // しばらくできずにいたら、司令官がヒントを言う
+        if (t - training.stepAt > TRAINING_TIP_MS && !talkTyping()) {
+          training.stepAt = t;
+          sayNow(isTouch && step.tipTouch ? step.tipTouch : step.tip);
+        }
+        return;
+      }
+      const skipped = training.skip;
       training.skip = false;
       training.idx++;
       training.armed = false;
-      if (training.idx < TRAINING_STEPS.length) Audio.heal();
+      training.announced = false;
+      if (training.idx < TRAINING_STEPS.length) {
+        Audio.heal();
+        // とばしたときはほめずに、すぐ次の指示へ
+        if (skipped) resetTalk();
+        else sayNow(TRAINING_CHEERS[training.cheer++ % TRAINING_CHEERS.length]);
+      }
     }
   }
 
@@ -9852,6 +11534,8 @@
     if (!training || training.done) return;
     training.done = true;
     banner("練習メニュー修了！　このまま好きなだけ練習できます");
+    sayNow(TRAINING_GRADUATE[0]);
+    for (const line of TRAINING_GRADUATE.slice(1)) say(line);
     renderTrainingPanel();
     if (runStats) runStats.trainedAll = true;
     checkAchievements();
@@ -9872,10 +11556,8 @@
       el.tpSkip.classList.add("hidden");
       return;
     }
-    const rows = [
-      `<li class="tp-cur">▶ ${esc(step.label)}</li>`,
-      `<li class="tp-hint">${esc(isTouch && step.hintTouch ? step.hintTouch : step.hint)}</li>`,
-    ];
+    // 指示とヒントは司令官がしゃべるので、一覧には項目名だけを出す
+    const rows = [`<li class="tp-cur">▶ ${esc(step.label)}</li>`];
     for (let i = cleared + 1; i < Math.min(cleared + 3, list.length); i++) {
       rows.push(`<li class="tp-next">○ ${esc(list[i].label)}</li>`);
     }
@@ -10300,8 +11982,8 @@
       const jack = !!(char && char.bodyStyle === "jack");
       const hero = !!(char && char.bodyStyle === "hero");
       const maru = !!(char && char.bodyStyle === "marubatsu");
-      const uniform = maru ? "#ffffff" : hero ? "#2f56b5" : merc ? "#141416" : jack ? "#2b2038" : isYou ? YOU_UNIFORM : def.uniform;
-      const accent = maru ? "#b9bfc6" : hero ? "#f2c53d" : merc ? "#33373e" : jack ? "#6b4a22" : isYou ? YOU_ACCENT : def.accent;
+      const uniform = maru ? "#ffffff" : hero ? "#2f56b5" : merc ? "#b3121b" : jack ? "#2b2038" : isYou ? YOU_UNIFORM : def.uniform;
+      const accent = maru ? "#b9bfc6" : hero ? "#f2c53d" : merc ? "#141416" : jack ? "#6b4a22" : isYou ? YOU_ACCENT : def.accent;
       const R = 19;
       ctx.save();
       ctx.translate(x, y);
@@ -10332,7 +12014,14 @@
       const w = first ? weaponDef(first) : null;
       if (w) {
         const paint = paintFor(w.key);
-        if (w.melee) {
+        if (w.style === "fist") {
+          // 鉄拳は左右の丸い拳
+          for (const side of [-1, 1]) {
+            ctx.fillStyle = "#e8b98a";
+            ctx.beginPath(); ctx.arc(R * 0.95, side * R * 0.45, R * 0.28, 0, 6.283); ctx.fill();
+            ctx.strokeStyle = paint.cost ? paint.trim : "#8a6446"; ctx.lineWidth = 1.4; ctx.stroke();
+          }
+        } else if (w.melee) {
           ctx.fillStyle = paint.cost ? paint.body : "#5b3a22";
           ctx.fillRect(R * 0.7, -R * 0.14, R * 0.5, R * 0.26);
           ctx.fillStyle = "#dfe5e7";
@@ -10352,11 +12041,13 @@
           ctx.fillStyle = paint.trim;
           ctx.fillRect(R * 0.78, -R * 0.12, R * 0.34, R * 0.14);
         }
-        // 手
-        ctx.fillStyle = "#caa06b";
-        ctx.beginPath(); ctx.arc(R * 0.82, R * 0.14, R * 0.19, 0, 6.283); ctx.fill();
+        // 手 (鉄拳は拳そのものが手なので描かない)
+        if (w.style !== "fist") {
+          ctx.fillStyle = "#caa06b";
+          ctx.beginPath(); ctx.arc(R * 0.82, R * 0.14, R * 0.19, 0, 6.283); ctx.fill();
+        }
       }
-      // 頭。黒衣の傭兵は覆面、ジャック・オー・ランタンはカボチャ、マルバツ君は ○✕ の顔。
+      // 頭。紅衣の傭兵は覆面、ジャック・オー・ランタンはカボチャ、マルバツ君は ○✕ の顔。
       if (maru) {
         ctx.save();
         ctx.translate(R * 0.1, 0);
@@ -10377,12 +12068,14 @@
         drawGardenLabel(x, y, R, isYou, char);
         return;
       }
-      ctx.fillStyle = merc ? "#141416" : accent;
+      ctx.fillStyle = merc ? "#b3121b" : accent;
       ctx.beginPath(); ctx.arc(R * 0.1, 0, R * 0.46, 0, 6.283); ctx.fill();
       if (merc) {
         for (const side of [-1, 1]) {
+          ctx.fillStyle = "#141416";
+          ctx.beginPath(); ctx.ellipse(R * 0.3, side * R * 0.2, R * 0.21, R * 0.16, side * 0.45, 0, 6.283); ctx.fill();
           ctx.fillStyle = "#eef1f4";
-          ctx.beginPath(); ctx.ellipse(R * 0.32, side * R * 0.19, R * 0.15, R * 0.1, side * 0.55, 0, 6.283); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(R * 0.33, side * R * 0.19, R * 0.13, R * 0.08, side * 0.55, 0, 6.283); ctx.fill();
         }
       } else {
         ctx.fillStyle = "rgba(0,0,0,0.28)";
@@ -10477,6 +12170,375 @@
     !el.lab.classList.contains("hidden");
 
   // ============================================================
+  //  ステージ作り (クリエイティブ)
+  //  マス目に地形とトラップを置いて、自分だけのステージを作る。世界観を選ぶと、
+  //  地面の色と置けるトラップが、そのステージの世界観に合わせて変わる。
+  //  作ったステージはこの端末に自動で保存され、メニューのステージ一覧から選んで遊べる。
+  //  オンラインでは、ホストが選んだステージの地形がそのまま参加者に送られる。
+  //  拠点と同じく、試合とは別のループで動く。
+  // ============================================================
+  const EDITOR_GRID = 20;             // 置く位置はこのマス目にそろえる
+  const EDITOR_BASE_R = 230;          // 基地のまわりは降下と復活のために空けておく
+  const EDITOR_MAX_OBSTACLES = 250;
+  const EDITOR_MAX_TRAPS = 60;
+  // 置ける地形。w, h は置くときの大きさ (「向きを変える」で縦と横が入れかわる)。
+  const EDITOR_PIECES = [
+    { type: "wall",      name: "建物",         icon: "🏢", w: 160, h: 120 },
+    { type: "ruin",      name: "崩れ壁",       icon: "🧱", w: 140, h: 32 },
+    { type: "apartment", name: "マンション",   icon: "🏚", w: 220, h: 180 },
+    { type: "rubble",    name: "がれき",       icon: "🪨", w: 90,  h: 70 },
+    { type: "crate",     name: "木箱",         icon: "📦", w: 50,  h: 50 },
+    { type: "sandbag",   name: "土嚢",         icon: "🎒", w: 100, h: 30 },
+    { type: "rock",      name: "岩",           icon: "⛰", w: 50,  h: 46 },
+    { type: "tree",      name: "木",           icon: "🌳", w: 56,  h: 56 },
+    { type: "bush",      name: "茂み",         icon: "🌿", w: 90,  h: 76 },
+    { type: "tires",     name: "タイヤ",       icon: "🛞", w: 46,  h: 46 },
+    { type: "hedgehog",  name: "バリケード",   icon: "✖️", w: 48,  h: 48 },
+    { type: "wreck",     name: "焼けた車",     icon: "🚙", w: 88,  h: 46 },
+    { type: "barrel",    name: "ドラム缶",     icon: "🛢️", w: 30,  h: 30 },
+    { type: "icewall",   name: "氷のかたまり", icon: "🧊", w: 160, h: 50 },
+    { type: "pine",      name: "雪の木",       icon: "🌲", w: 60,  h: 60 },
+    { type: "snowman",   name: "雪だるま",     icon: "⛄", w: 40,  h: 40 },
+  ];
+  const EDITOR_PIECE_BY_TYPE = {};
+  EDITOR_PIECES.forEach((p) => (EDITOR_PIECE_BY_TYPE[p.type] = p));
+
+  const Editor = (() => {
+    const ui = {
+      root: document.getElementById("editor-ui"),
+      open: document.getElementById("ed-open"),
+      name: document.getElementById("ed-name"),
+      theme: document.getElementById("ed-theme"),
+      palette: document.getElementById("ed-palette"),
+      status: document.getElementById("ed-status"),
+      top: document.querySelector("#editor-ui .ed-top"),
+      del: document.getElementById("ed-delete"),
+    };
+    let stage = null;          // 編集中の自作ステージ
+    let tool = "wall";         // 選んでいる道具。地形・トラップの種類か "erase"
+    let turned = false;        // 向きを変えたか
+    let hover = null;          // ポインタの下 (世界の座標)
+    let painting = 0;          // 0 = 押していない / 1 = 置いている / 2 = 消している
+    let deleteArmedUntil = 0;  // 「消す」をもう一度押すと本当に消える期限
+    let lastEditedId = null;
+    let message = "";
+    const view = { s: 1, ox: 0, oy: 0 };
+
+    const themeTraps = () => Object.keys(STAGE_BY_KEY[stage.theme].traps || {});
+    const isTrapTool = (t) => !!TRAP_KINDS[t];
+
+    // いま選んでいる道具で置くときの大きさ
+    function toolSize() {
+      const def = isTrapTool(tool) ? TRAP_KINDS[tool] : EDITOR_PIECE_BY_TYPE[tool];
+      if (!def) return null;
+      return turned && def.w !== def.h ? { w: def.h, h: def.w } : { w: def.w, h: def.h };
+    }
+
+    function newStage() {
+      if (customStages.length >= CUSTOM_STAGE_MAX) {
+        say(`ステージは ${CUSTOM_STAGE_MAX} こまでです。いらないステージを消してから作ってね。`);
+        return null;
+      }
+      let n = customStages.length + 1;
+      while (customStages.some((c) => c.name === `マイステージ ${n}`)) n++;
+      const c = { id: Date.now().toString(36), name: `マイステージ ${n}`, theme: "field", obstacles: [], traps: [] };
+      customStages.push(c);
+      saveCustomStages();
+      return c;
+    }
+
+    function select(c) {
+      stage = c;
+      lastEditedId = c ? c.id : null;
+      if (stage) linkWarps(stage.traps);
+      if (tool !== "erase" && isTrapTool(tool) && stage && !themeTraps().includes(tool)) tool = "wall";
+      renderUi();
+    }
+
+    function save() {
+      if (!stage) return;
+      linkWarps(stage.traps);
+      saveCustomStages();
+      syncMenuStageButtons();
+    }
+
+    function say(text) {
+      message = text;
+      renderStatus();
+    }
+
+    function renderUi() {
+      ui.open.innerHTML = customStages.map((c) =>
+        `<option value="${esc(c.id)}"${stage && c.id === stage.id ? " selected" : ""}>🛠 ${esc(c.name)}</option>`).join("") +
+        `<option value="__new">＋ 新しいステージ</option>`;
+      ui.name.value = stage ? stage.name : "";
+      ui.theme.innerHTML = CUSTOM_THEMES.map((k) => {
+        const st = STAGE_BY_KEY[k];
+        return `<option value="${k}"${stage && stage.theme === k ? " selected" : ""}>${st.icon} ${esc(st.name)}</option>`;
+      }).join("");
+      const button = (key, icon, name, extra = "") =>
+        `<button data-ed-tool="${key}" class="${tool === key ? "on" : ""}${extra}"><span>${icon}</span>${esc(name)}</button>`;
+      let html = `<div class="ed-group">道具</div>` + button("erase", "🧽", "消しゴム") +
+        `<button data-ed-turn class="${turned ? "on" : ""}"><span>🔄</span>向きを変える</button>`;
+      html += `<div class="ed-group">地形</div>` + EDITOR_PIECES.map((p) => button(p.type, p.icon, p.name)).join("");
+      if (stage) {
+        html += `<div class="ed-group">トラップ（${esc(STAGE_BY_KEY[stage.theme].name)}）</div>` +
+          themeTraps().map((k) => button(k, TRAP_KINDS[k].icon, TRAP_KINDS[k].name)).join("");
+      }
+      ui.palette.innerHTML = html;
+      ui.del.textContent = now() < deleteArmedUntil ? "🗑 もう一度押すと消えます" : "🗑 消す";
+      renderStatus();
+    }
+
+    function renderStatus() {
+      if (!stage) { ui.status.textContent = message; return; }
+      const count = `地形 ${stage.obstacles.length}/${EDITOR_MAX_OBSTACLES}・トラップ ${stage.traps.length}/${EDITOR_MAX_TRAPS}`;
+      const how = isTouch ? "タップで置く・消しゴムで消す" : "クリックで置く・右クリックで消す・ドラッグで続けて置ける";
+      ui.status.textContent = message ? `${message}　（${count}）` : `${how}　（${count}）`;
+    }
+
+    // ステージ全体が、上の操作バーと道具の欄をよけて画面に収まるよう縮める
+    function layoutView() {
+      const vw = viewW(), vh = viewH();
+      const canvasRect = canvas.getBoundingClientRect();
+      const top = ui.top.getBoundingClientRect().bottom - canvasRect.top + 8;
+      const pal = ui.palette.getBoundingClientRect();
+      const side = pal.width < vw * 0.5;   // 道具の欄が左の縦長か、下の横長か
+      const left = side ? pal.right - canvasRect.left + 8 : 8;
+      const bottom = side ? 30 : vh - (pal.top - canvasRect.top) + 6;
+      const aw = Math.max(50, vw - left - 8), ah = Math.max(50, vh - top - bottom);
+      view.s = Math.min(aw / WORLD_W, ah / WORLD_H);
+      view.ox = left + (aw - WORLD_W * view.s) / 2;
+      view.oy = top + (ah - WORLD_H * view.s) / 2;
+    }
+
+    function toWorld(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - view.ox) / view.s, y: (e.clientY - r.top - view.oy) / view.s };
+    }
+
+    function snapped(p) {
+      const size = toolSize();
+      if (!size) return null;
+      return {
+        x: Math.round((p.x - size.w / 2) / EDITOR_GRID) * EDITOR_GRID,
+        y: Math.round((p.y - size.h / 2) / EDITOR_GRID) * EDITOR_GRID,
+        w: size.w, h: size.h,
+      };
+    }
+
+    // 外周の壁の内側で、基地のまわりでもなく、ほかの物と重ならなければ置ける
+    function canPlace(b) {
+      if (b.x < 26 || b.y < 26 || b.x + b.w > WORLD_W - 26 || b.y + b.h > WORLD_H - 26) return false;
+      if (BASE_SPOTS.some((spot) => circleRect(spot.x, spot.y, EDITOR_BASE_R, b.x, b.y, b.w, b.h))) return false;
+      const hit = (o) => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y;
+      return !stage.obstacles.some(hit) && !stage.traps.some(hit);
+    }
+
+    function place(p) {
+      const b = snapped(p);
+      if (!b || !canPlace(b)) return false;
+      if (isTrapTool(tool)) {
+        if (stage.traps.length >= EDITOR_MAX_TRAPS) { say("トラップはこれ以上置けません"); return false; }
+        stage.traps.push({ type: tool, x: b.x, y: b.y, w: b.w, h: b.h });
+      } else {
+        if (stage.obstacles.length >= EDITOR_MAX_OBSTACLES) { say("地形はこれ以上置けません"); return false; }
+        stage.obstacles.push({ type: tool, x: b.x, y: b.y, w: b.w, h: b.h, seed: Math.round(Math.random() * 100) / 100 });
+      }
+      message = "";
+      return true;
+    }
+
+    // ポインタの下にある物を1つ消す。上に描かれている地形から先に消す。
+    function erase(p) {
+      const inside = (o) => p.x >= o.x && p.x <= o.x + o.w && p.y >= o.y && p.y <= o.y + o.h;
+      for (const list of [stage.obstacles, stage.traps]) {
+        for (let i = list.length - 1; i >= 0; i--) {
+          if (inside(list[i])) { list.splice(i, 1); message = ""; return true; }
+        }
+      }
+      return false;
+    }
+
+    function apply(p) {
+      const changed = painting === 2 ? erase(p) : place(p);
+      if (changed) { save(); renderStatus(); }
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
+      if (scene !== "editor" || !stage) return;
+      e.preventDefault();
+      painting = e.button === 2 || tool === "erase" ? 2 : 1;
+      hover = toWorld(e);
+      apply(hover);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (scene !== "editor" || !stage) return;
+      hover = toWorld(e);
+      if (painting) apply(hover);
+    });
+    const stop = () => { painting = 0; };
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointercancel", stop);
+    canvas.addEventListener("pointerleave", () => { stop(); hover = null; });
+    canvas.addEventListener("contextmenu", (e) => { if (scene === "editor") e.preventDefault(); });
+
+    ui.palette.addEventListener("click", (e) => {
+      const b = e.target.closest && e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-ed-turn")) turned = !turned;
+      else tool = b.dataset.edTool;
+      message = "";
+      renderUi();
+    });
+    ui.open.addEventListener("change", () => {
+      if (ui.open.value === "__new") { const c = newStage(); select(c || stage); return; }
+      select(customStages.find((c) => c.id === ui.open.value) || stage);
+    });
+    ui.name.addEventListener("input", () => {
+      if (!stage) return;
+      stage.name = ui.name.value.slice(0, 16) || "マイステージ";
+      save();
+      // 名前を打っている途中なので、入力欄は作り直さずに一覧の表示だけ直す
+      const opt = ui.open.querySelector(`option[value="${stage.id}"]`);
+      if (opt) opt.textContent = `🛠 ${stage.name}`;
+    });
+    ui.theme.addEventListener("change", () => {
+      if (!stage) return;
+      stage.theme = CUSTOM_THEMES.includes(ui.theme.value) ? ui.theme.value : "field";
+      if (isTrapTool(tool) && !themeTraps().includes(tool)) tool = "wall";
+      save();
+      renderUi();
+    });
+    document.getElementById("ed-play").addEventListener("click", () => {
+      if (!stage) return;
+      save();
+      playerStage = customStageKey(stage);
+      store.setItem("wz-stage", playerStage);
+      syncMenuStageButtons();
+      close();
+      startSoloMatch();
+    });
+    ui.del.addEventListener("click", () => {
+      if (!stage) return;
+      // うっかり消さないよう、3秒以内にもう一度押したときだけ消す
+      if (now() >= deleteArmedUntil) {
+        deleteArmedUntil = now() + 3000;
+        renderUi();
+        setTimeout(() => { if (scene === "editor") renderUi(); }, 3100);
+        return;
+      }
+      deleteArmedUntil = 0;
+      customStages = customStages.filter((c) => c !== stage);
+      saveCustomStages();
+      syncMenuStageButtons();
+      select(customStages[customStages.length - 1] || newStage());
+      say("ステージを消しました");
+    });
+    document.getElementById("ed-exit").addEventListener("click", () => openMenu());
+
+    function open() {
+      scene = "editor";
+      clearGameInput();
+      el.menu.classList.add("hidden");
+      el.touch.classList.add("hidden");
+      document.getElementById("hud").style.display = "none";
+      document.getElementById("topbtns").style.display = "none";
+      mini.style.display = "none";
+      ui.root.classList.remove("hidden");
+      message = "";
+      select(customStages.find((c) => c.id === lastEditedId) || customStages[customStages.length - 1] || newStage());
+      resize();
+    }
+
+    function close() {
+      painting = 0;
+      hover = null;
+      ui.root.classList.add("hidden");
+      document.getElementById("hud").style.display = "";
+      document.getElementById("topbtns").style.display = "";
+      mini.style.display = "";
+      scene = "menu";
+    }
+
+    function render() {
+      const vw = viewW(), vh = viewH(), t = now();
+      layoutView();
+      const theme = STAGE_BY_KEY[stage ? stage.theme : "field"];
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#11160d";
+      ctx.fillRect(0, 0, vw, vh);
+      if (!stage) return;
+      ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.ox, dpr * view.oy);
+      // 地面 (世界観の色)
+      const TS = 100;
+      for (let x = 0; x < WORLD_W; x += TS) {
+        for (let y = 0; y < WORLD_H; y += TS) {
+          const k = ((x / TS) * 7 + (y / TS) * 13) % 5;
+          ctx.fillStyle = k < 2 ? theme.ground[0] : k < 4 ? theme.ground[1] : theme.ground[2];
+          ctx.fillRect(x, y, TS, TS);
+        }
+      }
+      // 格子
+      ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1 / view.s;
+      ctx.beginPath();
+      for (let x = 0; x <= WORLD_W; x += TS) { ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H); }
+      for (let y = 0; y <= WORLD_H; y += TS) { ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); }
+      ctx.stroke();
+      // 外周の壁
+      ctx.fillStyle = "#4a4640";
+      ctx.fillRect(0, 0, WORLD_W, 26); ctx.fillRect(0, WORLD_H - 26, WORLD_W, 26);
+      ctx.fillRect(0, 0, 26, WORLD_H); ctx.fillRect(WORLD_W - 26, 0, 26, WORLD_H);
+      // 基地の場所。ここには何も置けない。
+      for (const team of TEAMS) {
+        const spot = BASE_SPOTS[team], def = teamDef(team);
+        ctx.fillStyle = hexToRgba(def.flag, 0.16);
+        ctx.beginPath(); ctx.arc(spot.x, spot.y, EDITOR_BASE_R, 0, 6.283); ctx.fill();
+        ctx.strokeStyle = hexToRgba(def.flag, 0.8); ctx.lineWidth = 3 / view.s;
+        ctx.setLineDash([12 / view.s, 8 / view.s]);
+        ctx.beginPath(); ctx.arc(spot.x, spot.y, EDITOR_BASE_R, 0, 6.283); ctx.stroke();
+        ctx.setLineDash([]);
+        // 名前は縁取りして、明るい地面の上でも読めるようにする。はみ出さないよう内側へ寄せる。
+        const label = `${def.short}の基地`;
+        ctx.font = `bold ${14 / view.s}px -apple-system, sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        const half = ctx.measureText(label).width / 2 + 34;
+        const lx = clamp(spot.x, half, WORLD_W - half);
+        ctx.lineWidth = 4 / view.s; ctx.strokeStyle = "rgba(0,0,0,0.75)"; ctx.lineJoin = "round";
+        ctx.strokeText(label, lx, spot.y);
+        ctx.fillStyle = def.text;
+        ctx.fillText(label, lx, spot.y);
+      }
+      // 置いた物。障害物の絵は「いまのステージ」の世界観で色を決めるので、描くあいだだけ
+      // 編集中のステージを試合の状態として見せる (拠点と同じく本物の試合の状態は使わない)。
+      const realG = G;
+      G = { stage: customStageKey(stage), traps: stage.traps };
+      try {
+        for (const trap of stage.traps) drawTrap(ctx, trap, t, stage.traps);
+        for (const o of stage.obstacles) drawObstacle(o);
+      } finally {
+        G = realG;
+      }
+      // 置く場所の影。置けない場所なら赤くなる。
+      if (hover && tool !== "erase") {
+        const b = snapped(hover);
+        if (b) {
+          const ok = canPlace(b);
+          ctx.fillStyle = ok ? "rgba(255,255,255,0.22)" : "rgba(255,60,60,0.25)";
+          ctx.fillRect(b.x, b.y, b.w, b.h);
+          ctx.strokeStyle = ok ? "#ffffff" : "#ff5a4e"; ctx.lineWidth = 2 / view.s;
+          ctx.strokeRect(b.x, b.y, b.w, b.h);
+        }
+      } else if (hover) {
+        ctx.strokeStyle = "#ffb0a0"; ctx.lineWidth = 2 / view.s;
+        ctx.beginPath(); ctx.arc(hover.x, hover.y, 14 / view.s, 0, 6.283); ctx.stroke();
+      }
+    }
+
+    return { open, close, render };
+  })();
+
+  // ============================================================
   //  ゲームループ
   // ============================================================
   let lastT = 0, snapAcc = 0, inputAcc = 0;
@@ -10494,6 +12556,11 @@
       else { localInput.interactEdge = false; gardenEnterEdge = false; }
       Garden.render();
       if (!el.hangar.classList.contains("hidden")) drawHangarPreview(dt);
+      return;
+    }
+    // ステージ作りの画面も、試合とは別に描く
+    if (scene === "editor") {
+      Editor.render();
       return;
     }
 
@@ -10519,6 +12586,7 @@
         }
       }
       updateGearAnimations(dt);
+      noteTrapUnderfoot();
       checkElimination();
       updateCamera();
       render();
@@ -10529,6 +12597,8 @@
   // クライアント: 受信状態へ滑らかに補間
   function interpClient(dt) {
     for (const s of G.soldiers) {
+      // ワープや復活で大きく飛んだときは、滑らせずにそのまま移す
+      if (dist2(s.x, s.y, s.rx, s.ry) > 250 * 250) { s.x = s.rx; s.y = s.ry; }
       s.x = lerp(s.x, s.rx, clamp(dt * 14, 0, 1));
       s.y = lerp(s.y, s.ry, clamp(dt * 14, 0, 1));
       if (s.moving) s.legPhase += dt * 12;
@@ -10567,18 +12637,18 @@
     scene = "match";
     mode = "sp";
     G = emptyState();
-    G.obstacles = genMap();
+    setupDuel();
+    layoutStage();
     G.goal = BASE_MAX_HP;
     spawnTeams();
-    spawnDogs();
-    spawnTanks();
+    if (!G.duel) { spawnDogs(); spawnTanks(); }
     spawnTurrets();
     spawnCreature();
     spawnSwordRock();
     spawnBeasts();
     spawnMedkits();
     spawnPumpkins();
-    el.scoreGoal.textContent = isTraining() ? "練習メニューを順番にこなそう" : "他3軍の基地をすべて破壊";
+    el.scoreGoal.textContent = isTraining() ? "練習メニューを順番にこなそう" : G.duel ? duelGoalText() : "他3軍の基地をすべて破壊";
     resize();
     hideOverlays();
     beginMatchTracking();
@@ -10650,8 +12720,8 @@
     el.rewardSummary.textContent = bits.join("　/　");
     el.rewardSummary.classList.toggle("win", win);
 
-    // 4軍の順位表: 基地が健在な軍が上、あとは撃破数順。
-    const standings = TEAMS.map((team) => ({
+    // 4軍の順位表: 基地が健在な軍が上、あとは撃破数順。1対1は向かい合った2人だけを並べる。
+    const standings = TEAMS.filter((team) => !G.duel || G.duel.teams.includes(team)).map((team) => ({
       team,
       alive: G.bases[team] && G.bases[team].hp > 0,
       kills: G.score[team],
@@ -10660,10 +12730,12 @@
     const mine = localTeam();
     const table = standings.map((row, i) => {
       const def = teamDef(row.team);
-      const tags = [row.team === winnerTeam ? "🎖 勝利" : row.alive ? "基地健在" : "基地陥落"];
-      if (row.team === mine) tags.push("あなたの軍");
+      const tags = [row.team === winnerTeam ? "🎖 勝利" : G.duel ? "敗北" : row.alive ? "基地健在" : "基地陥落"];
+      if (row.team === mine) tags.push(G.duel ? "あなた" : "あなたの軍");
+      const fighter = G.duel ? G.soldiers.find((s) => s.team === row.team && !s.summonUntil) : null;
+      const title = fighter ? fighter.name : G.armyNames[row.team];
       return `<div class="row standing${row.team === mine ? " mine" : ""}">` +
-        `<span><i class="dot" style="background:${def.flag}"></i>${i + 1}. ${esc(G.armyNames[row.team])}` +
+        `<span><i class="dot" style="background:${def.flag}"></i>${i + 1}. ${esc(title)}` +
         `<em>${tags.join(" / ")}</em></span><b>${row.kills} 撃破</b></div>`;
     }).join("");
 
@@ -10754,12 +12826,13 @@
     };
 
     for (const s of G.soldiers) {
-      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastGrenade", "lastMine", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle", "dropUntil", "sweepAt", "beamUntil"]);
+      shift(s, ["respawnAt", "lastDamagedAt", "parryUntil", "parryCooldownUntil", "stunnedUntil", "reloadUntil", "lastShot", "lastGrenade", "lastMine", "lastBaseSupplyAt", "lastFootstepAt", "heardUntil", "muzzle", "dropUntil", "sweepAt", "beamUntil", "soakedUntil", "regenUntil", "summonUntil", "gawkUntil", "shoutUntil", "appearAt", "staggerUntil"]);
       shift(s.ai, ["think", "strafeUntil", "lastSeen", "lostAt", "fireUntil"]);
     }
     if (G.dropAt) G.dropAt += delta;
     for (const beam of G.beams || []) shift(beam, ["until", "tickAt"]);
-    for (const dog of G.dogs) shift(dog, ["respawnAt", "lastAttack", "biteAt", "stunnedUntil"]);
+    for (const dog of G.dogs) shift(dog, ["respawnAt", "lastAttack", "biteAt", "stunnedUntil", "summonUntil", "circleUntil"]);
+    for (const portal of G.portals || []) shift(portal, ["born"]);
     for (const beast of G.beasts) shift(beast, ["respawnAt", "lastAttack", "roamUntil"]);
     if (G.creature) shift(G.creature, ["lastHeardAt", "roamUntil", "lastRoarAt", "lungeAt"]);
     for (const turret of G.turrets) shift(turret, ["respawnAt", "lastShot", "muzzle"]);
@@ -10920,18 +12993,18 @@
 
     function prepareHostLobby() {
       G = emptyState();
-      G.obstacles = genMap();
+      setupDuel();
+      layoutStage();
       G.goal = BASE_MAX_HP;
       spawnTeams();
-      spawnDogs();
-      spawnTanks();
+      if (!G.duel) { spawnDogs(); spawnTanks(); }
       spawnTurrets();
       spawnCreature();
       spawnSwordRock();
       spawnBeasts();
       spawnMedkits();
       spawnPumpkins();
-      el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
+      el.scoreGoal.textContent = G.duel ? duelGoalText() : "他3軍の基地をすべて破壊";
       resize();
       G.running = false; G.over = false;
       lobbyOpen = true;
@@ -10967,12 +13040,12 @@
         .map((s) => ({ n: s.name, tm: s.team }));
     }
 
-    function renderRoster(roster, armyNames) {
+    function renderRoster(roster, armyNames, duelTeams) {
       const byTeam = TEAMS.map(() => []);
       for (const p of roster || []) {
         if (p.tm >= 0 && p.tm < TEAM_COUNT) byTeam[p.tm].push(p.n);
       }
-      el.lobbyRoster.innerHTML = TEAMS.map((team) => {
+      el.lobbyRoster.innerHTML = TEAMS.filter((team) => !duelTeams || duelTeams.includes(team)).map((team) => {
         const def = teamDef(team);
         const members = byTeam[team];
         const names = members.length ? members.map((n) => esc(n)).join("、") : "CPUのみ";
@@ -10985,13 +13058,13 @@
 
     function broadcastLobby() {
       const roster = buildRoster();
-      renderRoster(roster, G.armyNames);
+      renderRoster(roster, G.armyNames, G.duel ? G.duel.teams : null);
       const ready = conns.length > 0;
       el.lobbyStart.classList.toggle("hidden", mode !== "host");
       el.lobbyStart.disabled = !ready || !!countdownTimer;
       el.lobbyStart.textContent = ready ? "全員そろった → 開始" : "参加者を待っています…";
       for (const c of conns) {
-        try { c.send({ t: "lobby", roster, names: G.armyNames }); } catch (e) {}
+        try { c.send({ t: "lobby", roster, names: G.armyNames, duel: G.duel ? G.duel.teams : null }); } catch (e) {}
       }
     }
 
@@ -11002,7 +13075,7 @@
         hp: Number.isFinite(o.hp) ? o.hp : null,
       }));
       conn.send({
-        t: "init", obstacles, goal: G.goal, slotId: slot ? slot.id : -1, stage: G.stage,
+        t: "init", obstacles, traps: G.traps, duel: G.duel, goal: G.goal, slotId: slot ? slot.id : -1, stage: G.stage,
         armyNames: G.armyNames, you: { team: slot ? slot.team : 1 }, paused: matchPaused,
       });
     }
@@ -11164,12 +13237,15 @@
         G = emptyState();
         if (d.stage) { G.stage = d.stage; playerStage = d.stage; }
         G.obstacles = d.obstacles.map((o) => ({ ...o, hp: o.hp == null ? Infinity : o.hp }));
+        G.traps = d.traps || [];
+        G.duel = d.duel || null;
+        if (G.duel) for (const base of G.bases) base.hidden = true;
         G.goal = d.goal;
         G.localId = d.slotId;
         G.armyNames = d.armyNames || G.armyNames;
         if (d.you && d.you.team != null) playerTeam = d.you.team;
         localInput.aimAngle = BASE_SPOTS[playerTeam].heading;
-        el.scoreGoal.textContent = "他3軍の基地をすべて破壊";
+        el.scoreGoal.textContent = G.duel ? duelGoalText() : "他3軍の基地をすべて破壊";
         resize();
         hideOverlays();
         beginMatchTracking();
@@ -11181,7 +13257,7 @@
         playerTeam = d.team;
         showLobby(roomCode, `あなたは ${d.name || teamDef(d.team).name}。ホストの開始を待っています…`);
       } else if (d.t === "lobby") {
-        renderRoster(d.roster, d.names);
+        renderRoster(d.roster, d.names, d.duel);
       } else if (d.t === "countdown") {
         showLobby(roomCode, `ゲーム開始まで ${d.n} 秒`, true);
       } else if (d.t === "reject") {
@@ -11212,10 +13288,14 @@
       for (const ns of d.s) {
         seen.add(ns.id);
         let s = G.soldiers.find((x) => x.id === ns.id);
+        const fresh = !s;
         if (!s) {
           s = { id: ns.id, legPhase: 0, muzzle: 0, hitFlash: 0, recoil: 0, lastFootstepAt: -99999, heardUntil: 0 };
           G.soldiers.push(s);
         }
+        // 助っ人のクローはゲートから出てくる
+        if (fresh && ns.cl === "claw") { openPortal(ns.x, ns.y); s.appearAt = now(); }
+        s.shoutUntil = now() + (ns.yl || 0);
         s.team = ns.tm; s.name = ns.n; s.level = ns.lv;
         s.hp = ns.hp; s.maxHp = ns.mh; s.dead = ns.d ? true : false;
         s.weapon = ns.w; s.aimAngle = ns.a;
@@ -11232,9 +13312,26 @@
         s.kills = ns.ki || 0; s.deaths = ns.de || 0;
         s.moving = ns.mv ? true : false; s.noiseRadius = ns.nr || 0;
         s.bladeSide = ns.bs || 0; s.gunSide = ns.gs || 0; s.flying = !!ns.fy; s.nvgOn = !!ns.nv;
-        if (ns.fl) s.muzzle = now();
+        // 水をかけられた・倒れて再生を待っている、の知らせはホストでしか出ないので、ここで出す
+        const wasSoaked = now() < (s.soakedUntil || 0), wasDowned = !!s.downed;
+        s.soakedUntil = ns.sk ? now() + ns.sk : 0;
+        s.downed = !!ns.dn; s.regenUntil = now() + (ns.dn || 0);
+        if (s.id === G.localId) {
+          if (ns.sk && !wasSoaked) banner(SOAKED_BANNER);
+          if (s.downed && !wasDowned) banner(DOWNED_BANNER);
+          if (wasDowned && !s.downed && !s.dead) { Audio.heal(); banner(REVIVED_BANNER); }
+        }
+        if (ns.fl) {
+          s.muzzle = now();
+          const fw = WEAPONS[ns.w];
+          if (fw && !fw.water) comicHit(s, !!fw.melee);
+        }
         s.rx = ns.x; s.ry = ns.y;
         if (s.x == null) { s.x = ns.x; s.y = ns.y; }
+      }
+      // 帰っていった助っ人のところに、ゲートを開く
+      for (const s of G.soldiers) {
+        if (!seen.has(s.id) && s.classKey === "claw" && !s.dead) openPortal(s.x, s.y);
       }
       G.soldiers = G.soldiers.filter((s) => seen.has(s.id));
       // 軍用犬
@@ -11245,11 +13342,16 @@
         if (!dog) {
           dog = { kind: "dog", id: nd.id, x: nd.x, y: nd.y, rx: nd.x, ry: nd.y, biteAt: 0, hitFlash: 0 };
           G.dogs.push(dog);
+          if (nd.pl) popFromBody(nd.x, nd.y);
         }
+        // ドッグプールが傭兵のまわりを回り終えたら、ハートを出す
+        if (nd.pl && nd.lv && !dog.loved) showLove(nd.x, nd.y);
+        dog.pool = !!nd.pl; dog.loved = !!nd.lv;
         dog.team = nd.tm; dog.name = nd.n; dog.hp = nd.hp; dog.maxHp = nd.mh;
         dog.dead = !!nd.d; dog.angle = nd.a; dog.moving = !!nd.mv; dog.rx = nd.x; dog.ry = nd.y;
         if (nd.bt) dog.biteAt = now();
       }
+      for (const dog of G.dogs) if (!dogSeen.has(dog.id) && dog.pool) popFromBody(dog.x, dog.y);
       G.dogs = G.dogs.filter((dog) => dogSeen.has(dog.id));
       // 戦車
       const tankSeen = new Set();
@@ -11276,7 +13378,7 @@
       // 弾(置き換え)
       G.bullets = d.b.map((b) => ({
         x: b.x, y: b.y, vx: b.vx, vy: b.vy, range: 9999, traveled: 0,
-        kind: b.sh ? "shell" : "bullet", col: b.sn ? "#bfe6ff" : "#ffe49a", len: b.sn ? 24 : 16,
+        kind: b.sh ? "shell" : "bullet", col: b.sn ? "#bfe6ff" : "#ffe49a", len: b.sn ? 24 : 16, water: !!b.wt,
       }));
       const nt = now();
       G.grenades = (d.g || []).map((g) => ({
@@ -11348,12 +13450,16 @@
         rh: Math.max(0, AUTO_HEAL_DELAY_MS - (stamp - o.lastDamagedAt)),
         ki: o.kills, de: o.deaths, mv: o.moving ? 1 : 0, nr: o.noiseRadius || 0,
         bs: o.bladeSide || 0, gs: o.gunSide || 0, fy: o.flying ? 1 : 0, nv: o.nvgOn ? 1 : 0,
+        sk: Math.max(0, Math.round((o.soakedUntil || 0) - stamp)),
+        dn: o.downed ? Math.max(1, Math.round(o.regenUntil - stamp)) : 0,
+        yl: Math.max(0, Math.round((o.shoutUntil || 0) - stamp)),
         fl: (stamp - o.muzzle < (WEAPONS[o.weapon].melee ? 190 : 60)) ? 1 : 0,
       }));
       const dg = G.dogs.map((dog) => ({
         id: dog.id, tm: dog.team, n: dog.name, x: Math.round(dog.x), y: Math.round(dog.y),
         a: +dog.angle.toFixed(2), hp: Math.round(dog.hp), mh: dog.maxHp, d: dog.dead ? 1 : 0,
         mv: dog.moving ? 1 : 0, bt: stamp - dog.biteAt < 180 ? 1 : 0,
+        pl: dog.pool ? 1 : 0, lv: dog.loved ? 1 : 0,
       }));
       const tn = G.tanks.map((tank) => {
         const tw = tankWeaponOf(tank);
@@ -11369,7 +13475,7 @@
       });
       const b = G.bullets.map((x) => ({
         x: Math.round(x.x), y: Math.round(x.y), vx: Math.round(x.vx), vy: Math.round(x.vy),
-        sn: x.len > 20 ? 1 : 0, sh: x.kind === "shell" ? 1 : 0,
+        sn: x.len > 20 ? 1 : 0, sh: x.kind === "shell" ? 1 : 0, wt: x.water ? 1 : 0,
       }));
       const g = G.grenades.map((x) => ({
         x: Math.round(x.x), y: Math.round(x.y), vx: Math.round(x.vx), vy: Math.round(x.vy), ro: +x.rotation.toFixed(2),
@@ -11528,15 +13634,33 @@
 
     // ステージ
     const savedStage = store.getItem("wz-stage");
-    playerStage = STAGE_BY_KEY[savedStage] ? savedStage : "field";
-    el.stageSeg.innerHTML = STAGES.map((st) =>
-      `<button data-stage="${st.key}"><span class="class-head">${st.icon} ${esc(st.name)}</span>` +
-      `<span class="class-desc">${esc(st.desc)}</span></button>`).join("");
+    playerStage = STAGE_BY_KEY[savedStage] || customStageOf(savedStage) ? savedStage : "field";
+    function renderStageButtons() {
+      const own = customStages.map((c) => {
+        const theme = STAGE_BY_KEY[c.theme];
+        return `<button data-stage="${esc(customStageKey(c))}"><span class="class-head">🛠 ${esc(c.name)}</span>` +
+          `<span class="class-desc">ステージ作りで作ったステージ（世界観：${theme.icon} ${esc(theme.name)}）</span></button>`;
+      });
+      el.stageSeg.innerHTML = STAGES.map((st) =>
+        `<button data-stage="${st.key}"><span class="class-head">${st.icon} ${esc(st.name)}</span>` +
+        `<span class="class-desc">${esc(st.desc)}</span></button>`).concat(own).join("");
+    }
     function syncStageButtons() {
       el.stageSeg.querySelectorAll("button").forEach((b) => {
         b.classList.toggle("on", b.dataset.stage === playerStage);
       });
     }
+    // ステージ作りで作ったり消したりしたら、一覧を作り直す
+    syncMenuStageButtons = function () {
+      if (!STAGE_BY_KEY[playerStage] && !customStageOf(playerStage)) {
+        playerStage = "field";
+        store.setItem("wz-stage", playerStage);
+      }
+      renderStageButtons();
+      syncStageButtons();
+      syncOnlineAvailability();
+    };
+    renderStageButtons();
     // 練習場は1人用なので、選んでいる間はオンライン対戦を伏せる
     const onlineBtn = document.getElementById("btn-online");
     function syncOnlineAvailability() {
@@ -11559,7 +13683,7 @@
     const savedClass = store.getItem("wz-class");
     playerClass = CLASS_BY_KEY[savedClass] && hasChar(savedClass) ? savedClass : "soldier";
     function renderClassButtons() {
-      el.classSeg.innerHTML = CLASSES.map((c) => {
+      el.classSeg.innerHTML = CLASSES.filter((c) => !c.summon).map((c) => {
         const got = hasChar(c.key);
         const rank = charRank(c.key);
         return `<button data-class="${c.key}"${got ? "" : " disabled"}>` +
@@ -11623,6 +13747,22 @@
       });
     });
 
+    // 対戦の形 (4軍戦 / 1対1)。ソロ戦にもオンライン対戦にも効く。
+    const soloBtn = document.getElementById("btn-solo");
+    function syncModeButtons() {
+      document.querySelectorAll("#mode-seg button").forEach((x) => x.classList.toggle("on", x.dataset.mode === matchMode));
+      soloBtn.textContent = matchMode === "duel" ? "ソロ戦（CPUと1対1）" : "ソロ戦（CPUと対戦）";
+    }
+    matchMode = store.getItem("wz-mode") === "duel" ? "duel" : "army";
+    document.querySelectorAll("#mode-seg button").forEach((b) => {
+      b.addEventListener("click", () => {
+        matchMode = b.dataset.mode === "duel" ? "duel" : "army";
+        store.setItem("wz-mode", matchMode);
+        syncModeButtons();
+      });
+    });
+    syncModeButtons();
+
     document.getElementById("btn-solo").addEventListener("click", () => { Audio.unlock(); Net.shutdown(); startSoloMatch(); });
     document.getElementById("btn-online").addEventListener("click", () => {
       el.menuMain.classList.add("hidden");
@@ -11682,6 +13822,7 @@
     el.tpSkip.addEventListener("click", () => { if (training && !training.done) training.skip = true; });
     // ---- 拠点(庭) ----
     document.getElementById("btn-garden").addEventListener("click", () => { Audio.unlock(); enterGarden(); });
+    document.getElementById("btn-editor").addEventListener("click", () => { Audio.unlock(); Editor.open(); });
     document.getElementById("btn-result-garden").addEventListener("click", () => { Audio.unlock(); enterGarden(); });
     document.getElementById("btn-garden-menu").addEventListener("click", () => { leaveGarden(); openMenu(); });
 
@@ -11811,6 +13952,7 @@
     commitRun(false);
     if (G) { G.running = false; }
     if (scene === "garden") leaveGarden();
+    if (scene === "editor") Editor.close();
     scene = "menu";
     syncMenuClassButtons();
     refreshWallets();
