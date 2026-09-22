@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ORE TO ARMADA ― 鉱石から大艦隊へ</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= HUD ================= -->
+<div id="hud" class="hidden">
+  <div class="panel" id="tl">
+    <div class="who"><span id="modeLabel">操縦中</span><span id="toolLabel"></span></div>
+    <div class="bar"><span class="lbl">体力</span><div class="track"><div id="hpFill" class="fill hp"></div></div><span id="hpNum" class="num"></span></div>
+    <div class="bar"><span class="lbl">酸素</span><div class="track"><div id="o2Fill" class="fill o2"></div></div><span id="o2Num" class="num"></span></div>
+    <div class="bar"><span class="lbl">スーツ電力</span><div class="track"><div id="suitFill" class="fill suit"></div></div><span id="suitNum" class="num"></span></div>
+  </div>
+
+  <div class="panel" id="tr">
+    <div class="money"><span id="credits">0</span> ₵ <span class="sep"></span> <span id="dayLabel">1日目</span></div>
+    <div id="shipBox">
+      <div class="shipName" id="shipName"></div>
+      <div class="bar"><span class="lbl">船体</span><div class="track"><div id="hullFill" class="fill hull"></div></div><span id="hullNum" class="num"></span></div>
+      <div class="bar"><span class="lbl">電力</span><div class="track"><div id="powFill" class="fill pow"></div></div><span id="powNum" class="num"></span></div>
+      <div class="bar"><span class="lbl">水素</span><div class="track"><div id="h2Fill" class="fill h2"></div></div><span id="h2Num" class="num"></span></div>
+      <div class="bar" id="shieldRow"><span class="lbl">バリア</span><div class="track"><div id="shFill" class="fill sh"></div></div><span id="shNum" class="num"></span></div>
+      <div class="bar"><span class="lbl">貨物</span><div class="track"><div id="cargoFill" class="fill cargo"></div></div><span id="cargoNum" class="num"></span></div>
+      <div class="line"><span id="speedLabel"></span><span id="assistLabel"></span></div>
+    </div>
+  </div>
+
+  <div id="topc">
+    <div class="panel" id="quest"><span class="qmark">目標</span> <span id="questText"></span></div>
+    <div id="warn" class="hidden"></div>
+    <div id="sysLabel"></div>
+  </div>
+
+  <div id="sidebtns">
+    <button class="rbtn" data-act="build" title="建築 (B)">🔧<span>B</span></button>
+    <button class="rbtn" data-act="inv" title="持ち物と貨物 (Tab)">🎒<span>Tab</span></button>
+    <button class="rbtn" data-act="crew" title="乗員 (C)">🧑‍🚀<span>C</span></button>
+    <button class="rbtn" data-act="fleet" title="艦隊 (V)">🚀<span>V</span></button>
+    <button class="rbtn" data-act="map" title="銀河マップ (M)">🗺️<span>M</span></button>
+    <button class="rbtn" data-act="bp" title="設計図 (P)">📐<span>P</span></button>
+    <button class="rbtn" data-act="menu" title="メニュー (Esc)">⚙️<span>Esc</span></button>
+  </div>
+
+  <div id="prompt" class="hidden"></div>
+  <div id="hotbar"></div>
+  <canvas id="minimap" width="200" height="200"></canvas>
+</div>
+
+<div id="toasts"></div>
+
+<!-- ================= 建築 ================= -->
+<div id="build" class="hidden">
+  <div class="panel" id="buildLeft">
+    <div class="btitle">建築モード <span class="keyhint">B で閉じる</span></div>
+    <div id="buildTabs"></div>
+    <div id="buildList"></div>
+    <div id="buildInfo"></div>
+    <div class="bkeys"><span class="key">左クリック</span> 置く <span class="key">右クリック</span> 外す <span class="key">R</span> 回す <span class="key">X</span> 左右対称 <b id="mirrorState">オフ</b></div>
+  </div>
+  <div class="panel" id="buildStats"></div>
+</div>
+
+<!-- ================= パネル ================= -->
+<div id="panelWrap" class="hidden">
+  <div id="panel">
+    <div id="panelHead">
+      <h2 id="panelTitle"></h2>
+      <div id="panelTabs"></div>
+      <button id="panelClose" title="閉じる (Esc)">✕</button>
+    </div>
+    <div id="panelBody"></div>
+  </div>
+</div>
+
+<div id="confirm" class="hidden">
+  <div class="cbox"><p id="confirmText"></p><div class="cbtns"><button class="btn primary" id="confirmYes">はい</button><button class="btn" id="confirmNo">いいえ</button></div></div>
+</div>
+
+<div id="story" class="hidden"><div class="sbox"><h2 id="storyTitle"></h2><p id="storyText"></p><button class="btn primary" id="storyOk">つづける</button></div></div>
+<div id="death" class="hidden"><div class="dbox"><h2>倒れた…</h2><p id="deathText"></p></div></div>
+<div id="flash"></div>
+
+<!-- ================= タイトル ================= -->
+<div id="titleScreen">
+  <div class="tcard">
+    <h1>ORE TO ARMADA</h1>
+    <p class="sub">鉱石から大艦隊へ</p>
+    <p class="lead">銀河の外縁で、中古の採掘艇と 200 クレジットから始まる。隕石を掘って売り、部品を買って船を建て増し、人を雇い、艦隊を組んで、銀河の中心から湧く群体に挑む。宇宙服で外に出れば、酸素は3分しかもたない。</p>
+    <div class="tbtns">
+      <button class="btn primary" id="btnNew">新しく始める</button>
+      <button class="btn" id="btnContinue">つづきから</button>
+      <button class="btn ghost" id="btnImport">セーブファイルを読み込む</button>
+      <button class="btn ghost" id="btnHelp">遊びかた</button>
+    </div>
+    <div id="diffPick" class="hidden">
+      <p>難しさを選ぶ</p>
+      <div class="tbtns">
+        <button class="btn primary" id="btnSurvival">サバイバル<small>酸素・給料・襲撃がきびしい (おすすめ)</small></button>
+        <button class="btn" id="btnRelaxed">のんびり<small>酸素の減りが半分、基地への襲撃なし</small></button>
+      </div>
+    </div>
+    <p id="saveWarn" class="warn hidden"></p>
+    <input type="file" id="fileIn" accept=".json,application/json" class="hidden" />
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="grid.js"></script>
+<script src="physics.js"></script>
+<script src="world.js"></script>
+<script src="ship.js"></script>
+<script src="combat.js"></script>
+<script src="actors.js"></script>
+<script src="build.js"></script>
+<script src="economy.js"></script>
+<script src="crew.js"></script>
+<script src="sector.js"></script>
+<script src="fleet.js"></script>
+<script src="render.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

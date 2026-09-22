@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>CELLHOUSE ― 塀の中をつくる</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= タイトル ================= -->
+<div id="title">
+  <div class="tcard">
+    <p class="kicker">刑務所をつくって運営する見下ろし型シミュレーション</p>
+    <h1>CELLHOUSE</h1>
+    <p class="sub">塀の中をつくる</p>
+    <p class="lead">
+      何もない草地に、壁を立て、扉をつけ、房と食堂と運動場をつくる。
+      護送車は毎朝やってくる。食べさせ、眠らせ、見張り、働かせる。
+      不満がたまれば拳がとび、床下では誰かがスプーンで穴を掘っている。
+    </p>
+    <div class="tbtns">
+      <button class="btn primary" id="btnNew">新しく始める</button>
+      <button class="btn" id="btnCont">つづきから</button>
+      <button class="btn ghost" id="btnHow">操作を見る</button>
+    </div>
+    <p id="newWarn">今のセーブデータは消えます。もう一度押すと最初から始まります。</p>
+    <div id="titleHelp">
+      <div class="kgrid">
+        <div><b>ドラッグ</b><span>画面を動かす・範囲を選ぶ</span></div>
+        <div><b>ホイール</b><span>拡大・縮小</span></div>
+        <div><b>R</b><span>設備を回す</span></div>
+        <div><b>スペース</b><span>一時停止</span></div>
+        <div><b>1 2 3</b><span>時間の速さ</span></div>
+        <div><b>右クリック</b><span>道具をやめる</span></div>
+      </div>
+      <p class="hint">スマートフォンでは、1本指でなぞって移動・範囲選択、2本指でつまんで拡大します。</p>
+    </div>
+    <p class="foot">セーブは自動。データはこの端末のブラウザにだけ残ります。</p>
+  </div>
+</div>
+
+<!-- ================= HUD ================= -->
+<div id="hud" class="hide">
+  <div id="top">
+    <div class="box money"><span class="lbl">資金</span><b id="mMoney">¥0</b><span id="mDelta"></span></div>
+    <div class="box clock"><b id="mDay"></b><b id="mTime"></b><span id="mAct" class="chip"></span></div>
+    <div class="box" id="speedBox">
+      <button data-sp="0" title="止める (スペース)">❚❚</button>
+      <button data-sp="1" title="ふつう (1)">▶</button>
+      <button data-sp="2" title="はやい (2)">▶▶</button>
+      <button data-sp="3" title="とてもはやい (3)">▶▶▶</button>
+    </div>
+    <div class="box stats">
+      <span>囚人 <b id="mPris"></b></span>
+      <span>職員 <b id="mStaff"></b></span>
+      <span id="mPowerWrap">電力 <b id="mPower"></b></span>
+      <span>空気 <b id="mMood"></b></span>
+    </div>
+    <div class="box emer">
+      <button id="bSearch" title="一斉捜索">🔦</button>
+      <button id="bLock" title="非常施錠">🔒</button>
+      <button id="bPolice" title="機動隊を呼ぶ">🚓</button>
+      <button id="bSave" title="保存">💾</button>
+      <button id="bHelp" title="遊びかた">？</button>
+    </div>
+  </div>
+
+  <div id="warns"></div>
+  <div id="logBox"></div>
+  <div id="insp" class="hide"></div>
+
+  <div id="toolBar" class="hide">
+    <b id="toolName"></b><span id="toolHelp"></span>
+    <button id="toolRot">回す (R)</button>
+    <button id="toolCancel">やめる</button>
+  </div>
+
+  <div id="drawer" class="hide">
+    <div id="drawerTabs"></div>
+    <div id="drawerItems"></div>
+  </div>
+
+  <div id="toolbar">
+    <button data-drawer="build"><i>🧱</i><span>建設</span></button>
+    <button data-drawer="obj"><i>🛏️</i><span>設備</span></button>
+    <button data-drawer="zone"><i>🗺️</i><span>部屋</span></button>
+    <span class="sep"></span>
+    <button data-modal="staff"><i>👮</i><span>職員</span></button>
+    <button data-modal="sched"><i>🕘</i><span>日課</span></button>
+    <button data-modal="policy"><i>📜</i><span>方針</span></button>
+    <button data-modal="research"><i>🔬</i><span>研究</span></button>
+    <button data-modal="grants"><i>💰</i><span>補助金</span></button>
+    <button data-modal="report"><i>📊</i><span>報告</span></button>
+    <button data-modal="list"><i>👥</i><span>名簿</span></button>
+    <span class="sep"></span>
+    <button id="tZones" class="tog"><i>🎨</i><span>部屋の色</span></button>
+    <button id="tDanger" class="tog"><i>🌡️</i><span>苛立ち</span></button>
+  </div>
+</div>
+
+<!-- ================= 管理パネル ================= -->
+<div id="modal" class="hide">
+  <div class="mcard">
+    <div class="mhead"><h2 id="mTitle"></h2><button id="mClose">✕</button></div>
+    <div id="mBody"></div>
+  </div>
+</div>
+
+<!-- ================= 閉鎖 ================= -->
+<div id="end" class="hide">
+  <div class="tcard">
+    <h1>閉鎖</h1>
+    <div id="endBody"></div>
+    <div class="tbtns"><button class="btn primary" id="btnRestart">もう一度はじめから</button></div>
+  </div>
+</div>
+
+<div id="tip"></div>
+<div id="toasts"></div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="people.js"></script>
+<script src="sim.js"></script>
+<script src="render.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

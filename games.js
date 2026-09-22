@@ -14,6 +14,39 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'ore-to-armada', genre: 'sandbox', players: '1P', date: '2026-09-22',
+    ja: {
+      title: 'ORE TO ARMADA ― 鉱石から大艦隊へ',
+      desc: '中古の採掘艇から始める宇宙サンドボックス。小惑星を掘って稼ぎ、船をブロックで組み上げ、艦隊を率いて銀河の中心を目指す。パソコン向け。',
+    },
+    en: {
+      title: 'Ore to Armada',
+      desc: 'A top-down space sandbox. Mine asteroids, build your ship block by block, hire a crew and lead a fleet toward the galactic core. Keyboard and mouse.',
+    },
+  },
+  {
+    slug: 'dead-drive', genre: 'action', players: '1P', date: '2026-09-22',
+    ja: {
+      title: 'DEAD DRIVE ― 改造車で生きのびろ',
+      desc: 'ゾンビの街を自作の改造車で走るローグライク。昼は食料や仲間を集めに出撃し、夜は基地を守りぬいて10日目の救助を待つ。スマホにも対応。',
+    },
+    en: {
+      title: 'Dead Drive',
+      desc: 'A top-down zombie roguelike in a car you build part by part. Scavenge and rescue survivors by day, defend your base by night, and last ten nights. Plays on phones.',
+    },
+  },
+  {
+    slug: 'cellhouse', genre: 'sandbox', players: '1P', date: '2026-09-22',
+    ja: {
+      title: 'CELLHOUSE ― 塀の中をつくる',
+      desc: '草地に刑務所を建てて運営する経営シミュレーション。房や食堂を作り、囚人の不満を抑えてケンカや脱走や暴動を防ぎながら黒字を保つ。スマホにも対応。',
+    },
+    en: {
+      title: 'Cellhouse',
+      desc: 'A top-down prison management sim. Build cells and canteens, keep prisoners\' needs met, and head off fights, escapes and riots while staying in the black. Plays on phones.',
+    },
+  },
+  {
     slug: 'kaiju-clash', genre: 'fighting', players: '1–2P', date: '2026-09-08',
     ja: {
       title: 'KAIJU CLASH ― 街を壊す怪獣たち',

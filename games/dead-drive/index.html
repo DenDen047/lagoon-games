@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>DEAD DRIVE ― 改造車で生きのびろ</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= 走行中の表示 ================= -->
+<div id="hud" class="hidden">
+  <div id="hudTop">
+    <div class="panel" id="hudDay"><b id="hDay">1日目</b><span id="hPhase"></span></div>
+    <div class="panel" id="hudObj"><span id="objIcon"></span><span id="objText"></span></div>
+  </div>
+  <div class="panel" id="hudCar">
+    <div class="row" id="cabRow"><span class="lbl">運転席</span><div class="track"><i id="barCab" class="fill cab"></i></div></div>
+    <div class="row"><span class="lbl">車体</span><div class="track"><i id="barBody" class="fill body"></i></div></div>
+    <div class="row" id="nitroRow"><span class="lbl">ニトロ</span><div class="track"><i id="barNitro" class="fill nitro"></i></div></div>
+    <div class="row hidden" id="hqRow"><span class="lbl">本部</span><div class="track"><i id="barHq" class="fill hq"></i></div></div>
+    <div class="nums"><span><b id="spd">0</b> km/h</span><span>📦 <b id="cargo">0</b></span><span>💺 <b id="seats">0</b></span></div>
+  </div>
+  <div id="hudRight">
+    <canvas id="mini" width="170" height="170"></canvas>
+    <div class="panel" id="lootBox"></div>
+  </div>
+  <div id="xpBar"><span id="lvNum">Lv 1</span><div class="track"><i id="xpFill"></i></div></div>
+  <div id="prompt"></div>
+  <button id="btnPause" aria-label="一時停止">II</button>
+  <div id="pad">
+    <div class="stick" id="padMove"><i></i></div>
+    <div class="btns">
+      <button class="pb nitro" data-btn="nitro">ニトロ</button>
+      <button class="pb back" data-btn="back">バック</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<!-- ================= 基地 ================= -->
+<div id="screen" class="hidden">
+  <header id="scrHead">
+    <div class="dayBox"><b id="sDay">1日目</b><span id="sPhase">朝</span><span id="sRaid" class="raid"></span></div>
+    <div id="resBox"></div>
+    <button id="btnMenu" class="btn small ghost" aria-label="メニュー">☰</button>
+  </header>
+  <nav id="tabs">
+    <button data-tab="deploy">🚗 出撃</button>
+    <button data-tab="night">🌙 夜</button>
+    <button data-tab="garage">🔧 ガレージ</button>
+    <button data-tab="base">🏰 基地</button>
+    <button data-tab="crew">👥 仲間</button>
+  </nav>
+  <main id="scrBody"></main>
+  <footer id="scrFoot"></footer>
+</div>
+
+<!-- ================= 窓 ================= -->
+<div id="modal" class="hidden">
+  <div class="mcard">
+    <h2 id="mTitle"></h2>
+    <div id="mBody"></div>
+    <div id="mFoot"></div>
+  </div>
+</div>
+
+<!-- ================= タイトル ================= -->
+<div id="titleScreen">
+  <div class="tcard">
+    <h1>DEAD DRIVE</h1>
+    <p class="sub">改造車で生きのびろ</p>
+    <p class="lead">ゾンビであふれた街を、自分で組んだ車で走る。轢いて、撃って、スーパーで食料を積み、取り残された人を乗せて帰る。夜は群れが基地を襲う。砲台を建て、防壁を厚くして、10日後の救助まで持ちこたえろ。</p>
+    <div class="tbtns">
+      <button class="btn primary" id="btnNew">新しく始める</button>
+      <button class="btn" id="btnContinue">つづきから</button>
+      <button class="btn" id="btnMeta">遺産</button>
+      <button class="btn ghost" id="btnHelp">遊びかた</button>
+    </div>
+    <p id="records"></p>
+    <p class="foot">セーブは自動。データはこの端末のブラウザにだけ残ります。</p>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="car.js"></script>
+<script src="world.js"></script>
+<script src="zombies.js"></script>
+<script src="combat.js"></script>
+<script src="run.js"></script>
+<script src="scene.js"></script>
+<script src="garage.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
