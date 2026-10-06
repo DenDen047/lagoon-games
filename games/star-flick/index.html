@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>STAR FLICK ― 宇宙船で消しピン</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= バトル中の表示 ================= -->
+<div id="hud" class="hidden">
+  <button id="btnPause" aria-label="一時停止">II</button>
+  <div id="actBar" class="hidden">
+    <div id="abHint"></div>
+    <div class="abRow">
+      <div class="abShip"><b id="abName"></b><span id="abHull"></span></div>
+      <div id="spinBox">
+        <button id="spinL" class="ab" aria-label="左回転">⟲</button>
+        <div class="spinMid"><span id="spinVal"></span><small id="spinMax"></small></div>
+        <button id="spinR" class="ab" aria-label="右回転">⟳</button>
+      </div>
+      <button id="btnBarrier" class="ab wide">🛡 バリア <b id="barLeft"></b></button>
+      <button id="btnJet" class="ab wide">🔥 ジェット <b id="jetLeft"></b></button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<!-- ================= メニュー画面 ================= -->
+<div id="screen" class="hidden">
+  <header id="scrHead">
+    <button id="btnBack" class="btn ghost small">← もどる</button>
+    <h2 id="scrTitle"></h2>
+    <div id="coinBox"></div>
+  </header>
+  <main id="scrBody"></main>
+</div>
+
+<!-- ================= 窓 ================= -->
+<div id="modal" class="hidden">
+  <div class="mcard">
+    <h2 id="mTitle"></h2>
+    <div id="mBody"></div>
+    <div id="mFoot"></div>
+  </div>
+</div>
+
+<!-- ================= タイトル ================= -->
+<div id="titleScreen">
+  <div class="tcard">
+    <h1 class="logo"><span>STAR</span> <span>FLICK</span></h1>
+    <p class="sub">宇宙船で消しピン</p>
+    <p class="lead">宇宙船をはじいてぶつけ、相手を宇宙へ落とせ！ 回転やジェットやバリアで改造して、ガチャで形とパーツを集めよう。たおした相手の船は、うばって自分のものにできる。</p>
+    <div class="tbtns">
+      <button class="btn primary big" id="btnCamp">ぼうけん</button>
+      <button class="btn big" id="btnVs">ふたりで対戦</button>
+      <button class="btn" id="btnHangar">ハンガー（改造）</button>
+      <button class="btn" id="btnGacha">ガチャ<span id="gachaBadge" class="badge">10連が引ける！</span></button>
+      <button class="btn ghost" id="btnHelp">遊びかた</button>
+    </div>
+    <p id="titleCoins"></p>
+    <p class="foot">セーブは自動。データはこの端末のブラウザにだけ残ります。</p>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="physics.js"></script>
+<script src="art.js"></script>
+<script src="battle.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
