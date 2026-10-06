@@ -6,15 +6,17 @@
 
 let G = null;
 const DT = 1 / 60;
+// ゲームのティックの中で受ける、押した瞬間だけの操作キー
+const STEP_KEYS = ['KeyF', 'KeyG', 'KeyJ', 'KeyZ', 'KeyR', 'KeyX', 'Digit1', 'Digit2', 'Digit3', 'Digit4'];
 
-function newGameState(seed, diff) {
+function newGameState(seed, diff, creative) {
   const unlocked = {};
   for (const d of BLOCK_LIST) if (d.tier === 1) unlocked[d.id] = true;
   return {
     v: 1, seed, diff, time: 0, day: 1, dayT: TUNE.dayLength * 0.3, credits: TUNE.startCredits, sysId: 0, sysState: {}, visited: {},
     unlocked, blueprints: [], rep: 0, quest: 0, questN: 0, missions: [], doneMissions: [], bossDead: [false, false, false, false],
     loanOut: false, respawn: null, nextId: 1, stats: { mined: 0, kills: 0, earned: 0 }, crew: [], player: null, hiredOffers: [],
-    lastStationSys: 0, opt: { rotate: true, mute: false }, galaxy: null,
+    lastStationSys: 0, opt: { rotate: true, mute: false }, galaxy: null, creative: !!creative, berth: null,
   };
 }
 
@@ -28,6 +30,7 @@ const Game = {
     $('btnNew').onclick = () => { $('diffPick').classList.remove('hidden'); };
     $('btnSurvival').onclick = () => this.start('survival');
     $('btnRelaxed').onclick = () => this.start('relaxed');
+    $('btnCreative').onclick = () => this.start('relaxed', true);
     $('btnContinue').onclick = () => { const d = Save.read(); if (d) this.load(d); };
     $('btnImport').onclick = () => $('fileIn').click();
     $('btnHelp').onclick = () => { $('titleScreen').classList.add('hidden'); this.previewHelp = true; UI.open('help'); };
@@ -58,9 +61,9 @@ const Game = {
     Render.cam.x = cx; Render.cam.y = cy; Render.cam.zoom = 0.62;
     this.title = true;
   },
-  start(diff) {
+  start(diff, creative) {
     const seed = (Math.random() * 1e9) | 0;
-    G = newGameState(seed, diff);
+    G = newGameState(seed, diff, creative);
     G.galaxy = makeGalaxy(seed);
     Grid.seq = 0;
     Sector.build(0, 'start');
@@ -81,6 +84,7 @@ const Game = {
     Sfx.muted = false;
     this.begin();
     Toast.show('まずは近くの小惑星を掘ろう。マウスを小惑星に向けて左クリック', 'good');
+    if (G.creative) Toast.show('クリエイティブ: ブロックは材料なしで置ける。乗員は C の画面でいつでも足せる', 'good');
     Save.write(true);
   },
   load(d) {
@@ -94,7 +98,7 @@ const Game = {
     G.player = makePerson('player', { name: 'あなた', color: '#e8864a', hp: pd.hp, o2: pd.o2, suit: pd.suit, inv: pd.inv || {}, tool: pd.tool || 1 });
     const g = pd.station ? S.station : S.grids.find((o) => o.id === pd.gridId);
     if (g && pd.mode === 'seat' && pd.seat) { const b = g.at(pd.seat[0], pd.seat[1]); if (b && b.def.seat) sitDown(G.player, g, b); else { G.player.mode = 'walk'; G.player.grid = g; G.player.lx = pd.lx; G.player.ly = pd.ly; } }
-    else if (g && pd.mode === 'walk') { G.player.mode = 'walk'; G.player.grid = g; G.player.lx = pd.lx; G.player.ly = pd.ly; }
+    else if (g && pd.mode === 'walk') { G.player.mode = 'walk'; G.player.grid = g; G.player.lx = pd.lx; G.player.ly = pd.ly; unstick(G.player); }
     else { G.player.mode = 'eva'; G.player.x = pd.x; G.player.y = pd.y; G.player.vx = pd.vx || 0; G.player.vy = pd.vy || 0; }
     Sfx.muted = !!(G.opt && G.opt.mute);
     this.begin();
@@ -149,18 +153,21 @@ const Game = {
     if (this.title) { Render.cam.x += raw * 0.6; this.draw(); return; }
     if (!this.running) return;
     this.keys();
+    let carry = false;
     if (!this.paused && !UI.isOpen) {
       this.acc += raw;
       let n = 0;
       this.edge = true;
       while (this.acc >= DT && n < 4) { this.step(DT); this.acc -= DT; n++; this.edge = false; }
       if (n >= 4) this.acc = 0;
+      // ティックが進まなかったフレーム (120Hz などの画面で起きる) では、操作のキーを次のフレームへ持ち越す
+      carry = n === 0;
     }
     this.camera(raw);
     this.draw();
     UI.hud(raw);
     if (Build.on) { UI.buildStatsT = (UI.buildStatsT || 0) - raw; if (UI.buildStatsT <= 0) { UI.buildStatsT = 0.25; UI.buildStats(); UI.buildInfo(); } }
-    Input.endFrame();
+    Input.endFrame(carry ? STEP_KEYS : null);
   },
 
   step(dt) {
@@ -189,6 +196,7 @@ const Game = {
     // 4. 物理
     for (const g of S.grids) if (!g.dead && !g.terrain) Phys.control(g, dt);
     for (const g of S.grids) if (!g.dead) Phys.integrate(g, dt);
+    Planet.tick(dt);
     Phys.collideAll(S.grids, (A, ai, aj, B, bi, bj, v) => this.impact(A, ai, aj, B, bi, bj, v));
     // 5. 武器
     const gs = p.mode === 'seat' && p.seat && p.seat.def.seat === 'gunner' ? p.grid : null;
@@ -283,8 +291,9 @@ const Game = {
     // 基地・漂流船での発見
     if (p.mode === 'walk' && p.grid && p.grid.bpLoot) {
       const id = p.grid.bpLoot; p.grid.bpLoot = null;
-      if (!G.unlocked[id]) { G.unlocked[id] = true; UI.buildPalette && Build.on && UI.buildPalette(); Toast.show(`漂流船の中で設計図「${BLOCKS[id].name}」を見つけた！`, 'good'); Sfx.play('coin'); }
-      else { Econ.earn(200, '漂流船の中で古いデータを見つけて売った'); }
+      const where = p.grid.kind === 'ruin' ? '古い基地の跡' : '漂流船の中';
+      if (!G.unlocked[id]) { G.unlocked[id] = true; UI.buildPalette && Build.on && UI.buildPalette(); Toast.show(`${where}で設計図「${BLOCKS[id].name}」を見つけた！`, 'good'); Sfx.play('coin'); }
+      else { Econ.earn(200, `${where}で古いデータを見つけて売った`); }
     }
   },
   pickTarget(ship, mw) {
@@ -303,7 +312,9 @@ const Game = {
     if (p.mode === 'seat') {
       const g = p.grid;
       standUp(p);
-      if (p.mode === 'eva') Toast.show('宇宙服で船外に出た。酸素は3分もつ');
+      const surf = Planet.surfAt(personWorld(p).x, personWorld(p).y);
+      if (p.mode === 'eva' && surf) Toast.show(PLANET_TYPES[surf.type].air ? '船を降りた。地上を歩ける' : '船を降りた。空気がないので、酸素は3分もつ');
+      else if (p.mode === 'eva') Toast.show('宇宙服で船外に出た。酸素は3分もつ');
       if (Build.on) Build.exit();
       return;
     }
@@ -311,6 +322,13 @@ const Game = {
     if (!t) return;
     const d = t.b.def;
     if (d.seat) {
+      // 乗員が座っていたら、席を代わってもらう (主人公がいつでも自分で操縦できるように)
+      if (t.b.occ && t.b.occ !== p) {
+        const c = t.b.occ;
+        if (c.kind !== 'crew') { Toast.show('ほかの人が座っている', 'bad'); return; }
+        standUp(c); c.jobKey = null; c.path = null;
+        Toast.show(`${c.name} と${d.seat === 'pilot' ? '操縦' : '砲手'}を代わった`);
+      }
       if (t.g.faction !== 'player' && t.g.kind !== 'station') {
         // 拿捕
         if (t.g.sys.bioCores.length) { Toast.show('生きた船は奪えない', 'bad'); return; }
@@ -322,9 +340,10 @@ const Game = {
       sitDown(p, t.g, t.b);
       return;
     }
+    if (d.kiosk === 'k_board') { this.boardMenu(); return; }
     if (d.kiosk) {
       const map = { k_market: 'market', k_parts: 'parts', k_bp: 'bp', k_hire: 'hire', k_mission: 'mission', k_med: 'med', k_yard: 'yard', k_repair: 'repair' };
-      this.openStation(map[d.kiosk], null);
+      this.openStation(map[d.kiosk]);
       return;
     }
     if (d.medbay) { G.respawn = { sys: S.sys.id, gridId: t.g.id, i: t.b.x, j: t.b.y }; Toast.show('この医療室を蘇生地点にした', 'good'); return; }
@@ -346,26 +365,80 @@ const Game = {
     if (carrier) return { text: `${carrier.name} に着艦する`, fn: () => Fleet.dock(ship, carrier, true) };
     const pair = Fleet.connectorPair(ship);
     if (pair && pair.o.kind !== 'station') return { text: `${pair.o.name} とつなぐ`, fn: () => { const [c, par] = ship.mass <= pair.o.mass ? [ship, pair.o] : [pair.o, ship]; Fleet.dock(c, par, false); } };
+    const v = Math.hypot(ship.vx, ship.vy);
     if (S.station && dist(ship.x, ship.y, S.station.x, S.station.y) < S.station.radius + ship.radius + 40) {
-      const v = Math.hypot(ship.vx, ship.vy);
-      return { text: v < 12 ? '入港する' : '入港するには速度を落とす', fn: () => { if (v < 12) this.openStation('market', ship); else Toast.show('速すぎる。止まってから G', 'bad'); } };
+      return { text: v < 12 ? '入港して、ステーションの中を歩く' : '入港するには速度を落とす', fn: () => { if (v < 12) this.enterStation(ship); else Toast.show('速すぎる。止まってから G', 'bad'); } };
     }
     for (const gt of S.gates) if (dist(ship.x, ship.y, gt.x, gt.y) < 30) {
       const to = G.galaxy.systems[gt.gateTo];
       return { text: `ゲートで ${to.name} へ (通行料 50 ₵〜)`, fn: () => { UI.confirm(`${to.name} (${RINGS[to.ring].name}) へゲートで移る？ 通行料は1隻 50 ₵。「ついてこい」の船も一緒に移る。`, () => Fleet.travel(to.id, 'gate')); } };
     }
+    // 惑星に降りる・上がるのは動く船だけ (基地は岩に固定されている)
+    if (ship.kind !== 'ship' || ship.static) return null;
+    const surf = Planet.surfAt(ship.x, ship.y);
+    if (surf) return { text: `${surf.name} から宇宙へ上がる`, fn: () => Planet.takeoff(ship, surf) };
+    const P = Planet.under(ship);
+    if (P) return { text: v < 12 ? `${P.name} (${PLANET_TYPES[P.type].name}) に降りる` : `${P.name} に降りるには速度を落とす`, fn: () => { if (v < 12) Planet.land(ship, P); else Toast.show('速すぎる。止まってから G', 'bad'); } };
     return null;
   },
-  openStation(tab, ship) {
-    Econ.dockShip = ship || null;
-    if (ship) { ship.vx = 0; ship.vy = 0; ship.va = 0; Missions.checkAtStation(S.sys); }
-    else { const near = nearestGridTo(S.station.x, S.station.y, 60, (g) => g.faction === 'player' && g.kind === 'ship'); Econ.dockShip = near; Missions.checkAtStation(S.sys); }
+  /* 船でステーションに入港する。船は外に止め、主人公は中の乗り場に立つ */
+  enterStation(ship) {
+    const p = G.player, st = S.station;
+    // 止めた船は、前の命令 (採掘など) を続けて離れていかないよう待機させる
+    ship.vx = 0; ship.vy = 0; ship.va = 0; ship.order = { type: 'wait' };
+    G.berth = { gridId: ship.id };
+    if (Build.on) Build.exit();
+    standUp(p);
+    st.updateSys();
+    // 船に近い方の乗り場に立つ
+    const k = st.sys.kiosks.filter((b) => b.def.kiosk === 'k_board').sort((a, b) => { const wa = st.blockWorld(a), wb = st.blockWorld(b); return dist2(wa.x, wa.y, ship.x, ship.y) - dist2(wb.x, wb.y, ship.x, ship.y); })[0];
+    const c = cellsBeside(st, k, p).sort((a, b) => dist2(a[0], a[1], k.x, k.y + 1) - dist2(b[0], b[1], k.x, k.y + 1))[0];
+    p.mode = 'walk'; p.grid = st; p.seat = null; p.att = null; p.lx = c[0] + 0.5; p.ly = c[1] + 0.5;
+    Render.cam.zoom = Math.max(Render.cam.zoom, 1.3);
+    Fleet.rejoinPods(ship);
+    Econ.dockShip = ship;
+    Missions.checkAtStation(S.sys);
+    Econ.dockShip = null;
     G.lastStationSys = S.sys.id;
     Crew.onDock();
-    Fleet.rejoinPods && ship && Fleet.rejoinPods(ship);
-    UI.open('station', tab);
+    Toast.show('ステーションに入った。歩いて店の窓口に行き F で入る。船に戻るときは「船の乗り場」で F', 'good');
+    Save.write(true);
+  },
+  /* 入港して止めてある船 (なければ null) */
+  berthShip() {
+    const b = G.berth, st = S.station;
+    const g = b && st && S.grids.find((o) => o.id === b.gridId && !o.dead && o.faction === 'player');
+    return g && dist(g.x, g.y, st.x, st.y) < st.radius + g.radius + 80 ? g : null;
+  },
+  /* 窓口で F: その店の画面を開く。売り買いは止めてある船の貨物で行う */
+  openStation(tab) {
+    Econ.dockShip = this.berthShip() || nearestGridTo(S.station.x, S.station.y, 60, (g) => g.faction === 'player' && g.kind === 'ship');
+    Missions.checkAtStation(S.sys);
+    G.lastStationSys = S.sys.id;
+    Crew.onDock();
+    UI.open('station', tab, { only: true });
     this.pause();
     Save.write(true);
+  },
+  /* 船の乗り場で F: ステーションのそばの持ち船を選んで操縦席に座る */
+  boardMenu() {
+    const st = S.station, berth = this.berthShip();
+    const ships = S.grids.filter((g) => g.faction === 'player' && g.kind === 'ship' && !g.dead && !g.dockedTo && dist(g.x, g.y, st.x, st.y) < st.radius + g.radius + 150 && g.hasControl());
+    if (!ships.length) { Toast.show('そばに乗れる船がない。造船所で買うか、エアロックから宇宙服で外へ出よう', 'bad'); return; }
+    ships.sort((a, b) => (b === berth) - (a === berth) || dist2(a.x, a.y, st.x, st.y) - dist2(b.x, b.y, st.x, st.y));
+    if (ships.length === 1) { this.boardShip(ships[0]); return; }
+    UI.choice('どの船に乗る？', ships.slice(0, 6).map((g) => [g.name + (g === berth ? ' (乗ってきた船)' : ''), () => this.boardShip(g)]).concat([['やめる', null]]));
+  },
+  boardShip(g) {
+    const p = G.player;
+    g.updateSys();
+    const seat = g.sys.pilotSeats.find((b) => !b.occ || b.occ.kind === 'crew');
+    if (!seat) { Toast.show('空いている操縦席がない', 'bad'); return; }
+    if (seat.occ) standUp(seat.occ);
+    if (g.abandoned) g.abandoned = false;
+    sitDown(p, g, seat);
+    G.berth = null;
+    Toast.show(`${g.name} の操縦席に座った。WASD で動かせる`, 'good');
   },
   openShipyard(base) {
     if (!G.blueprints.length) { Toast.show('設計図がない。P の画面で船を設計図に保存しよう', 'bad'); return; }
@@ -373,8 +446,8 @@ const Game = {
     UI.choice('造船台で組み上げる設計図を選ぶ (材料は基地の貨物から使う)', list.map((bp) => [bp.name, () => this.buildAtYard(base, bp)]).concat([['やめる', null]]));
   },
   buildAtYard(base, bp) {
-    const cost = blueprintCost(bp);
-    if (bp.blocks.some(([id]) => !G.unlocked[id])) { Toast.show('持っていない設計図のブロックがある', 'bad'); return; }
+    const cost = G.creative ? {} : blueprintCost(bp);
+    if (!G.creative && bp.blocks.some(([id]) => !G.unlocked[id])) { Toast.show('持っていない設計図のブロックがある', 'bad'); return; }
     const lack = Object.keys(cost).filter((k) => base.invTotal(k) < cost[k]);
     if (lack.length) { Toast.show('基地の貨物に材料が足りない: ' + lack.map((k) => `${ITEMS[k].name} ${cost[k] - base.invTotal(k)}`).join('、'), 'bad'); return; }
     for (const k in cost) base.invTake(k, cost[k]);
@@ -548,10 +621,15 @@ const Game = {
   draw() {
     const R = Render, t = this.t;
     R.frame++;
-    R.background(S ? { bg: S.sys.bg, nebulae: S.layout.nebulae } : null, t);
-    if (!S) return;
-    R.sun({ star: S.star });
+    const surf = S && Planet.surfAt(R.cam.x, R.cam.y);
+    if (surf) R.ground(surf, t);
+    else {
+      R.background(S ? { bg: S.sys.bg, nebulae: S.layout.nebulae } : null, t);
+      if (!S) return;
+      R.sun({ star: S.star });
+    }
     R.worldTransform();
+    if (!surf) R.planets(S.layout.planets, t);
     const vr = R.viewRadius(), cam = R.cam;
     for (const g of S.grids) {
       g.onScreen = dist2(g.x, g.y, cam.x, cam.y) < (vr + g.radius) ** 2;
@@ -571,6 +649,8 @@ const Game = {
     // 依頼や救難信号の方向
     R.buildGhost(t);
     R.fog(G.player);
+    // 店の札は壁の向こうでも読めるように、見えない所を暗くしたあとに描く
+    if (S.station && S.station.onScreen) { R.worldTransform(); R.stationSigns(S.station, t); }
     this.offscreenArrows();
     R.trimCache(S.grids);
     if (!this.title) UI.minimap();
@@ -580,8 +660,10 @@ const Game = {
     const R = Render, ctx = R.ctx;
     ctx.setTransform(R.dpr, 0, 0, R.dpr, 0, 0);
     const pts = [];
-    for (const m of S.markers) pts.push({ x: m.x, y: m.y, c: '#ffe35a' });
-    for (const m of G.missions) if (m.pos && m.sys === S.sys.id && !m.rescued) pts.push({ x: m.pos.x, y: m.pos.y, c: '#ffe35a' });
+    // 地上からは宇宙の目印は見えない
+    const space = !Planet.surfAt(R.cam.x, R.cam.y);
+    if (space) for (const m of S.markers) pts.push({ x: m.x, y: m.y, c: '#ffe35a' });
+    if (space) for (const m of G.missions) if (m.pos && m.sys === S.sys.id && !m.rescued) pts.push({ x: m.pos.x, y: m.pos.y, c: '#ffe35a' });
     const ship = playerShip();
     if (ship && ship.target && !ship.target.dead) pts.push({ x: ship.target.x, y: ship.target.y, c: '#ff5a5a' });
     for (const p of pts) {

@@ -31,6 +31,7 @@ const TUNE = {
   fragmentMin: 9,        // これ未満のブロック数の破片は回収物になる
   deathFine: 0.1,
   towFine: 0.2,
+  surfaceR: 460,         // 惑星の地上の広さ (半径、マス)
 };
 
 /* ---------------- アイテム ---------------- */
@@ -208,6 +209,8 @@ B('bio_jaw', { cat: 'bio', name: '顎', tier: 99, hp: 180, mass: 2, air: 'leak',
 B('bio_spore', { cat: 'bio', name: '胞子砲', tier: 99, hp: 120, mass: 2, air: 'leak', turret: true, weapon: 'spore', noBuild: true });
 B('bio_regen', { cat: 'bio', name: '再生腺', tier: 99, hp: 150, mass: 2, air: 'leak', regen: 6, noBuild: true });
 B('bio_flesh', { cat: 'bio', name: '肉', tier: 99, hp: 120, mass: 1.5, air: 'leak', noBuild: true });
+// ステーションの船の乗り場 (保存の番号がずれないよう、ブロックの一覧の最後に足す)
+B('k_board', { cat: 'station', name: '船の乗り場', tier: 99, hp: 99999, mass: 5, kiosk: 'k_board', noBuild: true });
 
 const BUILD_CATS = ['struct', 'control', 'power', 'thrust', 'defense', 'weapon', 'life', 'prod', 'dock'];
 
@@ -401,7 +404,7 @@ const SHIPS = {
 /* ---------------- ステーションと拠点の型 ---------------- */
 const STATION_LEGEND = {
   '#': ['st_wall', 0], '=': ['st_glass', 0], '1': ['k_market', 0], '2': ['k_parts', 0], '3': ['k_bp', 0], '4': ['k_hire', 0],
-  '5': ['k_mission', 0], '6': ['k_med', 0], '7': ['k_yard', 0], '8': ['k_repair', 0],
+  '5': ['k_mission', 0], '6': ['k_med', 0], '7': ['k_yard', 0], '8': ['k_repair', 0], '9': ['k_board', 0],
 };
 const STATION_ROWS = (() => {
   const hub = [
@@ -410,7 +413,7 @@ const STATION_ROWS = (() => {
     '#__1__#__2__#__3__#__4__#',
     '#_____#_____#_____#_____#',
     '###D#####D#####D#####D###',
-    'L_______________________L',
+    'L9_____________________9L',
     '+__________c____________+',
     '###D#####D#####D#####D###',
     '#_____#_____#_____#_____#',
@@ -420,6 +423,16 @@ const STATION_ROWS = (() => {
   ];
   return hub.map((r, y) => (y === 5 || y === 6) ? '.....' + r + '.....' : 'SSSSS' + r + 'SSSSS');
 })();
+/* 惑星の地上にある古い基地の跡 */
+const RUIN_ROWS = [
+  '..#####..',
+  '.##_K_##.',
+  '##_____##',
+  'D___c___D',
+  '##_____##',
+  '.##_K_##.',
+  '..#=#=#..',
+];
 const HIDEOUT_ROWS = [
   '...w###w...',
   '..##___##..',
@@ -465,3 +478,15 @@ const BOSSES = [
   { ring: 2, key: 'boss_queen', name: '群体の女王', drop: [], bounty: 20000 },
   { ring: 3, key: 'boss_mother', name: '群体の母艦', drop: [], bounty: 50000 },
 ];
+
+/* ---------------- 惑星 ----------------
+   first: 地上でよく取れる鉱石。rare: 星系より1つ内側の環までの珍しい鉱石も出る。
+   tex: 宇宙から見た色 (低い所・高い所・模様)。ground: 地上の地面の色。 */
+const PLANET_TYPES = {
+  green: { name: '緑の惑星', air: true, tex: ['#2f6e9e', '#5fae5a', '#ffffff'], ground: '#3d5e34', ground2: '#4f7442', spot: '#2c4626', first: ['ore_iron', 'ore_si'], rare: ['ore_au'], desc: '空気がある。宇宙服なしで息ができる' },
+  rock: { name: '岩の惑星', tex: ['#5a4e44', '#8a7a6a', '#3e352e'], ground: '#5e5248', ground2: '#6e6056', spot: '#463d35', first: ['ore_iron'], rare: ['ore_ni', 'ore_u'], desc: '空気はない。鉄とニッケルが多い' },
+  ice: { name: '氷の惑星', tex: ['#7fb0d0', '#e4f4ff', '#a8d4ec'], ground: '#b3cdd9', ground2: '#cfe2ea', spot: '#8fb0c2', first: ['ore_ice'], rare: ['ore_ni', 'ore_prism'], desc: '空気はない。氷がたくさん取れる' },
+  desert: { name: '砂の惑星', tex: ['#a07040', '#e0b878', '#c89a5e'], ground: '#ab8a56', ground2: '#c09e68', spot: '#8a6c44', first: ['ore_si'], rare: ['ore_au', 'ore_prism'], desc: '空気はない。ケイ素と金が出る' },
+  lava: { name: '溶岩の惑星', tex: ['#3a1e18', '#5a2a1e', '#ff7a3a'], ground: '#2e2422', ground2: '#3a2c28', spot: '#ff6a2a', first: ['ore_iron'], rare: ['ore_au', 'ore_u', 'ore_void'], desc: '空気はない。珍しい鉱石が眠っている' },
+};
+const PLANET_NUMS = ['I', 'II', 'III'];

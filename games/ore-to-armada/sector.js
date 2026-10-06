@@ -16,7 +16,7 @@ const Sector = {
       sys, layout: L, grids: [], persons: [], bullets: [], beams: [], particles: [], pickups: [], drones: [], gates: [], asteroids: [],
       star: { x: 0, y: 0, r: sys.star.r, c: sys.star.c }, station: null, markers: [],
       ev: { raid: 150 + Math.random() * 150, meteor: 420 + Math.random() * 300, distress: 360 + Math.random() * 400, storm: 500 + Math.random() * 400, derelict: 600 + Math.random() * 400, patrol: 5, baseRaid: 700 + Math.random() * 600 },
-      warn: null, meteorT: 0, stormT: 0, goneRocks: {},
+      warn: null, meteorT: 0, stormT: 0, goneRocks: {}, planetsMade: true,
       onScreenGrid(g) { return !!g.onScreen; },
     };
     G.sysId = sysId;
@@ -24,7 +24,7 @@ const Sector = {
     // 小惑星
     const ores = RINGS[sys.ring].ores;
     const addRock = (idx, seed, diam, x, y, o = {}) => {
-      const a = makeAsteroid(seed, diam, ores, o);
+      const a = makeAsteroid(seed, diam, o.ores || ores, o);
       a.rockIdx = idx; a.x = x; a.y = y; a.a = (seed % 628) / 100;
       const dug = st.dug && st.dug[idx];
       if (dug) { a.dug = new Set(dug); for (const k of dug) { const [i, j] = k.split(',').map(Number); a.setTerrain(i, j, 0); } a.dirtyMass = true; a.dirtyEdge = true; }
@@ -40,6 +40,7 @@ const Sector = {
       for (let k = 0; k < c.n; k++) { const a = r.f(TAU), d = r.f(c.r * 0.35, c.r); addRock(ci + ':' + k, c.seed + k, r.i(4, 15), c.x + Math.cos(a) * d, c.y + Math.sin(a) * d); }
     });
     L.comets.forEach((c, k) => addRock('c' + k, c.seed, 18, c.x, c.y, { comet: true }));
+    for (const P of L.planets) Planet.populate(P, addRock, st);
     // ステーションとゲート
     if (L.station) { S.station = makeStation(L.station, sys); S.grids.push(S.station); }
     for (const gt of L.gates) { const g = makeGate(gt, gt.to); S.grids.push(g); S.gates.push(g); }
@@ -91,7 +92,7 @@ const Sector = {
   save() {
     if (!S) return;
     const st = G.sysState[S.sys.id] = G.sysState[S.sys.id] || {};
-    st.dug = Object.assign({}, S.goneRocks); st.pose = {};
+    st.dug = Object.assign({}, S.goneRocks); st.pose = {}; st.planetsMade = S.planetsMade;
     for (const a of S.asteroids) {
       if (a.dug && a.dug.size) st.dug[a.rockIdx] = [...a.dug];
       if (!a.static && (Math.abs(a.vx) > 0.01 || Math.abs(a.vy) > 0.01 || a.moved)) st.pose[a.rockIdx] = [+a.x.toFixed(2), +a.y.toFixed(2), +a.a.toFixed(3), +a.vx.toFixed(3), +a.vy.toFixed(3), +a.va.toFixed(3)];
@@ -137,7 +138,9 @@ const Sector = {
     const sys = S.sys, ev = S.ev, pl = G.player;
     const w = personWorld(pl);
     const relaxed = G.diff === 'relaxed';
-    const safeStart = sys.id === 0 && G.quest < 6;
+    // 惑星の地上にいるあいだは、宇宙のできごと (襲来・隕石雨・救難信号) は起きない
+    const onSurf = !!Planet.surfAt(w.x, w.y);
+    const safeStart = (sys.id === 0 && G.quest < 6) || onSurf;
     // 警報を出してから、しばらくして起きる
     if (S.warn) {
       S.warn.t -= dt;
@@ -165,7 +168,7 @@ const Sector = {
     }
     if (S.meteorT > 0) {
       S.meteorT -= dt;
-      if (Math.random() < dt * 5) {
+      if (!onSurf && Math.random() < dt * 5) {
         const a = S.meteorDir, off = (Math.random() - 0.5) * 160;
         const x = w.x - Math.cos(a) * 140 - Math.sin(a) * off, y = w.y - Math.sin(a) * 140 + Math.cos(a) * off;
         const r = makeAsteroid((Math.random() * 1e9) | 0, 2 + Math.random() * 2.5, ['ore_iron', 'ore_si']);
@@ -176,7 +179,7 @@ const Sector = {
     for (const g of S.grids) if (g.meteor != null) { g.meteor -= dt; if (g.meteor <= 0) g.dead = true; }
     // 救難信号
     ev.distress -= dt;
-    if (ev.distress <= 0) {
+    if (ev.distress <= 0 && !onSurf) {
       ev.distress = 600 + Math.random() * 600;
       const a = Math.random() * TAU, r = 300 + Math.random() * 300;
       const m = { x: w.x + Math.cos(a) * r, y: w.y + Math.sin(a) * r, kind: 'distress', trap: Math.random() < 0.35, t: 240 };

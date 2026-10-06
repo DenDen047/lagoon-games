@@ -73,7 +73,13 @@ const Input = {
   },
   key(code) { return this.down.has(code); },
   hit(code) { return this.pressed.has(code); },
-  endFrame() { this.pressed.clear(); this.mclick = [false, false, false]; this.wheel = 0; },
+  /* keep: 次のフレームへ持ち越すキー (ゲームのティックが進まなかったとき) */
+  endFrame(keep) {
+    const held = keep ? [...this.pressed].filter((c) => keep.includes(c)) : [];
+    this.pressed.clear(); for (const c of held) this.pressed.add(c);
+    if (!keep) this.mclick = [false, false, false];
+    this.wheel = 0;
+  },
 };
 
 /* ---------------- DOM ---------------- */

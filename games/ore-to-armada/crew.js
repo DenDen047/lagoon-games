@@ -40,16 +40,38 @@ const Crew = {
   title(c) { const best = SKILLS.slice().sort((a, b) => c.skills[b.id] - c.skills[a.id])[0]; return best.title; },
   stars(n) { return '★'.repeat(n) + '☆'.repeat(5 - n); },
   freeBeds(g) { g.updateSys(); return g.sys.beds.length - G.crew.filter((c) => c.gridId === g.id).length; },
+  /* 乗員が立てる床があるか (床のない小さな船には乗せられない) */
+  hasFloor(g) { let ok = false; g.eachBlock((b) => { if (b.def.walk && !b.def.door && !b.def.airlock) ok = true; }); return ok; },
   hire(c, g) {
     if (G.crew.length >= TUNE.maxCrew) { Toast.show(`乗員は ${TUNE.maxCrew} 人まで`, 'bad'); return false; }
-    if (!g || this.freeBeds(g) <= 0) { Toast.show('空いている寝台がない。寝台を置いた船で雇おう', 'bad'); return false; }
-    if (!Econ.spend(c.wage)) return false;
+    // クリエイティブでは寝台がなくても、お金がなくても雇える
+    if (!g || (!G.creative && this.freeBeds(g) <= 0)) { Toast.show('空いている寝台がない。寝台を置いた船で雇おう', 'bad'); return false; }
+    if (!this.hasFloor(g)) { Toast.show(`${g.name} には乗員が立てる床がない。床のある船に乗せよう`, 'bad'); return false; }
+    if (!G.creative && !Econ.spend(c.wage)) return false;
     G.hiredOffers = (G.hiredOffers || []).concat(c.offerId || []).slice(-80);
     this.board(c, g);
     G.crew.push(c);
-    Toast.show(`${c.name} (${this.title(c)}) を雇った。日給 ${c.wage} ₵`, 'good');
+    Toast.show(`${c.name} (${this.title(c)}) を雇った。` + (G.creative ? 'クリエイティブなので無料' : `日給 ${c.wage} ₵`), 'good');
     Quest.event('hire');
     return true;
+  },
+  /* クリエイティブ: 持ち場を選んで、いつでも1人足す。乗せるのは今いる船 (なければ近くの持ち船) */
+  addCreative(role) {
+    if (G.crew.length >= TUNE.maxCrew) { Toast.show(`乗員は ${TUNE.maxCrew} 人まで`, 'bad'); return null; }
+    const p = G.player, w = personWorld(p);
+    const mine = (o) => o && o.faction === 'player' && !o.terrain && !o.dead && (o.kind === 'ship' || o.kind === 'base') && this.hasFloor(o);
+    const here = playerShip() || p.grid;
+    const g = (mine(here) ? here : null) || nearestGridTo(w.x, w.y, 200, mine);
+    if (!g) { Toast.show('乗員が立てる床のある船がない。床のある船に乗っているときか、そのそばで足そう', 'bad'); return null; }
+    const c = this.candidate(new RNG((Math.random() * 1e9) | 0), S.sys);
+    const sk = ROLES[role].skill;
+    if (sk) c.skills[sk] = Math.max(c.skills[sk], 4);
+    c.role = role;
+    this.board(c, g);
+    G.crew.push(c);
+    Toast.show(`${c.name} (${ROLES[role].name}) が ${g.name} に乗った`, 'good');
+    Quest.event('hire');
+    return c;
   },
   hireRescued(c) {
     const g = S.grids.find((o) => o.faction === 'player' && !o.terrain && this.freeBeds(o) > 0);
@@ -92,6 +114,8 @@ const Crew = {
     for (const o of G.crew) if (o.gridId === c.gridId && o.trait !== 'brave') o.morale = Math.max(0, o.morale - 15);
   },
   payday() {
+    // クリエイティブでは日給はかからない
+    if (G.creative) { for (const c of G.crew) c.morale = Math.min(100, c.morale + 5); return; }
     let paid = 0, unpaid = 0;
     const mul = G.diff === 'relaxed' ? 0.5 : 1;
     for (const c of G.crew) {

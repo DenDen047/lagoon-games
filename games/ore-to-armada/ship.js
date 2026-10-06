@@ -7,7 +7,12 @@
 const PRIO = ['life', 'shield', 'weapon', 'thrust', 'prod'];
 
 const Ship = {
-  solarFactor(x, y) { const d = Math.hypot(x, y); return clamp(1.25 - d / 1200, 0.05, 1); },
+  solarFactor(x, y) {
+    // 惑星の地上では、その惑星と恒星の距離で決まる
+    const P = Planet.surfAt(x, y);
+    const d = P ? Math.hypot(P.x, P.y) : Math.hypot(x, y);
+    return clamp(1.25 - d / 1200, 0.05, 1);
+  },
 
   /* 1ティックぶんの船の仕組みを進める */
   update(g, dt, env) {

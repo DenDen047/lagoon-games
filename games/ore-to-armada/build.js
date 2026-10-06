@@ -88,7 +88,7 @@ const Build = {
   },
 
   check(def, g, base, i, j, r, reach) {
-    if (!G.unlocked[def.id]) return { ok: false, why: 'この設計図をまだ持っていない' };
+    if (!G.unlocked[def.id] && !G.creative) return { ok: false, why: 'この設計図をまだ持っていない' };
     if (def.baseOnly && !(g && g.kind === 'base')) return { ok: false, why: '基地にしか置けない' };
     const frame = g || base;
     const [w, h] = Grid.sizeOf(def, r);
@@ -148,6 +148,8 @@ const Build = {
   count(src, id) { return src.isPerson ? invCountP(src, id) : src.invTotal(id); },
   take(src, id, n) { return src.isPerson ? invTakeP(src, id, n) : src.invTake(id, n); },
   source(def) {
+    // クリエイティブでは材料なしで置ける
+    if (G.creative) return { free: true };
     const srcs = this.sources();
     for (const s of srcs) if (this.count(s, 'B:' + def.id) > 0) return { s, item: 'B:' + def.id };
     // 材料は複数の出どころから集めてよい
@@ -157,6 +159,7 @@ const Build = {
   pay(def) {
     const src = this.source(def);
     if (!src) return false;
+    if (src.free) return true;
     if (src.item) { this.take(src.s, src.item, 1); return true; }
     const srcs = this.sources();
     for (const k in def.cost) { let need = def.cost[k]; for (const s of srcs) { if (need <= 0) break; need -= this.take(s, k, need); } }
@@ -201,12 +204,13 @@ const Build = {
     const p = G.player;
     if (h.base) {
       const r = h.base;
-      const g = new Grid({ kind: 'base', faction: 'player', name: '小惑星基地 ' + (Fleet.count('base') + 1), static: true });
+      const onPlanet = !!Planet.surfAt(r.x, r.y);
+      const g = new Grid({ kind: 'base', faction: 'player', name: (onPlanet ? '地上基地 ' : '小惑星基地 ') + (Fleet.count('base') + 1), static: true });
       g.x = r.x; g.y = r.y; g.a = r.a; g.comX = r.comX; g.comY = r.comY;
       g.rockGrid = r; g.rockId = r.rockIdx; r.base = g;
       g.dirtyMass = false; g.mass = 1e6; g.inertia = 1e9;
       S.grids.push(g);
-      Toast.show('小惑星に基地を作った', 'good');
+      Toast.show(onPlanet ? '惑星の岩山に基地を作った' : '小惑星に基地を作った', 'good');
       Quest.event('base', null, g);
       return g;
     }
@@ -228,7 +232,7 @@ const Build = {
     const at = g.blockWorld(b);
     const stash = b.inv && b.used ? b.inv : null;
     g.removeBlock(b);
-    if (!g.loan) this.refund(b.def, g, at);
+    if (!g.loan && !G.creative) this.refund(b.def, g, at);
     if (stash) for (const k in stash) { let n = g.invAdd(k, stash[k]); if (n > 0) n = invAddP(G.player, k, n); if (n > 0) dropPickup(at.x, at.y, { [k]: n }, 'salvage'); }
     Sfx.play('remove', 0.6);
     if (g.count === 0) { g.dead = true; }
@@ -295,8 +299,9 @@ const Blueprints = {
     const def = BLOCKS[id];
     if (!g.canPlace(def, x, y, r)) { return false; }
     const srcs = payer && payer.isPerson ? [g, payer] : [g];
-    for (const c in def.cost) { let have = 0; for (const s of srcs) have += s.isPerson ? invCountP(s, c) : s.invTotal(c); if (have < def.cost[c]) return false; }
-    for (const c in def.cost) { let need = def.cost[c]; for (const s of srcs) { if (need <= 0) break; need -= s.isPerson ? invTakeP(s, c, need) : s.invTake(c, need); } }
+    const cost = G.creative ? {} : def.cost;
+    for (const c in cost) { let have = 0; for (const s of srcs) have += s.isPerson ? invCountP(s, c) : s.invTotal(c); if (have < cost[c]) return false; }
+    for (const c in cost) { let need = cost[c]; for (const s of srcs) { if (need <= 0) break; need -= s.isPerson ? invTakeP(s, c, need) : s.invTake(c, need); } }
     g.addBlock(id, x, y, r);
     g.plan.splice(k, 1);
     if (!g.plan.length) { g.plan = null; if (g.faction === 'player') Toast.show('予定図のブロックを全部建てた', 'good'); }

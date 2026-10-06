@@ -46,6 +46,9 @@ const Fleet = {
     if (!this.canAct(g)) return;
     const o = g.order || { type: 'wait' };
     const lead = playerShip() || (G.player.grid && G.player.grid.faction === 'player' ? G.player.grid : null);
+    // 惑星の地上と宇宙は別の場所。ついていく相手・守る相手・帰る先が別の場所にいるときは、その場で待つ
+    const here = Planet.zone(g.x, g.y), away = (x) => x && Planet.zone(x.x, x.y) !== here;
+    if (o.type === 'follow' && away(lead)) return;
     if (o.type === 'follow') {
       if (!lead || lead === g || lead.dockedTo === g) return;
       const followers = S.grids.filter((x) => x.faction === 'player' && x.order && x.order.type === 'follow' && !x.dockedTo && x !== lead);
@@ -58,6 +61,7 @@ const Fleet = {
     if (o.type === 'attack' || o.type === 'guard') {
       let t = o.type === 'attack' ? S.grids.find((x) => x.id === o.targetId && !x.dead && !x.disabled) : null;
       const anchor = o.type === 'guard' ? S.grids.find((x) => x.id === o.targetId && !x.dead) || lead : null;
+      if (away(anchor)) return;
       if (!t) { let bd = 200 * 200; const ref = anchor || g; for (const x of S.grids) if (!x.dead && !x.disabled && !x.terrain && hostile('player', x.faction) && x.faction !== 'derelict') { const d = dist2(x.x, x.y, ref.x, ref.y); if (d < bd) { bd = d; t = x; } } }
       if (t) {
         g.target = t;
@@ -73,7 +77,7 @@ const Fleet = {
     if (o.type === 'mine') { this.mineAI(g, dt, o); return; }
     if (o.type === 'return') {
       const home = S.grids.find((x) => x.id === o.targetId && !x.dead);
-      if (!home) { g.order = { type: 'wait' }; return; }
+      if (!home || away(home)) { g.order = { type: 'wait' }; return; }
       const hangar = home.sys && home.sys.hangars ? this.hangarSpot(home, g) : null;
       if (hangar) {
         const d = this.steer(g, hangar.x, hangar.y, home.vx, home.vy, home.a, 14);
@@ -93,7 +97,7 @@ const Fleet = {
     if (o.state === 'go' && cap > 0 && free < cap * 0.05) o.state = 'unload';
     if (o.state === 'unload') {
       const home = S.grids.find((x) => x.id === o.homeId && !x.dead);
-      if (!home) { o.state = 'full'; return; }
+      if (!home || Planet.zone(home.x, home.y) !== Planet.zone(g.x, g.y)) { o.state = 'full'; return; }
       const d = this.steer(g, home.x + home.radius + g.radius + 4, home.y, 0, 0, g.a);
       if (d < home.radius + g.radius + 25) {
         const inv = g.invAll();

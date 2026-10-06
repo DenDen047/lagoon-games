@@ -61,7 +61,8 @@ function makeGalaxy(seed) {
 function makeAsteroid(seed, diam, ores, o = {}) {
   const rng = new RNG(seed);
   const n1 = makeNoise(seed), n2 = makeNoise(seed + 7), n3 = makeNoise(seed + 13);
-  const g = new Grid({ kind: 'asteroid', terrain: true, static: diam >= 30, name: diam >= 30 ? '大きな小惑星' : '小惑星' });
+  const big = o.static != null ? o.static : diam >= 30;
+  const g = new Grid({ kind: 'asteroid', terrain: true, static: big, name: o.name || (big ? '大きな小惑星' : '小惑星') });
   const R = diam / 2;
   const iceOnly = o.comet;
   for (let j = -Math.ceil(R) - 3; j <= Math.ceil(R) + 3; j++) for (let i = -Math.ceil(R) - 3; i <= Math.ceil(R) + 3; i++) {
@@ -283,7 +284,38 @@ function systemLayout(sys, galaxy) {
     if (lane.gate) L.gates.push({ to: lane.to, x: Math.cos(a) * (R - 230), y: Math.sin(a) * (R - 230) });
   }
   if (galaxy.bossSys[sys.ring] === sys.id) { const a = rng.f(TAU); L.boss = { key: BOSSES[sys.ring].key, x: Math.cos(a) * (R - 400), y: Math.sin(a) * (R - 400) }; }
+  L.planets = planetLayout(sys, L);
   return L;
+}
+
+/* 星系の惑星。今までの星系の中身が変わらないよう、別の乱数で決める。
+   地上 (sx, sy) は星系の外のずっと遠くに置き、降りるとそこへ移る。 */
+function planetLayout(sys, L) {
+  const rng = new RNG(sys.seed ^ 0x51a7e7);
+  const R = TUNE.sectorRadius;
+  const types = sys.ring === 0 ? ['green', 'rock', 'ice', 'desert'] : ['rock', 'ice', 'desert', 'lava', 'green'];
+  const n = sys.id === 0 ? 1 : rng.i(1, 2);
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const r = rng.f(60, 95);
+    // 最初の星系の惑星はステーションのそばに置いて、すぐ見つかるようにする
+    const nearSt = sys.id === 0 && k === 0 && L.station;
+    const clear = (x, y) => Math.hypot(x, y) > sys.star.r + r + 160 && Math.hypot(x, y) < R - r - 260
+      && (!L.station || dist(x, y, L.station.x, L.station.y) > r + 110)
+      && L.clusters.every((c) => dist(x, y, c.x, c.y) > c.r + r + 40)
+      && out.every((p) => dist(x, y, p.x, p.y) > p.r + r + 200)
+      && (!L.boss || dist(x, y, L.boss.x, L.boss.y) > r + 150);
+    let x = 0, y = 0;
+    for (let tries = 0; tries < 80; tries++) {
+      const a = rng.f(TAU);
+      if (nearSt) { const d = r + rng.f(130, 260); x = L.station.x + Math.cos(a) * d; y = L.station.y + Math.sin(a) * d; }
+      else { const d = rng.f(450, R - 300); x = Math.cos(a) * d; y = Math.sin(a) * d; }
+      if (clear(x, y)) break;
+    }
+    const type = nearSt ? 'green' : rng.pick(types);
+    out.push({ k, x, y, r, type, name: sys.name + ' ' + PLANET_NUMS[k], seed: rng.i(1, 1e9), sx: 7000 + k * 2600, sy: 7000 });
+  }
+  return out;
 }
 
 /* 星系に入る位置: ゲートの前、ジャンプの着地点、ステーションの近く */
@@ -322,6 +354,23 @@ function makeHideout(pos, sys, rng) {
   for (const [id, n] of loot) g.invAdd(id, n);
   g.crewSlots = 3;
   g.hideout = true;
+  return g;
+}
+/* 惑星の地上にある古い基地の跡。中の貨物庫と設計図を漁れる */
+function makeRuin(P, pos, sys) {
+  const rng = new RNG(P.seed ^ 0x7a11);
+  const g = gridFromRows(RUIN_ROWS, { kind: 'ruin', faction: 'derelict', name: '古い基地の跡', static: true, cx: 4, cy: 3 });
+  g.static = true; g.derelict = true;
+  g.eachBlock((b) => { b.hp = Math.max(5, b.hp * rng.f(0.4, 0.9)); });
+  const loot = [['p_steel', rng.i(15, 35)], ['p_circuit', rng.i(6, 14)], ['p_thr', rng.i(3, 8)], ['o2_bottle', rng.i(2, 4)]];
+  if (sys.ring >= 1) loot.push(['p_armor', rng.i(3, 8)], ['p_adv', rng.i(1, 4)]);
+  if (sys.ring >= 2) loot.push(['p_lens', rng.i(1, 3)], ['p_barrier', rng.i(1, 3)]);
+  for (const [id, n] of loot) g.invAdd(id, n);
+  const pool = BLOCK_LIST.filter((b) => typeof b.tier === 'number' && b.tier >= 2 && b.tier <= Math.min(5, sys.ring + 3) && !b.noBuild);
+  g.bpLoot = rng.pick(pool).id;
+  g.updateMass();
+  g.x = pos.x; g.y = pos.y; g.a = rng.f(TAU);
+  g.updateRooms();
   return g;
 }
 function makeGate(pos, to) {

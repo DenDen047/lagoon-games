@@ -465,7 +465,7 @@ Object.assign(Render, {
     }
     const face = p.mode === 'walk' && p.grid ? p.face + p.grid.a : p.face;
     ctx.save(); ctx.translate(w.x, w.y); ctx.rotate(face);
-    const bob = p.mode === 'walk' ? Math.sin(p.walkT * 12) * 0.05 : 0;
+    const bob = p.mode === 'walk' || p.onGround ? Math.sin(p.walkT * 12) * 0.05 : 0;
     // 背中のタンク
     ctx.fillStyle = '#d8dde6'; ctx.fillRect(-0.36, -0.2, 0.16, 0.4);
     // 体 (宇宙服)
@@ -597,5 +597,146 @@ Object.assign(Render, {
     c.globalCompositeOperation = 'source-over';
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.drawImage(fc, 0, 0);
+  },
+});
+
+/* ---------- 惑星・地上・ステーションの看板 ---------- */
+function hexRgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+Object.assign(Render, {
+  /* 宇宙から見た惑星の模様。1回だけ裏の Canvas に描き置く。恒星の側が明るい */
+  planetTex(P) {
+    if (P.tex) return P.tex;
+    const N = 384, cv = document.createElement('canvas');
+    cv.width = cv.height = N;
+    const c = cv.getContext('2d'), img = c.createImageData(N, N), px = img.data;
+    const n1 = makeNoise(P.seed), n2 = makeNoise(P.seed + 5);
+    const [lo, hi, ac] = PLANET_TYPES[P.type].tex.map(hexRgb);
+    const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+    const L = Math.hypot(P.x, P.y) || 1, lx = -P.x / L, ly = -P.y / L;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const u = (x + 0.5) / N * 2 - 1, v = (y + 0.5) / N * 2 - 1, r2 = u * u + v * v;
+      if (r2 > 1) continue;
+      const z = Math.sqrt(1 - r2);
+      const n = n1(u * 3 + 10, v * 3 + 10) * 0.65 + n1(u * 9 + 3, v * 9 + 3) * 0.35;
+      const m = n2(u * 5 + 20, v * 5 + 20);
+      let col, glow = 0;
+      if (P.type === 'green') { const land = clamp((n - 0.48) / 0.04, 0, 1); col = mix(mix(lo, [40, 90, 140], n), mix(hi, [70, 120, 60], Math.max(0, n - 0.5) * 2), land); if (m > 0.62) col = mix(col, ac, Math.min(1, (m - 0.62) * 4)); }
+      else if (P.type === 'lava') { col = mix(lo, hi, n); glow = clamp((1 - Math.abs(n - 0.5) / 0.018) * 1.6, 0, 1); }
+      else if (P.type === 'desert') col = mix(lo, hi, 0.5 + 0.5 * Math.sin(v * 14 + n * 5));
+      else if (P.type === 'ice') { col = mix(lo, hi, n); if (m > 0.7) col = mix(col, ac, 0.6); }
+      else { col = mix(lo, hi, n); if (m > 0.7) col = mix(col, ac, Math.min(0.8, (m - 0.7) * 8)); }
+      const light = clamp(0.22 + 0.9 * Math.max(0, u * lx + v * ly + z * 0.55), 0.18, 1.1);
+      // 溶岩の筋は影の側でも光って見える
+      col = col.map((q) => q * light);
+      if (glow) col = mix(col, ac, glow);
+      const k = (y * N + x) * 4, edge = clamp((1 - Math.sqrt(r2)) * N / 2, 0, 1);
+      px[k] = col[0]; px[k + 1] = col[1]; px[k + 2] = col[2]; px[k + 3] = 255 * edge;
+    }
+    c.putImageData(img, 0, 0);
+    P.tex = cv;
+    return cv;
+  },
+  /* 宇宙に浮かぶ惑星 (船より下に描く。上を飛べて、真上で G を押すと降りられる) */
+  planets(list, t) {
+    const ctx = this.ctx, cam = this.cam, vr = this.viewRadius();
+    for (const P of list) {
+      if (dist(P.x, P.y, cam.x, cam.y) > vr + P.r * 1.3) continue;
+      if (PLANET_TYPES[P.type].air) {
+        const g = ctx.createRadialGradient(P.x, P.y, P.r * 0.94, P.x, P.y, P.r * 1.2);
+        g.addColorStop(0, 'rgba(140,200,255,0.45)'); g.addColorStop(1, 'rgba(140,200,255,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(P.x, P.y, P.r * 1.2, 0, TAU); ctx.fill();
+      }
+      ctx.drawImage(this.planetTex(P), P.x - P.r, P.y - P.r, P.r * 2, P.r * 2);
+      const s = this.toScreen(P.x, P.y), k = this.k;
+      ctx.save();
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(230,240,255,0.85)';
+      ctx.fillText(`${P.name} (${PLANET_TYPES[P.type].name})`, s.x, s.y + P.r * k + 18);
+      ctx.restore();
+    }
+  },
+  /* 惑星の地上。地面の色にまだら模様と、惑星ごとの小さな飾りを重ねる */
+  ground(P, t) {
+    const ctx = this.ctx, T = PLANET_TYPES[P.type], cam = this.cam;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = T.ground; ctx.fillRect(0, 0, this.W, this.H);
+    this.worldTransform();
+    const vr = this.viewRadius();
+    const hash = (i, j, s) => { let h = (i * 73856093) ^ (j * 19349663) ^ (s * 83492791) ^ P.seed; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+    const cells = (C, fn) => {
+      for (let j = Math.floor((cam.y - vr) / C) - 1; j <= Math.floor((cam.y + vr) / C) + 1; j++)
+        for (let i = Math.floor((cam.x - vr) / C) - 1; i <= Math.floor((cam.x + vr) / C) + 1; i++) fn(i, j, C);
+    };
+    // 大きなまだら
+    ctx.globalAlpha = 0.4;
+    cells(36, (i, j, C) => {
+      const h = hash(i, j, 1);
+      ctx.fillStyle = h < 0.5 ? T.ground2 : (P.type === 'lava' ? '#241c1a' : T.spot);
+      ctx.beginPath(); ctx.ellipse((i + hash(i, j, 2)) * C, (j + hash(i, j, 3)) * C, C * (0.4 + h * 0.6), C * (0.25 + hash(i, j, 4) * 0.4), hash(i, j, 5) * TAU, 0, TAU); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    // 小さな飾り (近づいたときだけ)
+    if (cam.zoom > 0.5) cells(5, (i, j, C) => {
+      const h = hash(i, j, 7);
+      if (h > 0.45) return;
+      const x = (i + hash(i, j, 8)) * C, y = (j + hash(i, j, 9)) * C, s = 0.5 + hash(i, j, 10);
+      if (P.type === 'green') {
+        if (h < 0.03) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(x + 0.4, y + 0.5, 1.5 * s, 1.1 * s, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#2f6a2a'; ctx.beginPath(); ctx.arc(x, y, 1.4 * s, 0, TAU); ctx.fill(); ctx.fillStyle = '#4a8a3a'; ctx.beginPath(); ctx.arc(x - 0.35 * s, y - 0.35 * s, 0.8 * s, 0, TAU); ctx.fill(); }
+        else if (h < 0.08) { ctx.fillStyle = ['#ffe35a', '#ff8ad0', '#ffffff'][(h * 100 | 0) % 3]; ctx.beginPath(); ctx.arc(x, y, 0.16, 0, TAU); ctx.fill(); }
+        else { ctx.strokeStyle = '#5f8a4a'; ctx.lineWidth = 0.08; ctx.beginPath(); ctx.moveTo(x - 0.2, y); ctx.lineTo(x - 0.3, y - 0.4 * s); ctx.moveTo(x, y); ctx.lineTo(x, y - 0.5 * s); ctx.moveTo(x + 0.2, y); ctx.lineTo(x + 0.32, y - 0.4 * s); ctx.stroke(); }
+      } else if (P.type === 'lava') {
+        const a = 0.45 + 0.35 * Math.sin(t * 2 + h * 40);
+        ctx.strokeStyle = `rgba(255,${110 + (h * 200 | 0) % 60},40,${a})`; ctx.lineWidth = 0.14;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 1.2 * s, y + 0.4); ctx.lineTo(x + 1.8 * s, y - 0.3); ctx.stroke();
+      } else if (P.type === 'ice') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 0.06;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 1.4 * s, y + 0.6 * s); ctx.moveTo(x + 0.7 * s, y + 0.3 * s); ctx.lineTo(x + 0.9 * s, y - 0.5 * s); ctx.stroke();
+      } else if (P.type === 'desert') {
+        ctx.strokeStyle = 'rgba(255,240,200,0.3)'; ctx.lineWidth = 0.1;
+        ctx.beginPath(); ctx.arc(x, y + 1.2, 1.4 * s, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();
+      } else {
+        if (h < 0.04) { ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 0.18; ctx.beginPath(); ctx.arc(x, y, 1.2 * s, 0, TAU); ctx.stroke(); ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 0.08; ctx.beginPath(); ctx.arc(x, y, 1.4 * s, Math.PI, Math.PI * 1.7); ctx.stroke(); }
+        else { ctx.fillStyle = 'rgba(40,34,30,0.5)'; ctx.beginPath(); ctx.arc(x, y, 0.18 * s, 0, TAU); ctx.fill(); }
+      }
+    });
+    // 地平線の外は暗くする
+    const R = TUNE.surfaceR;
+    const gr = ctx.createRadialGradient(P.sx, P.sy, R - 40, P.sx, P.sy, R + 140);
+    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(2,3,8,0.9)');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(P.sx, P.sy, R + 3000, 0, TAU); ctx.fill();
+  },
+  /* ステーションの店の名前と店員 (どこへ行けば何があるか分かるように) */
+  stationSigns(st, t) {
+    if (this.cam.zoom < 0.6) return;
+    const ctx = this.ctx;
+    st.updateSys();
+    ctx.save();
+    this.gridTransform(st);
+    const fs = Math.max(0.55, 12 / this.k);
+    for (const b of st.sys.kiosks) {
+      const below = st.at(b.x, b.y + 2), above = st.at(b.x, b.y - 2);
+      const doorDown = below && below.def.door, doorUp = above && above.def.door;
+      // 店員はドアと反対側の、窓口の向こうに立つ
+      if (doorDown || doorUp) {
+        const cx = b.x + 0.5, cy = b.y + (doorDown ? -0.5 : 1.5);
+        ctx.fillStyle = '#d8dde6'; ctx.beginPath(); ctx.ellipse(cx, cy, 0.28, 0.24, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = ['#8fd3ff', '#ffd24a', '#5fd18a', '#ff9a4a'][b.x * 7 + b.y & 3]; ctx.beginPath(); ctx.ellipse(cx, cy, 0.22, 0.18, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#f0d0b0'; ctx.beginPath(); ctx.arc(cx, cy + (doorDown ? 0.08 : -0.08), 0.13, 0, TAU); ctx.fill();
+      }
+      // 名前の札 (画面の向きに合わせて立てる)
+      // 店は窓口とドアのあいだ、乗り場は上の壁に札を出す (立っている人と重ならないように)
+      const lx = b.x + 0.5, ly = b.y + (doorUp || b.def.kiosk === 'k_board' ? -0.5 : 1.5);
+      const w = st.toWorld(lx, ly);
+      ctx.save();
+      this.worldTransform();
+      ctx.translate(w.x, w.y); ctx.rotate(this.cam.a);
+      ctx.font = `bold ${fs}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const tw = ctx.measureText(b.def.name).width + fs * 0.8;
+      ctx.fillStyle = 'rgba(8,16,30,0.78)'; ctx.fillRect(-tw / 2, -fs * 0.7, tw, fs * 1.4);
+      ctx.fillStyle = b.def.kiosk === 'k_board' ? '#7dff9a' : '#8fd3ff'; ctx.fillText(b.def.name, 0, 0.02);
+      ctx.restore();
+    }
+    ctx.restore();
   },
 });

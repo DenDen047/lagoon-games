@@ -519,8 +519,11 @@ const AI = {
     if (g.aiT <= 0) {
       g.aiT = 0.8 + Math.random() * 0.4;
       let best = null, bd = (g.aggro || 320) ** 2;
+      const zone = Planet.zone(g.x, g.y);
       for (const o of S.grids) {
         if (o.dead || o.disabled || o.terrain || o.kind === 'gate' || !hostile(g.faction, o.faction)) continue;
+        // 惑星の地上と宇宙は別の場所なので、追いかけない
+        if (Planet.zone(o.x, o.y) !== zone) continue;
         if (o.kind === 'station' && g.faction !== 'swarm') continue;
         const d = dist2(o.x, o.y, g.x, g.y) * (o.faction === 'player' ? 0.7 : 1);
         if (d < bd) { bd = d; best = o; }

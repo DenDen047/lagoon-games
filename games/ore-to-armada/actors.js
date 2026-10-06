@@ -72,6 +72,9 @@ function overlapsBlocked(g, x, y, r, p) {
 }
 function breathable(p) {
   if (p.mode === 'seat') return true;
+  // 空気のある惑星の地上では、建物の外でも中でも息ができる
+  const w = personWorld(p), P = Planet.surfAt(w.x, w.y);
+  if (P && PLANET_TYPES[P.type].air) return true;
   if (p.mode !== 'walk' || !p.grid) return false;
   return p.grid.pressureAt(Math.floor(p.lx), Math.floor(p.ly)) > 0.45;
 }
@@ -112,6 +115,18 @@ function standUp(p) {
   const v = g.velAt(w.x, w.y);
   p.mode = 'eva'; p.x = w.x; p.y = w.y; p.vx = v.x; p.vy = v.y; p.grid = null;
   p.att = best ? { g, lx: best[0] + 0.5, ly: best[1] + 0.5 } : null;
+}
+/* 歩けないマスに埋まっていたら、近くの歩けるマスへ移す (ステーションの間取りが変わったときなど) */
+function unstick(p) {
+  const g = p.grid;
+  if (!g || !overlapsBlocked(g, p.lx, p.ly, PR, p)) return;
+  let best = null, bd = 1e9;
+  for (let j = Math.floor(p.ly) - 4; j <= Math.floor(p.ly) + 4; j++) for (let i = Math.floor(p.lx) - 4; i <= Math.floor(p.lx) + 4; i++) {
+    if (!walkableCell(g, i, j, p) || overlapsBlocked(g, i + 0.5, j + 0.5, PR, p)) continue;
+    const d = dist2(i + 0.5, j + 0.5, p.lx, p.ly);
+    if (d < bd) { bd = d; best = [i + 0.5, j + 0.5]; }
+  }
+  if (best) { p.lx = best[0]; p.ly = best[1]; }
 }
 function ejectFromSeat(p) { if (p.seat) { const g = p.grid; standUp(p); if (p.mode === 'walk' && !g) p.mode = 'eva'; } }
 
@@ -199,6 +214,9 @@ function walkStep(p, dt, input) {
 }
 
 function evaStep(p, dt, input) {
+  // 惑星の地上では、ジェットパックを使わずに地面を歩く (スーツ電力は減らない)
+  const surf = Planet.surfAt(p.x, p.y);
+  p.onGround = !!surf;
   // 磁力ブーツで張りついている
   if (p.att) {
     const a = p.att;
@@ -208,14 +226,19 @@ function evaStep(p, dt, input) {
       p.x = w.x; p.y = w.y; p.vx = v.x; p.vy = v.y; p.att = null;
     } else { const w = a.g.toWorld(a.lx, a.ly); p.x = w.x; p.y = w.y; const v = a.g.velAt(w.x, w.y); p.vx = v.x; p.vy = v.y; return; }
   }
-  const jet = (input.x || input.y) && p.suit > 0;
+  if (surf) {
+    const sp = TUNE.walkSpeed * (p.kind === 'player' ? 1.15 : 0.9), k = Math.min(1, dt * 10);
+    p.vx += (input.x * sp - p.vx) * k; p.vy += (input.y * sp - p.vy) * k;
+    if (input.x || input.y) { p.face = Math.atan2(input.y, input.x); p.walkT += dt; }
+  }
+  const jet = !surf && (input.x || input.y) && p.suit > 0;
   if (jet) {
     p.vx += input.x * TUNE.jetForce * dt; p.vy += input.y * TUNE.jetForce * dt;
     p.suit = Math.max(0, p.suit - TUNE.jetDrain * dt * (G.diff === 'relaxed' ? 0.5 : 1));
     p.face = Math.atan2(input.y, input.x);
     if (Math.random() < 0.5) S.particles.push({ x: p.x - input.x * 0.4, y: p.y - input.y * 0.4, vx: -input.x * 6 + p.vx, vy: -input.y * 6 + p.vy, life: 0.25, max: 0.25, c: '#bfe8ff', s: 0.18 });
   }
-  if (input.brake && p.suit > 0) {
+  if (input.brake && p.suit > 0 && !surf) {
     // 近くのグリッドに対して止まる
     const ref = nearestGridTo(p.x, p.y, 20);
     const v = ref ? ref.velAt(p.x, p.y) : { x: 0, y: 0 };
@@ -225,6 +248,7 @@ function evaStep(p, dt, input) {
   const sp = Math.hypot(p.vx, p.vy);
   if (sp > 30) { p.vx *= 30 / sp; p.vy *= 30 / sp; }
   p.x += p.vx * dt; p.y += p.vy * dt;
+  if (surf) Planet.keepIn(p, surf, TUNE.surfaceR);
   // グリッドとの当たり
   for (const g of S.grids) {
     if (g.dead || g.kind === 'gate') continue;
@@ -254,8 +278,8 @@ function evaStep(p, dt, input) {
         p.vx -= vn * wn.x; p.vy -= vn * wn.y;
       }
       const w = g.toWorld(l.x, l.y); p.x = w.x; p.y = w.y;
-      // 止まったら磁力ブーツで張りつく
-      if (!input.x && !input.y && Math.hypot(p.vx - v.x, p.vy - v.y) < 3) p.att = { g, lx: l.x, ly: l.y };
+      // 止まったら磁力ブーツで張りつく (地上では地面に立っているので張りつかない)
+      if (!surf && !input.x && !input.y && Math.hypot(p.vx - v.x, p.vy - v.y) < 3) p.att = { g, lx: l.x, ly: l.y };
     }
   }
 }
@@ -386,8 +410,10 @@ function interactTarget(p) {
 function interactLabel(t) {
   if (!t) return '';
   const d = t.b.def;
+  if (d.seat && t.b.occ && t.b.occ.kind === 'crew') return `${t.b.occ.name} と${d.seat === 'pilot' ? '操縦' : '砲手'}を代わる`;
   if (d.seat) return d.seat === 'pilot' ? (t.g.faction === 'player' ? '操縦する' : t.g.faction === 'derelict' || t.g.disabled ? '操縦席に座る' : '操縦席') : '砲手席に座る';
-  if (d.kiosk) return KIOSKS[d.kiosk] + 'に行く';
+  if (d.kiosk === 'k_board') return '船に乗る';
+  if (d.kiosk) return KIOSKS[d.kiosk] + 'に入る';
   if (d.medbay) return '医療室を蘇生地点にする';
   if (d.refine || d.assemble) return '生産を見る';
   if (d.shipyard) return '造船台を使う';
@@ -400,6 +426,7 @@ function interactLabel(t) {
 function findPath(g, p, sx, sy, goals, maxN = 4000) {
   const key = (i, j) => (i - g.minX) + (j - g.minY) * g.w;
   const goalSet = new Set(goals.map(([i, j]) => key(i, j)));
+  const P = Planet.surfAt(g.x, g.y), outsideAir = !!(P && PLANET_TYPES[P.type].air);
   const start = key(sx, sy);
   if (goalSet.has(start)) return [];
   const prev = new Map([[start, -1]]);
@@ -412,7 +439,7 @@ function findPath(g, p, sx, sy, goals, maxN = 4000) {
       const k = key(ni, nj);
       if (prev.has(k) || g.idx(ni, nj) < 0) continue;
       if (!walkableCell(g, ni, nj, p)) continue;
-      if (p.avoidVac && g.pressureAt(ni, nj) < 0.3 && !goalSet.has(k)) continue;
+      if (p.avoidVac && !outsideAir && g.pressureAt(ni, nj) < 0.3 && !goalSet.has(k)) continue;
       prev.set(k, key(i, j));
       if (goalSet.has(k)) { found = k; head = q.length; break; }
       q.push(ni, nj);
