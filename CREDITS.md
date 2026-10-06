@@ -16,23 +16,20 @@
 
 ## 音楽
 
-| ファイル | 使っているゲーム | 状態 |
-|---|---|---|
-| `audio/bgm-battle.mp3` / `.ogg` | war-zone / war-zone-pixel / mythic-realm | **出所を確認中** |
-| `audio/bgm-darkforest.mp3` / `.ogg` | war-zone / war-zone-pixel / mythic-realm | **出所を確認中**（上の曲を加工したもの） |
+| ファイル | 使っているゲーム | 曲名・作者 | 配布元 | ライセンス |
+|---|---|---|---|---|
+| `audio/bgm-battle.mp3` / `.ogg` | war-zone / war-zone-pixel / mythic-realm | Determined Pursuit (epic orchestra loop) — Emma_MA | [OpenGameArt.org](https://opengameart.org/content/determined-pursuit-epic-orchestra-loop) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — 商用利用・加工可、クレジット不要 |
+| `audio/bgm-darkforest.mp3` / `.ogg` | war-zone / war-zone-pixel / mythic-realm | 上の曲を音程下げ・ローパス・エコーで加工したもの | 同上 | 同上 |
 
 3つのゲームで同じファイルを共有しています（内容が同一であることを確認済み）。
 
-`bgm-darkforest` は `bgm-battle` を音程を下げて加工した派生版です。元の曲のライセンスが加工を許していない場合、この曲も作り直す必要があります。
+2026年7月21日に Codex にフリー素材の BGM を探してもらい、推薦された `determined_pursuit_loop.wav`（19.1MB）を配布ページから落として、コミット `f079695` で MP3 と OGG に変換して入れました。変換でファイル内の作者情報が消えたため、一時は出所が分からなくなっていました。2026年10月6日に次の3点で突き合わせて確定しています。
 
-**確認できるまで、この2曲を含むゲームを有償で販売しないでください。** 出所の分からない素材で商品を作ると、あとから止められたときに買った人にも迷惑がかかります。
+- Codex の当日のセッション記録に、この曲を第一候補として勧めた回答が残っている
+- ブラウザの閲覧履歴に、同じ日の 17:09 にこの曲の配布ページを開いた記録がある（コミットは 17:31）
+- 配布元の WAV と `bgm-battle` は長さがどちらも 108.000 秒で、波形の相関が 0.997 だった（違いは圧縮によるもの）
 
-分かっていること。
-
-- 2026年7月21日のコミット `f079695` で追加された
-- 元は 18.2MB の WAV ファイル（現在は残っていない）
-- ファイルの中に作者名・曲名の情報は入っていない（ffmpeg で変換した際に消えた）
-- 作業ログにも配布元の記録が残っていない
+CC0 なのでクレジットは法的には不要ですが、配布 ZIP の `クレジット.txt` には作者名を載せています。
 
 ## プログラムの部品（ライブラリ）
 

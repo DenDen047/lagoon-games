@@ -12,12 +12,14 @@
 
 ■ 音楽（BGM）
 
-  bgm-battle       《曲名を記入》
-  bgm-darkforest   《曲名を記入》（上の曲を加工した暗い版）
+  Determined Pursuit (epic orchestra loop)
+  作曲          Emma_MA
+  配布元        OpenGameArt.org
+                https://opengameart.org/content/determined-pursuit-epic-orchestra-loop
+  ライセンス    CC0 1.0（パブリックドメイン）
+                https://creativecommons.org/publicdomain/zero/1.0/
 
-  作曲          《作者名を記入》
-  配布元        《配布サイト名と URL を記入》
-  ライセンス    《ライセンス名と URL を記入》
+  暗黒の森の BGM は、この曲の音程を下げて加工したものです。
 
 
 ■ ライブラリ
