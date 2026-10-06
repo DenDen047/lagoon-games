@@ -17,315 +17,315 @@ const GAMES = [
     slug: 'star-flick', genre: 'action', players: '1–2P', date: '2026-10-06',
     ja: {
       title: 'STAR FLICK ― 宇宙船で消しピン',
-      desc: '宇宙船をはじいてぶつけ、相手を宇宙へ落とす消しピン。回転・ジェット・こわれないバリアで改造し、ガチャでパーツを集め、たおした敵の船はうばって使える。スマホにも対応。',
+      desc: '宇宙船をはじいてぶつけ、相手を宇宙へ落とす消しピン。ガチャで集めたパーツで船を改造できる。スマホ対応。',
     },
     en: {
       title: 'Star Flick',
-      desc: 'Flick-battle spaceships off stations, moons and the edge of a black hole. Add spin, jets and unbreakable barriers, pull parts from a gacha and steal the ships you beat. Plays on phones.',
+      desc: 'Flick your spaceship to knock rivals into space, and upgrade it with parts from a gacha. Plays on phones.',
     },
   },
   {
     slug: 'neko-mart', genre: 'sandbox', players: '1P', date: '2026-10-06',
     ja: {
       title: 'NEKO MART ― ねこのお店やさん',
-      desc: '猫の町でお店をひらく経営ゲーム。仕入れた商品を棚にならべてレジで売り、ためたお金で自分だけの商品を作る。いぬやうさぎのお客さんのアンケートを読み、店長のきせかえも楽しめる。スマホにも対応。',
+      desc: '猫の町でお店をひらく経営ゲーム。商品を仕入れて棚にならべ、動物のお客さんに売る。スマホ対応。',
     },
     en: {
       title: 'Neko Mart',
-      desc: 'Run a little shop in a town of cats. Stock the shelves, ring up animal customers who browse before they pay, read their request slips, craft your own goods and dress up your shopkeeper. Plays on phones.',
+      desc: 'Run a little shop in a town of cats: stock the shelves and sell to animal customers. Plays on phones.',
     },
   },
   {
     slug: 'ore-to-armada', genre: 'sandbox', players: '1P', date: '2026-09-22',
     ja: {
       title: 'ORE TO ARMADA ― 鉱石から大艦隊へ',
-      desc: '中古の採掘艇から始める宇宙サンドボックス。小惑星を掘って稼ぎ、船をブロックで組み上げ、艦隊を率いて銀河の中心を目指す。パソコン向け。',
+      desc: '小惑星を掘って稼ぎ、船をブロックで組んで艦隊を率いる宇宙サンドボックス。パソコン向け。',
     },
     en: {
       title: 'Ore to Armada',
-      desc: 'A top-down space sandbox. Mine asteroids, build your ship block by block, hire a crew and lead a fleet toward the galactic core. Keyboard and mouse.',
+      desc: 'A space sandbox: mine asteroids, build your ship block by block and lead a fleet. Keyboard and mouse.',
     },
   },
   {
     slug: 'dead-drive', genre: 'action', players: '1P', date: '2026-09-22',
     ja: {
       title: 'DEAD DRIVE ― 改造車で生きのびろ',
-      desc: 'ゾンビの街を自作の改造車で走るローグライク。昼は食料や仲間を集めに出撃し、夜は基地を守りぬいて10日目の救助を待つ。スマホにも対応。',
+      desc: '改造車でゾンビの街を走るローグライク。昼は物資を集め、夜は基地を守って10日間を生きのびる。スマホ対応。',
     },
     en: {
       title: 'Dead Drive',
-      desc: 'A top-down zombie roguelike in a car you build part by part. Scavenge and rescue survivors by day, defend your base by night, and last ten nights. Plays on phones.',
+      desc: 'A zombie roguelike in a car you build: scavenge by day, defend your base by night, survive ten nights. Plays on phones.',
     },
   },
   {
     slug: 'cellhouse', genre: 'sandbox', players: '1P', date: '2026-09-22',
     ja: {
       title: 'CELLHOUSE ― 塀の中をつくる',
-      desc: '草地に刑務所を建てて運営する経営シミュレーション。房や食堂を作り、囚人の不満を抑えてケンカや脱走や暴動を防ぎながら黒字を保つ。スマホにも対応。',
+      desc: '刑務所を建てて運営する経営シミュレーション。囚人の不満を抑えて暴動や脱走を防ぐ。スマホ対応。',
     },
     en: {
       title: 'Cellhouse',
-      desc: 'A top-down prison management sim. Build cells and canteens, keep prisoners\' needs met, and head off fights, escapes and riots while staying in the black. Plays on phones.',
+      desc: 'Build and run a prison, keeping inmates content enough to head off riots and escapes. Plays on phones.',
     },
   },
   {
     slug: 'kaiju-clash', genre: 'fighting', players: '1–2P', date: '2026-09-08',
     ja: {
       title: 'KAIJU CLASH ― 街を壊す怪獣たち',
-      desc: '街のまんなかで怪獣どうしが殴りあう対戦格闘。8体から選べて、技はボタン1つで出る。ビルは殴っても踏んでも崩れる。スマホにも対応。',
+      desc: '街のまんなかで怪獣どうしが殴りあう対戦格闘。8体から選べて、ビルは殴ると崩れる。スマホ対応。',
     },
     en: {
       title: 'Kaiju Clash',
-      desc: 'A side-view fighting game where eight giant monsters trash a city while trading blows. One-button moves, buildings that crumble, and two players on one keyboard. Plays on phones.',
+      desc: 'Eight giant monsters brawl through a city that crumbles around them, with one-button moves. Plays on phones.',
     },
   },
   {
     slug: 'sunset-shift', genre: 'action', players: '1P', date: '2026-09-08',
     ja: {
       title: 'SUNSET SHIFT ― 定時後のヒーロー',
-      desc: '昼は会社で伝票をさばき、定時後は街でヒーローになる見下ろしアクション。能力のちがう3人を使い分け、屋上も使って事件を解決する。',
+      desc: '昼は会社員、定時後は街のヒーローになる見下ろしアクション。3人を使い分けて事件を解決する。',
     },
     en: {
       title: 'Sunset Shift',
-      desc: 'A top-down action game about office workers who turn hero after six. Sort invoices by day, then fight crime across the streets and rooftops as one of three heroes.',
+      desc: 'Office workers by day, heroes after six: fight crime across streets and rooftops as one of three heroes.',
     },
   },
   {
     slug: 'beast-cradle', genre: 'rpg', players: '1P', date: '2026-09-08',
     ja: {
       title: 'BEAST CRADLE ― 育ての闘技場',
-      desc: 'けものを育てて闘技場で戦わせる育成バトル。稽古のたびに一週が過ぎて皆が歳をとるので、誰を鍛えるかが悩みどころ。スマホにも対応。',
+      desc: 'けものを育てて闘技場で戦わせる育成バトル。稽古のたびに一週が過ぎ、皆が歳をとる。スマホ対応。',
     },
     en: {
       title: 'Beast Cradle',
-      desc: 'A monster-raising battler where every training session costs a week and everyone ages. Raise a team, fight turn-based arena bouts and climb the ranks. Plays on phones.',
+      desc: 'Raise monsters for the arena, where every training session costs a week and everyone ages. Plays on phones.',
     },
   },
   {
     slug: 'phantom-duel', genre: 'fighting', players: '1P', date: '2026-09-08',
     ja: {
       title: 'PHANTOM DUEL ― 自分だけの幻影',
-      desc: '猫の街で幻影どうしが戦う見下ろしバトル。全6章のストーリーで17匹の挑戦者を倒していく。相棒は10体から選べて、自分で作ることもできる。',
+      desc: '猫の街で幻影どうしを戦わせる見下ろしバトル。全6章のストーリーで、相棒は自分でも作れる。',
     },
     en: {
       title: 'Phantom Duel',
-      desc: 'A top-down duel game in a city of cats, fought through phantom partners. A six-chapter story, ten ready-made phantoms, and a builder for your own.',
+      desc: 'Duel with phantom partners through a six-chapter story in a city of cats, or build a phantom of your own.',
     },
   },
   {
     slug: 'moko-god', genre: 'rpg', players: '1P', date: '2026-09-08',
     ja: {
       title: 'MOKO GOD ― 影の城とモコの剣',
-      desc: 'CASTAWAY PLANET のモコが剣をとる見下ろしアクションRPG。剣と魔法で魔物を倒し、三つの印をそろえて影の城の主クロモコに挑む。スマホにも対応。',
+      desc: 'CASTAWAY PLANET のモコが剣をとる見下ろしアクションRPG。剣と魔法で影の城を目指す。スマホ対応。',
     },
     en: {
       title: 'Moko God',
-      desc: 'A top-down action RPG in which a Moko from Castaway Planet takes up a sword. Fight with blade and magic, collect three seals and storm Kuromoko\'s castle. Plays on phones.',
+      desc: 'A top-down action RPG where a Moko from Castaway Planet takes up a sword and storms a shadow castle. Plays on phones.',
     },
   },
   {
     slug: 'party-maker', genre: 'party', players: '2–5P', date: '2026-09-01',
     ja: {
       title: 'PARTY MAKER ― みんなでつくる大会',
-      desc: '1台の画面を順番に回して遊ぶ2〜5人のパーティーゲーム。おえかきクイズなど6種のミニゲームで、その日の番組表を自分たちで組む。',
+      desc: '1台の画面を回して遊ぶ2〜5人のパーティーゲーム。おえかきクイズなど6種のミニゲーム入り。',
     },
     en: {
       title: 'Party Maker',
-      desc: 'A pass-the-screen party game for 2–5 players. Build your own running order from six minigames, headlined by draw-and-guess.',
+      desc: 'A pass-the-screen party game for 2–5 players with six minigames, including draw-and-guess.',
     },
   },
   {
     slug: 'castaway-planet', genre: 'sandbox', players: '1P', date: '2026-09-01',
     ja: {
       title: 'CASTAWAY PLANET ― 墜ちた星の暮らし',
-      desc: '宇宙船が墜ちた星で暮らしながら船を直す見下ろしサンドボックス。畑を耕し、鉱石を掘り、乗り込み式のロボットで作業して4つの惑星を渡る。',
+      desc: '墜ちた星で畑を耕し鉱石を掘り、宇宙船を直して星々を渡る見下ろしサンドボックス。',
     },
     en: {
       title: 'Castaway Planet',
-      desc: 'A top-down survival sandbox on the planet you crash-landed on. Farm, mine, pilot a robot you built yourself, and repair the ship to reach four planets.',
+      desc: 'Crash-land on a planet, then farm, mine and repair your ship to travel across four worlds.',
     },
   },
   {
     slug: 'walled-wolves', genre: 'puzzle', players: '1P', date: '2026-08-25',
     ja: {
       title: 'WALLED WOLVES ― 壁の中の人狼',
-      desc: '閉ざされた中世の街を歩き回る人狼ゲーム。昼は村の仕事をこなし、夜は眠る・隠れる・占う・守る、あるいは狼になって押し入る。',
+      desc: '閉ざされた中世の街を歩き回る人狼ゲーム。昼は仕事をこなし、夜は隠れるか狼になって襲う。',
     },
     en: {
       title: 'Walled Wolves',
-      desc: 'A walk-around werewolf game in a sealed medieval town. Do chores by day, then hide, scry, guard or turn into a wolf at night.',
+      desc: 'A walk-around werewolf game in a sealed medieval town: chores by day, hide or hunt by night.',
     },
   },
   {
     slug: 'noclip', genre: 'horror', players: '1P', date: '2026-08-25',
     ja: {
       title: 'NOCLIP ― 壁抜けの館',
-      desc: 'ツルハシ一本でバックルームズと洋館を掘り進むサバイバルホラー。壁も扉も壊せるが、その音が実体たちを呼び寄せる。',
+      desc: 'ツルハシで壁を壊して進むサバイバルホラー。掘る音が実体たちを呼び寄せる。',
     },
     en: {
       title: 'NOCLIP',
-      desc: 'A top-down survival horror where your pickaxe breaks walls and doors through the backrooms and a manor, and every swing draws the entities closer.',
+      desc: 'A survival horror where your pickaxe breaks through walls, and every swing draws the entities closer.',
     },
   },
   {
     slug: 'mech-raiders', genre: 'shooter', players: '1–2P', date: '2026-08-25',
     ja: {
       title: 'MECH RAIDERS ― 鋼鉄機兵',
-      desc: 'セクターに降下して敵機を狩る見下ろしロボット戦。母艦で18機から機体を選び、武装を整えて出撃する。',
+      desc: '18機から機体を選んで出撃し、敵機を狩る見下ろしロボット戦。',
     },
     en: {
       title: 'Mech Raiders',
-      desc: 'A top-down mech shooter. Pick from eighteen frames aboard your carrier, gear up, and hunt enemy machines sector by sector.',
+      desc: 'A top-down mech shooter: pick from eighteen frames and hunt enemy machines sector by sector.',
     },
   },
   {
     slug: 'hollow-toys-fp', genre: 'horror', players: '1P', date: '2026-08-18',
     ja: {
       title: 'HOLLOW TOYS 一人称視点 ― 閉店したピザ店の夜',
-      desc: 'HOLLOW TOYS を一人称で作り直したサバイバルホラー。閉店したピザ店を懐中電灯ひとつで歩き、動き出したアニマトロニクスから逃げる。',
+      desc: 'HOLLOW TOYS の一人称版。懐中電灯の明かりだけを頼りに、閉店したピザ店から逃げる。',
     },
     en: {
       title: 'Hollow Toys: First Person',
-      desc: 'The same pizzeria as Hollow Toys, rebuilt in first person with a raycast renderer — you see only what the flashlight beam reaches.',
+      desc: 'Hollow Toys in first person: escape the pizzeria seeing only what your flashlight reaches.',
     },
   },
   {
     slug: 'parkour-blade', genre: 'action', players: '1P', date: '2026-08-18',
     ja: {
       title: 'PARKOUR BLADE ― 刃の回廊',
-      desc: '高さを使う見下ろしパルクール。低い刃は跳び越え、垂れた刃はスライディングでくぐり、谷は壁キックで渡る。全6ステージ。',
+      desc: '刃を跳び越え、くぐり、壁キックで谷を渡る見下ろしパルクール。全6ステージ。',
     },
     en: {
       title: 'Parkour Blade',
-      desc: 'A top-down parkour runner with real height. Jump the low blades, slide under the hanging ones and wall-kick across gaps in six timed stages.',
+      desc: 'A top-down parkour runner: jump, slide and wall-kick past blades across six timed stages.',
     },
   },
   {
     slug: 'steel-serpent', genre: 'action', players: '1P', date: '2026-08-18',
     ja: {
       title: 'STEEL SERPENT ― 鋼の蛇',
-      desc: '弾をローリングでかわしてラッシュを溜め、ナイフ一本で踏み込む横スクロールのステルスアクション。武器7種、3ステージ、ボス4体。',
+      desc: '弾をローリングでかわし、ナイフ一本で踏み込む横スクロールのステルスアクション。',
     },
     en: {
       title: 'Steel Serpent',
-      desc: 'A side-scrolling stealth action game. Roll through a bullet to charge RUSH, then close in with just a knife. Seven weapons, three stages, four bosses.',
+      desc: 'A side-scrolling stealth action game: roll through bullets and close in with just a knife.',
     },
   },
   {
     slug: 'forge-and-crown', genre: 'rpg', players: '1P', date: '2026-08-17',
     ja: {
       title: 'FORGE & CROWN ― 鍛冶と王冠',
-      desc: '西洋ファンタジーの国づくりRPG。城をタイル単位で設計し、領地を月ごとに運営し、4×4のマスにポリオミノを詰めて鎧を鍛え、自分でも戦場に立つ。',
+      desc: '城を設計し、領地を運営し、パズルで鎧を鍛えて自らも戦う国づくりRPG。',
     },
     en: {
       title: 'Forge & Crown',
-      desc: 'A western-fantasy strategy RPG. Design your castle, run your province, forge armour as a block puzzle, and fight on the field yourself.',
+      desc: 'A fantasy strategy RPG: design your castle, run your province, forge armour as a puzzle and fight on the field.',
     },
   },
   {
     slug: 'hollow-toys', genre: 'horror', players: '1P', date: '2026-08-17',
     ja: {
       title: 'HOLLOW TOYS ― 閉店したピザ店の夜',
-      desc: '懐中電灯ひとつで閉店したピザ店に忍び込む2Dサバイバルホラー。7人から選び、動き出したアニマトロニクスから逃げて3フロアを踏破する。',
+      desc: '懐中電灯ひとつで閉店したピザ店を探り、動き出したアニマトロニクスから逃げるホラー。',
     },
     en: {
       title: 'Hollow Toys',
-      desc: 'A top-down survival horror in a shuttered pizzeria lit only by your flashlight. Seven characters, three floors and a final boss.',
+      desc: 'A top-down survival horror: sneak through a shuttered pizzeria by flashlight and escape the animatronics.',
     },
   },
   {
     slug: 'gacha-strikers', genre: 'sports', players: '1P', date: '2026-08-17',
     ja: {
       title: 'GACHA STRIKERS ― ガチャストライカーズ',
-      desc: 'ガチャでチームを作るアーケードサッカー。ステージに勝つとチケットがもらえ、属性を持つ36人の選手から引いて編成を組み、12ステージのキャンペーンを進める。',
+      desc: 'ガチャで選手を集めてチームを作るアーケードサッカー。全12ステージ。',
     },
     en: {
       title: 'Gacha Strikers',
-      desc: 'Arcade soccer with a gacha roster — win stages for tickets, pull from 36 players with elemental affinities and cut-in specials, and build your formation across a 12-stage campaign.',
+      desc: 'Arcade soccer with a gacha roster: pull players, build your formation and clear twelve stages.',
     },
   },
   {
     slug: 'war-zone-pixel', genre: 'shooter', players: '1P / オンライン', players_en: '1P / Online', date: '2026-07-30',
     ja: {
       title: 'WARZONE: CHRONOFRONT ― 時蝕戦線',
-      desc: '1947年の時の裂け目を4つの軍が奪い合うドット絵の見下ろしシューター。4職・4ステージ、戦車と永続強化つき。1人でも、ルームコードでオンラインでも遊べる。',
+      desc: '時の裂け目を4つの軍が奪い合う、ドット絵の見下ろしシューター。',
     },
     en: {
       title: 'Warzone: Chronofront',
-      desc: 'A pixel-art top-down shooter where four armies fight over a 1947 time fracture — four classes, four stages, tanks and permanent upgrades. Solo or online via a room code.',
+      desc: 'A pixel-art top-down shooter where four armies fight over a time fracture.',
     },
   },
   {
     slug: 'mythic-realm', genre: 'rpg', players: '1P / オンライン', players_en: '1P / Online', date: '2026-07-28',
     ja: {
       title: 'MYTHIC REALM 2D ― 神話の魔境',
-      desc: '9つの職業から選ぶ剣と魔法の見下ろしアクションRPG。章ごとの戦いか、12の土地が続く広い世界で魔王を目指す。オンラインでも遊べる。',
+      desc: '9つの職業から選べる、剣と魔法の見下ろしアクションRPG。',
     },
     en: {
       title: 'Mythic Realm 2D',
-      desc: 'A top-down sword-and-sorcery action RPG with nine classes. Play the chapter battles or roam a twelve-land open world to the demon lord. Solo or online.',
+      desc: 'A top-down sword-and-sorcery action RPG with nine classes.',
     },
   },
   {
     slug: 'war-zone', genre: 'shooter', players: '1P / オンライン', players_en: '1P / Online', date: '2026-06-23',
     ja: {
       title: 'WARZONE 2D ― 戦場',
-      desc: '見下ろし型の戦争シューター。基地で装備を整え、徴兵ガチャで仲間を集めて戦場へ。自分でステージも作れて、オンラインでも遊べる。',
+      desc: '基地で装備を整え、ガチャで仲間を集めて戦う見下ろし戦争シューター。',
     },
     en: {
       title: 'Warzone 2D',
-      desc: 'A top-down war shooter. Gear up at a walkable base, recruit characters from a gacha, build your own stages, and fight solo or online.',
+      desc: 'A top-down war shooter: gear up at base, recruit allies from a gacha and head into battle.',
     },
   },
   {
     slug: 'street-fighter', genre: 'fighting', players: '1–2P', date: '2026-06-23',
     ja: {
       title: 'ストリート・ファイト',
-      desc: 'ボタン1つで必殺技が出る2D対戦格闘。ガード・投げ・必殺ゲージつきで、CPU戦と同じキーボードでの2人対戦を選べる。',
+      desc: 'ボタン1つで必殺技が出る2D対戦格闘。CPU戦と2人対戦を選べる。',
     },
     en: {
       title: 'Street Fight',
-      desc: 'A 2D fighter with one-button specials, guards, throws and a super meter — vs CPU (3 difficulties) or 2-player local.',
+      desc: 'A 2D fighter with one-button specials, vs CPU or two players on one keyboard.',
     },
   },
   {
     slug: 'smash-browser-mobile', genre: 'fighting', players: '1P', date: '2026-06-23',
     ja: {
       title: 'Mini Smash (スマホ版)',
-      desc: 'Mini Smash のタッチ操作版。スマホやタブレットでも同じ12キャラから選んで、CPU と1対1で戦える。',
+      desc: 'Mini Smash のスマホ・タブレット版。タッチ操作で CPU と戦う。',
     },
     en: {
       title: 'Mini Smash (Mobile)',
-      desc: 'A touch-friendly version of Mini Smash — fight a CPU on a phone or tablet.',
+      desc: 'Mini Smash for phones and tablets: fight a CPU with touch controls.',
     },
   },
   {
     slug: 'machigurashi', genre: 'sandbox', players: '1P', date: '2026-06-16',
     ja: {
       title: 'まちぐらし ― Lagoon Life',
-      desc: '自動生成の町で暮らす見下ろし型の生活シミュレーション。カフェで働き、買い物をして、空き地に家を建てる。',
+      desc: '自動生成の町で働き、買い物をし、家を建てて暮らす生活シミュレーション。',
     },
     en: {
       title: 'Machigurashi (Lagoon Life)',
-      desc: 'A top-down life sim where you live, work, shop, and join events through the seasons of a procedurally generated town.',
+      desc: 'A top-down life sim: work, shop and build a home in a procedurally generated town.',
     },
   },
   {
     slug: 'ragdoll-rumble', genre: 'action', players: '1P', date: '2026-06-16',
     ja: {
       title: 'ラグドール・ランブル',
-      desc: 'ふらふら揺れるラグドール人形で、押し寄せる敵をぶっ飛ばす物理アクション。武器を拾いながらウェーブを勝ち抜く。',
+      desc: 'ふらふら揺れるラグドール人形で、押し寄せる敵を勝ち抜く物理アクション。',
     },
     en: {
       title: 'Ragdoll Rumble',
-      desc: 'A physics brawler where you fight through waves as a wobbly active-ragdoll fighter.',
+      desc: 'A physics brawler where you fight through waves as a wobbly ragdoll.',
     },
   },
   {
     slug: 'cat-wars', genre: 'rpg', players: '1P', date: '2026-05-12',
     ja: {
       title: 'にゃんこウォーズ',
-      desc: 'お金を貯めてにゃんこを召喚し、敵陣の城を落とすレーン型タワーディフェンス。10種のユニットをコストと役割で使い分ける。',
+      desc: 'にゃんこを召喚して敵の城を落とすレーン型タワーディフェンス。',
     },
     en: {
       title: 'Nyanko Wars',
@@ -336,7 +336,7 @@ const GAMES = [
     slug: 'terraria-like', genre: 'sandbox', players: '1P', date: '2026-05-12',
     ja: {
       title: 'Mini Terraria',
-      desc: 'ブロックを掘って集めて積み上げる2Dサンドボックス。地形は自動生成で、草・土・石・木を採ってワークベンチまで作れる。',
+      desc: 'ブロックを掘って集めて積み上げる2Dサンドボックス。',
     },
     en: {
       title: 'Mini Terraria',
@@ -347,7 +347,7 @@ const GAMES = [
     slug: 'mario-coop', genre: 'action', players: '2P', date: '2026-05-12',
     ja: {
       title: 'ふたりでマリオっぽい冒険',
-      desc: '2人同時プレイの横スクロールアクション。コインとハテナブロックを取りながら、ふたりでゴール旗を目指す。',
+      desc: 'ふたり同時に遊ぶ横スクロールアクション。協力してゴールを目指す。',
     },
     en: {
       title: 'Two-Player Mario-like Adventure',
@@ -358,7 +358,7 @@ const GAMES = [
     slug: 'smash-browser', genre: 'fighting', players: '2P', date: '2026-05-05',
     ja: {
       title: 'Mini Smash',
-      desc: '1つのキーボードを2人で分けあって戦う2D対戦アクション。12キャラそれぞれに必殺技があり、相手を場外へ吹っ飛ばした数で勝敗が決まる。',
+      desc: '1つのキーボードを2人で分けあう2D対戦アクション。相手を場外へ吹っ飛ばす。',
     },
     en: {
       title: 'Mini Smash Bros',
