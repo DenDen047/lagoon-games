@@ -454,9 +454,11 @@ function collideCarZombies(dt) {
         if (Math.random() < 0.3) FX.burst(z.x, z.y, 2, { col: '#ffd27a', kind: 'line', r: 1, spMin: 50, spMax: 120, lifeMin: 0.08, lifeMax: 0.15 });
       }
     }
-    if (cell.def.contact) z.hurt(cell.def.contact * (1 + 0.5 * (perks.spikes || 0)) * dt, 'saw', S);
+    /* トゲ。スパイカーは向けた側だけ、スパイクタイヤとノコはどこでも刺す */
+    const stab = cell.def.contact && (!cell.def.face || car.facing(hit)) ? cell.def.contact * partPowMul(cell.lv) : 0;
+    if (stab) z.hurt(stab * (1 + 0.5 * (perks.spikes || 0)) * dt, 'saw', S);
     else if (perks.spikes && cell.open) z.hurt(9 * perks.spikes * dt, 'saw', S);
-    if ((cell.def.contact || perks.spikes) && Math.random() < dt * 12) FX.burst(z.x, z.y, 1, { col: GOO, r: 2.5, spMin: 30, spMax: 100, lifeMin: 0.15, lifeMax: 0.3 });
+    if ((stab || perks.spikes) && Math.random() < dt * 12) FX.burst(z.x, z.y, 1, { col: GOO, r: 2.5, spMin: 30, spMax: 100, lifeMin: 0.15, lifeMax: 0.3 });
   }
 }
 

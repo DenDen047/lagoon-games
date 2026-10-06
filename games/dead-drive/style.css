@@ -298,6 +298,11 @@ body.touch #prompt { bottom: 190px; }
 .metaList .metaRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 8px 12px; margin-bottom: 6px; }
 .metaRow p { margin: 2px 0 0; font-size: 12px; color: var(--dim); }
 .metaRow small { color: var(--acc); }
+.codeRow { display: flex; gap: 8px; }
+.codeMsg { font-size: 12px; min-height: 16px; }
+.codeMsg.good { color: var(--acc2); }
+.codeMsg.bad { color: var(--bad); }
+.codeRow input { flex: 1; min-width: 0; font: 14px var(--font); color: var(--ink); background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 8px 10px; }
 
 /* ------------------------------- 狭い画面 ------------------------------- */
 @media (max-width: 900px) {

@@ -22,6 +22,23 @@ const UI = {
     el('btnPause').onclick = () => this.pause();
     document.querySelectorAll('#tabs button').forEach((b) => { b.onclick = () => { Sfx.ui(); this.tab = b.dataset.tab; this.renderTab(); }; });
     el('btnMenu').onclick = () => this.pause();
+    /* ひみつのコードは、どの画面でもキーボードで続けて打てば効く。入力欄の中の文字は数えない */
+    let typed = '';
+    addEventListener('keydown', (ev) => {
+      if (!ev.key || ev.key.length !== 1 || (ev.target && /^(INPUT|TEXTAREA)$/.test(ev.target.tagName))) return;
+      typed = (typed + ev.key.toLowerCase()).slice(-CHEAT_CODE.length);
+      if (typed === CHEAT_CODE) { typed = ''; this.cheat(); }
+    });
+  },
+
+  /* ひみつのコードを効かせる。ランが始まっていなければ何もしない。
+     出撃中はセーブしない決まりなので、基地にいるときだけすぐ保存する */
+  cheat() {
+    if (!Run.state) { toast('ゲームを始めてから入力しよう', 'bad'); return; }
+    Run.cheat();
+    Sfx.level();
+    toast('ひみつのコード！ すべての部品が使えるようになり、スクラップが無限になった', 'good');
+    if (G.mode === 'base') { Run.save(); this.renderTab(); }
   },
 
   /* ------------------------------ タイトル ------------------------------ */
@@ -77,8 +94,10 @@ const UI = {
         <div><b>Esc / P</b><span>一時停止</span></div>
         <div><b>ガレージで R</b><span>部品の向きを変える</span></div>
         <div><b>右クリック</b><span>ガレージで部品を外す</span></div>
+        <div><b>ドラッグ</b><span>ガレージで部品を別のマスへ動かす</span></div>
       </div>
       <p>武器は自分で狙って撃つ。向けた方向の射界にゾンビが入れば撃ちはじめる。スピードを出してぶつかれば轢ける。衝角（しょうかく）を付けた向きでぶつかると、ほとんど傷つかずに轢ける。</p>
+      <p>タイヤも部品のひとつで、置いた場所につく。いちばん前の列のタイヤが向きを変える。バイクのタイヤを前と後ろに1つずつ付ければバイクになる。重い車にはタイヤを多めに。置いた部品を押して選ぶと「強化」でき、硬く強くなる。</p>
       <p>スマートフォンでは、左のスティックを進みたい方向に倒す。右のボタンでニトロとバック。</p>`);
     this.modal('遊びかた', b, [{ label: 'とじる', fn: () => { this.closeModal(); if (onClose) onClose(); } }]);
   },
@@ -130,7 +149,7 @@ const UI = {
     el('sRaid').className = s.day === nr ? 'raid hot' : 'raid';
     const need = Run.foodNeed();
     el('resBox').innerHTML =
-      `<span class="chip" title="スクラップ">${RES_ICON.scrap}<b>${s.scrap}</b></span>` +
+      `<span class="chip" title="スクラップ">${RES_ICON.scrap}<b>${s.cheat ? '∞' : s.scrap}</b></span>` +
       `<span class="chip ${s.food < need ? 'bad' : ''}" title="食料（1日に食べる量）">${RES_ICON.food}<b>${s.food}</b><small>/日 ${need}</small></span>` +
       `<span class="chip" title="燃料">${RES_ICON.fuel}<b>${s.fuel}</b></span>` +
       `<span class="chip" title="仲間">${RES_ICON.crew}<b>${s.survivors.length}</b></span>` +
@@ -192,7 +211,7 @@ const UI = {
     const carBox = h('div', 'carBox');
     const cv = document.createElement('canvas'); cv.width = 180; cv.height = 180; cv.className = 'carThumb';
     carBox.appendChild(cv);
-    const cells = s.design.map((c) => ({ c: c.c, r: c.r, t: c.t, hp: Run.cellHp(c) }));
+    const cells = s.design.map((c) => ({ c: c.c, r: c.r, t: c.t, lv: c.lv, hp: Run.cellHp(c) }));
     const st = carStats(cells, s.perks, s.meta);
     const cab = s.design.find((c) => c.t === 'cabin');
     const cabK = Run.cellHp(cab) / Run.cellMax(cab);
@@ -202,6 +221,7 @@ const UI = {
       `<div class="chips"><span>耐久 ${Math.round(st.hp)} / ${st.maxhp}</span><span>運転席 ${Math.round(cabK * 100)}%</span><span>最高速 ${Math.round(st.top / 3.6)} km/h</span>` +
       `<span>火力 ${st.dps}</span><span>📦 ${st.cargo}</span><span>💺 ${st.seats}</span></div>` +
       (cabK < 0.6 || broken ? `<p class="warn">${broken ? `壊れた部品が ${broken} 個ある。` : ''}${cabK < 0.6 ? '運転席が傷んでいる。' : ''}ガレージで修理しよう。</p>` : '') +
+      (!st.wheels ? '<p class="warn">タイヤがない。ガレージでタイヤを付けよう。</p>' : '') +
       this.loadWarn(s.dests[this.sel], st));
     carBox.appendChild(info);
     root.appendChild(carBox);
@@ -634,6 +654,20 @@ const UI = {
     const quit = h('button', 'bigChoice', `<b>タイトルへ戻る</b><small>${was === 'drive' ? 'この出撃（夜）はなかったことになり、その前から再開できる。' : 'セーブは残る。'}</small>`);
     quit.onclick = () => { this.closeModal(); Run.state = null; this.title(); };
     body.appendChild(quit);
+    /* キーボードのないスマホでも、ここからひみつのコードを入れられる */
+    const code = h('form', 'codeRow', '<input type="text" placeholder="ひみつのコード" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn small">入力</button>');
+    const msg = h('small', 'codeMsg');   // トーストはこの窓の裏に隠れるので、結果は窓の中に出す
+    code.onsubmit = (ev) => {
+      ev.preventDefault();
+      const inp = code.querySelector('input');
+      const ok = inp.value.trim().toLowerCase() === CHEAT_CODE;
+      if (ok) this.cheat();
+      msg.textContent = ok ? 'すべての部品が使えるようになり、スクラップが無限になった' : 'コードがちがう';
+      msg.className = 'codeMsg ' + (ok ? 'good' : 'bad');
+      inp.value = '';
+    };
+    body.appendChild(code);
+    body.appendChild(msg);
     this.modal('一時停止', body, [{ label: 'つづける', fn: () => { this.closeModal(); if (was === 'drive') G.mode = 'drive'; } }]);
   },
 };

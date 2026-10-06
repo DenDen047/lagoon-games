@@ -1,6 +1,7 @@
 /* =========================================================================
    DEAD DRIVE ― ガレージ
    マス目に部品を置いて車を組む。前は画面の上。
+   置いた部品は押して選ぶと強化でき、ドラッグすると別のマスへ動かせる。
    ========================================================================= */
 'use strict';
 
@@ -11,6 +12,7 @@ const Garage = {
   sel: null,      // 置こうとしている部品
   rot: 0,         // 置くときの向き
   pick: null,     // 選んでいる置き済みの部品
+  drag: null,     // ドラッグで動かしている置き済みの部品
   hover: null,
   cv: null, P: 40,
   painting: false,
@@ -51,11 +53,13 @@ const Garage = {
     const tools = h('div', 'gTools');
     const rotBtn = h('button', 'btn small', '↻ 向きを変える <kbd>R</kbd>');
     rotBtn.onclick = () => this.rotate(root);
+    const upBtn = h('button', 'btn small', '⬆ 強化');
+    upBtn.onclick = () => { if (this.pick && this.upgrade(this.pick)) this.refresh(); };
     const delBtn = h('button', 'btn small ghost', '外す');
     delBtn.onclick = () => { if (this.pick) { this.remove(this.pick); this.render(root); } };
-    delBtn.disabled = !this.pick || this.pick.t === 'cabin';
-    tools.appendChild(rotBtn); tools.appendChild(delBtn);
-    const hint = h('div', 'gHint', this.sel ? `「${PARTS[this.sel].name}」を置く場所を押す。右クリックで外す。` : '部品を選んでから、マスを押して置く。置いた部品を押すと選べる。');
+    tools.appendChild(rotBtn); tools.appendChild(upBtn); tools.appendChild(delBtn);
+    this.upBtn = upBtn; this.delBtn = delBtn;
+    const hint = h('div', 'gHint', this.sel ? `「${PARTS[this.sel].name}」を置く場所を押す。右クリックで外す。` : '部品を選んでから、マスを押して置く。置いた部品を押すと選べて、強化できる。ドラッグすると別のマスへ動かせる。');
     const [cols, rows] = Run.gridSize();
     const avail = Math.min(innerWidth < 760 ? innerWidth - 40 : 420, 560);
     this.P = Math.floor(clamp(Math.min(avail / cols, (innerHeight - 330) / rows), 26, 52));
@@ -65,7 +69,7 @@ const Garage = {
     cv.className = 'gGrid';
     this.cv = cv;
     mid.appendChild(hint); mid.appendChild(cv); mid.appendChild(tools);
-    this.bindGrid(cv, root);
+    this.bindGrid(cv);
 
     /* 性能 */
     const side = h('div', 'gSide');
@@ -83,7 +87,12 @@ const Garage = {
   refresh() {
     this.draw();
     const s = Run.state;
-    const cells = this.design().map((c) => ({ c: c.c, r: c.r, t: c.t, hp: Run.cellHp(c) }));
+    const p = this.pick;
+    this.delBtn.disabled = !p || p.t === 'cabin';
+    const lv = p ? p.lv || 1 : 1, maxed = lv >= PART_MAX_LV;
+    this.upBtn.innerHTML = !p ? '⬆ 強化' : maxed ? '⬆ 強化 最大' : `⬆ 強化 Lv${lv + 1}（🔩${partUpCost(p.t, lv)}）`;
+    this.upBtn.disabled = !p || maxed || s.scrap < partUpCost(p.t, lv);
+    const cells = this.design().map((c) => ({ c: c.c, r: c.r, t: c.t, lv: c.lv, hp: Run.cellHp(c) }));
     const st = carStats(cells, s.perks, s.meta);
     const box = this.root.querySelector('.gStats');
     const bar = (label, val, max, txt) => `<div class="stat"><span>${label}</span><div class="sbar"><i style="width:${clamp(val / max, 0, 1) * 100}%"></i></div><b>${txt}</b></div>`;
@@ -94,9 +103,12 @@ const Garage = {
       bar('最高速', st.top, 520, Math.round(st.top / 3.6) + ' km/h') +
       bar('加速', st.accel, 520, Math.round(st.accel / 3)) +
       bar('曲がり', st.turn, 3.3, (st.turn * 30).toFixed(0)) +
+      bar('タイヤ', st.load, Math.max(st.M, 0.1), `${st.wheels}個・支え ${Math.round(st.load)}`) +
       bar('轢く力', st.ramPow, 3, st.ramPow.toFixed(1)) +
       bar('火力', st.dps, 400, st.dps + '') +
-      `<div class="chips"><span>📦 積載 ${st.cargo}</span><span>💺 座席 ${st.seats}</span><span>🚀 ニトロ ${st.nitro.toFixed(1)}秒</span></div>`;
+      `<div class="chips"><span>📦 積載 ${st.cargo}</span><span>💺 座席 ${st.seats}</span><span>🚀 ニトロ ${st.nitro.toFixed(1)}秒</span></div>` +
+      (!st.wheels ? '<p class="warn">タイヤがない。これでは這うようにしか進まない。</p>'
+        : st.support < 1 ? `<p class="warn">タイヤが重さ ${st.M.toFixed(1)} を支えきれず、遅くなっている。タイヤを足すか、強いタイヤにしよう。</p>` : '');
     const cost = Run.repairCost();
     const rep = this.root.querySelector('.gRepair');
     rep.innerHTML = '';
@@ -113,14 +125,39 @@ const Garage = {
     const box = this.root && this.root.querySelector('.gInfo');
     if (!box) return;
     const d = PARTS[id];
+    const pw = cell ? partPowMul(cell.lv) : 1;   // 置いた部品は強化のぶんも入れて見せる
+    const num = (v) => Math.round(v * pw * 10) / 10;
     let extra = '';
     if (d.weapon) {
       const w = WEAPONS[d.weapon];
-      extra = `<div class="chips"><span>射程 ${w.range || '―'}</span><span>${w.arc > 3 ? '360°' : '射界 ' + Math.round(w.arc * 2 * 180 / Math.PI) + '°'}</span><span>威力 ${w.dmg}${w.pellets ? '×' + w.pellets : ''}</span></div>`;
+      extra = `<div class="chips"><span>射程 ${w.range || '―'}</span><span>${w.arc > 3 ? '360°' : '射界 ' + Math.round(w.arc * 2 * 180 / Math.PI) + '°'}</span><span>威力 ${num(w.dmg)}${w.pellets ? '×' + w.pellets : ''}</span></div>`;
     }
-    const hp = cell ? `<div class="chips"><span>耐久 ${Math.round(Run.cellHp(cell))} / ${Run.cellMax(cell)}</span></div>` : '';
+    if (d.wheel) extra = `<div class="chips"><span>支える重さ ${num(d.wheel.load)}</span><span>速さ ×${d.wheel.speed}</span><span>曲がり ×${d.wheel.turn}</span></div>`;
+    let hp = '';
+    if (cell) {
+      const lv = cell.lv || 1;
+      const pow = d.weapon ? '威力' : d.contact ? '刺す力' : d.power ? '馬力' : d.wheel ? '支える重さ' : '';
+      hp = `<div class="chips"><span>Lv ${lv} / ${PART_MAX_LV}</span><span>耐久 ${Math.round(Run.cellHp(cell))} / ${Run.cellMax(cell)}</span></div>` +
+        `<p>${lv < PART_MAX_LV ? `強化すると 耐久 ×${partHpMul(lv + 1)}${pow ? `・${pow} ×${partPowMul(lv + 1)}` : ''}（はじめと比べて）` : 'これ以上は強化できない。'}</p>`;
+    }
     box.innerHTML = `<h4>${d.name}${d.rot ? ' <small>向きあり</small>' : ''}</h4><p>${d.desc}</p>` +
       `<div class="chips"><span>🔩 ${d.cost}</span><span>耐久 ${d.hp}</span><span>重さ ${d.mass}</span></div>` + extra + hp;
+  },
+
+  /* 選んだ部品を1つ強化する。傷はそのままで、増えた耐久のぶんだけ HP も増える */
+  upgrade(cell) {
+    const s = Run.state, lv = cell.lv || 1;
+    if (lv >= PART_MAX_LV || !s.design.includes(cell)) return false;
+    const cost = partUpCost(cell.t, lv);
+    if (s.scrap < cost) { toast('スクラップが足りない', 'bad'); return false; }
+    const before = Run.cellMax(cell);
+    s.scrap -= cost;
+    cell.lv = lv + 1;
+    if (cell.hp > 0) cell.hp += Run.cellMax(cell) - before;
+    Sfx.good();
+    Run.save(); UI.refreshHead();
+    this.info(cell.t, cell);
+    return true;
   },
 
   rotate(root) {
@@ -145,7 +182,7 @@ const Garage = {
   },
 
   refund(cell) {
-    const cost = PARTS[cell.t].cost;
+    const cost = Run.cellInvest(cell);
     if (cell.fresh) return cost;
     return Math.floor(cost * 0.5 * clamp(Run.cellHp(cell) / Run.cellMax(cell), 0, 1));
   },
@@ -169,14 +206,7 @@ const Garage = {
     if (!s.design.includes(cell)) { this.pick = null; return false; }
     if (cell.t === 'cabin') { toast('運転席は外せない', 'bad'); return false; }
     const rest = s.design.filter((x) => x !== cell);
-    /* 外したあとも全部が運転席につながっているか */
-    const cab = rest.find((x) => x.t === 'cabin');
-    const seen = new Set([cab]); const q = [cab];
-    while (q.length) {
-      const a = q.pop();
-      for (const b of rest) if (!seen.has(b) && Math.abs(a.c - b.c) + Math.abs(a.r - b.r) === 1) { seen.add(b); q.push(b); }
-    }
-    if (seen.size !== rest.length) { toast('ほかの部品がこの部品でつながっているので外せない', 'bad'); return false; }
+    if (!designConnected(rest)) { toast('ほかの部品がこの部品でつながっているので外せない', 'bad'); return false; }
     s.scrap += this.refund(cell);
     s.design = rest;
     if (this.pick === cell) this.pick = null;
@@ -185,29 +215,57 @@ const Garage = {
     return true;
   },
 
-  bindGrid(cv, root) {
-    const cellOf = (ev) => {
-      const r = cv.getBoundingClientRect();
-      const x = (ev.clientX - r.left), y = (ev.clientY - r.top - GTOP);
-      return { c: Math.floor(x / this.P), r: Math.floor(y / this.P) };
-    };
+  /* 置いた部品を空いたマスへ動かせるか。だめなら理由を返す */
+  moveWhy(cell, c, r) {
+    const [cols, rows] = Run.gridSize();
+    if (c < 0 || r < 0 || c >= cols || r >= rows) return '範囲の外';
+    if (this.at(c, r)) return 'そこにはもう部品がある';
+    const oc = cell.c, or = cell.r;
+    cell.c = c; cell.r = r;
+    const ok = designConnected(this.design());
+    cell.c = oc; cell.r = or;
+    return ok ? null : 'そこだと車体からはなれてしまう';
+  },
+
+  cellAt(ev) {
+    const r = this.cv.getBoundingClientRect();
+    return { c: Math.floor((ev.clientX - r.left) / this.P), r: Math.floor((ev.clientY - r.top - GTOP) / this.P) };
+  },
+
+  /* ドラッグを離したマスへ部品を動かす。マス目の外や同じマスで離したら何もしない */
+  drop(ev) {
+    this.painting = false;
+    const cell = this.drag;
+    this.drag = null;
+    if (!cell || !this.cv || !this.cv.isConnected) return;
+    const p = this.cellAt(ev);
+    const [cols, rows] = Run.gridSize();
+    if ((p.c === cell.c && p.r === cell.r) || p.c < 0 || p.r < 0 || p.c >= cols || p.r >= rows) { this.draw(); return; }
+    const why = this.moveWhy(cell, p.c, p.r);
+    if (why) toast(why, 'bad');
+    else { cell.c = p.c; cell.r = p.r; Sfx.load(); Run.save(); }
+    this.refresh();
+  },
+
+  bindGrid(cv) {
     const act = (ev, first) => {
-      const p = cellOf(ev);
+      const p = this.cellAt(ev);
       const cur = this.at(p.c, p.r);
       if (this.sel) {
         if (!first && cur) return;
         if (this.place(p.c, p.r)) { this.refresh(); }
       } else if (first) {
         this.pick = cur || null;
+        this.drag = cur || null;
         if (cur) this.info(cur.t, cur);
-        this.render(root);
+        this.refresh();
       }
     };
     cv.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
       Sfx.unlock();
       if (ev.button === 2) {
-        const p = cellOf(ev); const cur = this.at(p.c, p.r);
+        const p = this.cellAt(ev); const cur = this.at(p.c, p.r);
         if (cur && this.remove(cur)) this.refresh();
         return;
       }
@@ -215,12 +273,12 @@ const Garage = {
       act(ev, true);
     });
     cv.addEventListener('pointermove', (ev) => {
-      const p = cellOf(ev);
+      const p = this.cellAt(ev);
       if (!this.hover || this.hover.c !== p.c || this.hover.r !== p.r) { this.hover = p; this.draw(); }
       if (this.painting && this.sel && ev.pointerType === 'mouse' && ev.buttons === 1) act(ev, false);
     });
     cv.addEventListener('pointerleave', () => { this.hover = null; this.draw(); });
-    if (!this.upBound) { this.upBound = true; addEventListener('pointerup', () => { this.painting = false; }); }
+    if (!this.upBound) { this.upBound = true; addEventListener('pointerup', (ev) => this.drop(ev)); }
     cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
   },
 
@@ -245,32 +303,40 @@ const Garage = {
       ctx.strokeStyle = '#ffd35a'; ctx.lineWidth = 2.5;
       ctx.strokeRect(this.pick.c * P + 1.5, this.pick.r * P + 1.5, P - 3, P - 3);
     }
-    /* 置く前の影 */
-    if (this.sel && this.hover) {
+    /* 置く前・動かす前の影。置けないマスは赤い枠 */
+    const ghost = (t, rot, bad) => {
       const { c, r } = this.hover;
-      if (c >= 0 && r >= 0 && c < cols && r < rows) {
-        const bad = this.canPlace(c, r, this.sel);
-        ctx.save();
-        ctx.globalAlpha = 0.6;
-        ctx.translate((c + 0.5) * P, (r + 0.5) * P); ctx.rotate(-Math.PI / 2); ctx.scale(P / CS, P / CS);
-        drawPart(ctx, this.sel, PARTS[this.sel].rot ? this.rot : 0, CS, {});
-        ctx.restore();
-        ctx.strokeStyle = bad && bad !== 'もう置いてある' ? '#ff5f6d' : '#7ee39b'; ctx.lineWidth = 2;
-        ctx.strokeRect(c * P + 1, r * P + 1, P - 2, P - 2);
-      }
+      if (c < 0 || r < 0 || c >= cols || r >= rows) return;
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.translate((c + 0.5) * P, (r + 0.5) * P); ctx.rotate(-Math.PI / 2); ctx.scale(P / CS, P / CS);
+      drawPart(ctx, t, rot, CS, {});
+      ctx.restore();
+      ctx.strokeStyle = bad ? '#ff5f6d' : '#7ee39b'; ctx.lineWidth = 2;
+      ctx.strokeRect(c * P + 1, r * P + 1, P - 2, P - 2);
+    };
+    if (this.sel && this.hover) {
+      const bad = this.canPlace(this.hover.c, this.hover.r, this.sel);
+      ghost(this.sel, PARTS[this.sel].rot ? this.rot : 0, bad && bad !== 'もう置いてある');
+    } else if (this.drag && this.hover && (this.hover.c !== this.drag.c || this.hover.r !== this.drag.r)) {
+      ghost(this.drag.t, this.drag.rot || 0, !!this.moveWhy(this.drag, this.hover.c, this.hover.r));
     }
   },
 };
 
+/* 部品がすべて、運転席から上下左右のとなりづたいにつながっているか */
+function designConnected(cells) {
+  const cab = cells.find((x) => x.t === 'cabin');
+  const seen = new Set([cab]); const q = [cab];
+  while (q.length) {
+    const a = q.pop();
+    for (const b of cells) if (!seen.has(b) && Math.abs(a.c - b.c) + Math.abs(a.r - b.r) === 1) { seen.add(b); q.push(b); }
+  }
+  return seen.size === cells.length;
+}
+
 /* 設計図のマスを、前を上にして描く（ガレージとアイコン用） */
 function drawDesign(ctx, design, P, opt = {}) {
-  let minR = 99, maxR = -99, minC = 99, maxC = -99;
-  for (const c of design) { minR = Math.min(minR, c.r); maxR = Math.max(maxR, c.r); minC = Math.min(minC, c.c); maxC = Math.max(maxC, c.c); }
-  /* 車輪 */
-  ctx.fillStyle = '#0c0d0f';
-  for (const r of [minR, maxR]) for (const c of [minC - 0.55, maxC + 0.55]) {
-    roundRect(ctx, (c + 0.5) * P - P * 0.26, (r + 0.5) * P - P * 0.5, P * 0.52, P, P * 0.15); ctx.fill();
-  }
   const has = (c, r) => design.some((x) => x.c === c && x.r === r && Run.cellHp(x) > 0);
   for (const cell of design) {
     const hp = Run.cellHp(cell), max = Run.cellMax(cell);
@@ -281,7 +347,7 @@ function drawDesign(ctx, design, P, opt = {}) {
     let open = 0;
     [[0, -1], [1, 0], [0, 1], [-1, 0]].forEach(([dc, dr], i) => { if (!has(cell.c + dc, cell.r + dr)) open |= 1 << i; });
     if (hp <= 0) ctx.globalAlpha = 0.35;
-    drawPart(ctx, cell.t, cell.rot || 0, CS, { open, hpRatio: opt.hp ? hp / max : 1, time: G.time });
+    drawPart(ctx, cell.t, cell.rot || 0, CS, { open, hpRatio: opt.hp ? hp / max : 1, time: G.time, lv: cell.lv });
     ctx.restore();
     if (hp <= 0) {
       ctx.strokeStyle = '#ff5f6d'; ctx.lineWidth = 2;

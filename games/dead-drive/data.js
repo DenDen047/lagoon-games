@@ -10,7 +10,9 @@ const RAID_NIGHTS = [2, 4, 6, 8, 10];
 
 /* ------------------------------- 車の部品 ------------------------------- */
 /* bp: true の部品は設計図を手に入れるまで置けない。
-   rot: true の部品は向きを持つ（0=前 1=右 2=後ろ 3=左）。 */
+   rot: true の部品は向きを持つ（0=前 1=右 2=後ろ 3=左）。
+   face: true の部品は、向けた側だけがトゲで刺す。reach はトゲが向けた側へ突き出る長さ（マス）。
+   wheel はタイヤの性能。load 支えられる重さ / grip 滑りにくさ / speed 最高速の倍率 / turn 曲がりやすさの倍率 / w 描くときの幅。 */
 const PARTS = {
   cabin:   { name: '運転席',     cat: 'core',   cost: 0,  hp: 150, mass: 3.0, col: '#d9b44a', seats: 1, cargo: 4,
              desc: 'あなたが乗る席。ここが壊れたら終わり。小さなエンジンと荷物入れがついている。' },
@@ -22,10 +24,18 @@ const PARTS = {
              desc: '戦車の板。とても硬いがとても重い。' },
   ram:     { name: '衝角',       cat: 'body',   cost: 14, hp: 130, mass: 2.0, col: '#c9cfd6', rot: true, ram: 2.4,
              desc: '向けた方向でゾンビにぶつかると大ダメージ。自分はほとんど傷つかない。' },
-  spikes:  { name: 'トゲ',       cat: 'body',   cost: 10, hp: 70,  mass: 1.0, col: '#9aa3ad', contact: 45,
-             desc: '触れているゾンビを刺しつづける。しがみつかれても平気になる。' },
+  spikes:  { name: 'スパイカー', cat: 'body',   cost: 12, hp: 100, mass: 1.3, col: '#9aa3ad', rot: true, face: true, reach: 0.6, contact: 70, ram: 1.7,
+             desc: 'トゲトゲの壁。向けた側に長いトゲが並び、張りついたゾンビを刺しつづける。トゲの側でぶつかると轢く力も上がる。' },
   saw:     { name: '回転ノコ',   cat: 'weapon', cost: 28, hp: 80,  mass: 1.6, col: '#d0d6dc', contact: 160, bp: true,
              desc: '触れたゾンビを切り刻む丸ノコ。車の角に付けると強い。' },
+  wheel:   { name: 'タイヤ',     cat: 'wheel',  cost: 5,  hp: 60,  mass: 0.4, col: '#2a2d31', wheel: { load: 7, grip: 6.5, speed: 1, turn: 1, w: 0.55 },
+             desc: 'ふつうのタイヤ。置いたマスにつき、車を支えて走らせる。いちばん前の列のタイヤが向きを変える。' },
+  bikewheel: { name: 'バイクのタイヤ', cat: 'wheel', cost: 4, hp: 35, mass: 0.2, col: '#2a2d31', wheel: { load: 3.5, grip: 5.2, speed: 1.15, turn: 1.3, w: 0.3 },
+             desc: '細くて軽いタイヤ。速く、よく曲がるが、重い車は支えきれない。前と後ろに1つずつ付ければバイクになる。' },
+  bigwheel:  { name: 'オフロードタイヤ', cat: 'wheel', cost: 14, hp: 120, mass: 1.2, col: '#2a2d31', bp: true, wheel: { load: 15, grip: 8.5, speed: 0.93, turn: 0.9, w: 0.82 },
+             desc: '太くて硬いタイヤ。重い車もしっかり支え、滑りにくい。少し遅くなる。' },
+  spikewheel: { name: 'スパイクタイヤ', cat: 'wheel', cost: 22, hp: 80, mass: 0.8, col: '#2a2d31', bp: true, contact: 70, wheel: { load: 7, grip: 7.5, speed: 0.97, turn: 1, w: 0.6 },
+             desc: 'トゲの生えたタイヤ。触れたゾンビをスパイカーと同じように刺す。どの向きから触れても刺さる。' },
   engine:  { name: 'エンジン',   cat: 'util',   cost: 20, hp: 60,  mass: 2.0, col: '#b0563c', power: 5,
              desc: '馬力が上がる。重い車ほど何基も要る。' },
   nitro:   { name: 'ニトロ',     cat: 'util',   cost: 16, hp: 40,  mass: 0.7, col: '#3d8fd6', nitro: 1,
@@ -53,13 +63,23 @@ const PARTS = {
   mines:   { name: '地雷投下機', cat: 'weapon', cost: 30, hp: 60,  mass: 1.2, col: '#7a6a3a', weapon: 'mines', bp: true,
              desc: '走っていると後ろに地雷を落としていく。追ってくる群れに強い。' },
 };
-const PART_ORDER = ['frame', 'armor', 'heavy', 'ram', 'spikes', 'saw', 'mg', 'shotgun', 'flamer', 'rocket', 'turret', 'tesla', 'mines', 'engine', 'nitro', 'cargo', 'seat', 'magnet', 'repair'];
+const PART_ORDER = ['frame', 'armor', 'heavy', 'ram', 'spikes', 'saw', 'wheel', 'bikewheel', 'bigwheel', 'spikewheel', 'mg', 'shotgun', 'flamer', 'rocket', 'turret', 'tesla', 'mines', 'engine', 'nitro', 'cargo', 'seat', 'magnet', 'repair'];
 const PART_CATS = [
   { id: 'body', name: '車体' },
+  { id: 'wheel', name: 'タイヤ' },
   { id: 'weapon', name: '武器' },
   { id: 'util', name: '装備' },
 ];
 const BP_POOL = PART_ORDER.filter((id) => PARTS[id].bp);
+
+/* 部品の強化。ガレージで1マスずつ Lv を上げる。
+   耐久はすべての部品で上がり、武器の威力・トゲの刺す力・エンジンの馬力・タイヤの支える力も上がる。 */
+const PART_MAX_LV = 3;
+const partHpMul = (lv) => 1 + 0.5 * ((lv || 1) - 1);
+const partPowMul = (lv) => 1 + 0.3 * ((lv || 1) - 1);
+/* Lv lv から lv+1 へ上げる値段。運転席は値段 0 なので 30 として数える */
+const partUpCost = (t, lv) => Math.max(6, t === 'cabin' ? 30 : PARTS[t].cost) * lv;
+const partMaxHp = (t, lv, plate) => Math.round(PARTS[t].hp * partHpMul(lv) * (1 + 0.1 * (plate || 0)));
 
 /* ------------------------------- 武器 ------------------------------- */
 /* arc は射界の半分の角度。rate は1秒あたりの発射数。 */
@@ -111,7 +131,7 @@ const PERKS = [
   { id: 'range',   icon: '🎯', name: '長い照準',       max: 3, desc: '武器の射程 +15%', needWeapon: true },
   { id: 'fire',    icon: '🔥', name: '焼夷弾',         max: 3, desc: '弾が当たったゾンビが燃える', needWeapon: true },
   { id: 'crit',    icon: '✦',  name: '急所',           max: 3, desc: '弾が2.5倍のダメージになる確率 +15%', needWeapon: true },
-  { id: 'spikes',  icon: '🦔', name: 'トゲ強化',       max: 3, desc: 'トゲ・ノコの接触ダメージ +50%。外側の部品すべてが少し刺さる' },
+  { id: 'spikes',  icon: '🦔', name: 'トゲ強化',       max: 3, desc: 'スパイカー・スパイクタイヤ・ノコの接触ダメージ +50%。外側の部品すべてが少し刺さる' },
   { id: 'repair',  icon: '🔧', name: '轢いて直す',     max: 3, desc: '轢くたびに、いちばん傷んだ部品が少し直る' },
   { id: 'nitro',   icon: '🚀', name: 'ニトロ過給',     max: 3, desc: 'ニトロの回復 +40%、容量 +30%' },
   { id: 'speed',   icon: '🏁', name: 'チューンドエンジン', max: 4, desc: '最高速 +8%、加速 +12%' },
@@ -303,11 +323,15 @@ const META = [
   { id: 'reroll', name: '迷い',           max: 2, cost: [5, 10],    desc: '強化の選び直しが1日に1回ふえる' },
 ];
 
-/* はじめの車。運転席のまわりに最低限の装甲と機関銃。 */
+/* はじめの車。運転席のまわりに最低限の装甲と機関銃、両わきに4つのタイヤ。 */
 const START_DESIGN = [
   { c: 2, r: 1, t: 'ram', rot: 0 },
-  { c: 1, r: 2, t: 'armor' }, { c: 2, r: 2, t: 'mg', rot: 0 }, { c: 3, r: 2, t: 'armor' },
+  { c: 0, r: 2, t: 'wheel' }, { c: 1, r: 2, t: 'armor' }, { c: 2, r: 2, t: 'mg', rot: 0 }, { c: 3, r: 2, t: 'armor' }, { c: 4, r: 2, t: 'wheel' },
   { c: 1, r: 3, t: 'armor' }, { c: 2, r: 3, t: 'cabin' }, { c: 3, r: 3, t: 'armor' },
-  { c: 1, r: 4, t: 'cargo' }, { c: 2, r: 4, t: 'engine' }, { c: 3, r: 4, t: 'seat' },
+  { c: 0, r: 4, t: 'wheel' }, { c: 1, r: 4, t: 'cargo' }, { c: 2, r: 4, t: 'engine' }, { c: 3, r: 4, t: 'seat' }, { c: 4, r: 4, t: 'wheel' },
   { c: 2, r: 5, t: 'armor' },
 ];
+
+/* ひみつのコード。入れるとこのランの設計図がすべてそろい、スクラップが減らなくなる */
+const CHEAT_CODE = 'unlockall';
+const CHEAT_SCRAP = 999999;

@@ -53,7 +53,8 @@ const Backdrop = {
     for (const c of d) {
       ctx.save();
       ctx.translate((cyr - c.r) * CS, (c.c - cxr) * CS);
-      drawPart(ctx, c.t, c.rot || 0, CS, { open: 15, time: t, aim: c.t === 'mg' ? Math.sin(t * 1.3) * 0.4 : undefined });
+      const open = [[0, -1], [1, 0], [0, 1], [-1, 0]].reduce((o, [dc, dr], i) => (d.some((x) => x.c === c.c + dc && x.r === c.r + dr) ? o : o | (1 << i)), 0);
+      drawPart(ctx, c.t, c.rot || 0, CS, { open, time: t, spin: (t * 3) % 1, aim: c.t === 'mg' ? Math.sin(t * 1.3) * 0.4 : undefined });
       ctx.restore();
     }
     ctx.restore();

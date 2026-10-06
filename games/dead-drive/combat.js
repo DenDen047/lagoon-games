@@ -158,7 +158,7 @@ function updateCarWeapons(S, dt) {
     if (w.kind === 'mine') {
       if (c.cd <= 0 && car.speed > 70) {
         c.cd = 1 / w.rate;
-        S.mines.push({ x: wx - car.cosA * CS, y: wy - car.sinA * CS, t: 0, dmg: w.dmg * m.dmg, r: w.radius * m.radius });
+        S.mines.push({ x: wx - car.cosA * CS, y: wy - car.sinA * CS, t: 0, dmg: w.dmg * m.dmg * partPowMul(c.lv), r: w.radius * m.radius });
       }
       continue;
     }
@@ -187,6 +187,7 @@ function updateCarWeapons(S, dt) {
     if (shoot && c.cd <= 0 && Math.abs(angDiff(c.aim, want)) < 0.3) {
       c.cd = 1 / w.rate;
       const bx = wx + Math.cos(c.aim) * CS * 0.7, by = wy + Math.sin(c.aim) * CS * 0.7;
+      m.extra = partPowMul(c.lv);   // 強化した武器ほど威力が上がる
       fireWeapon(S, w, bx, by, c.aim, m, { target: c.target });
     }
   }

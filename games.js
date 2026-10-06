@@ -14,17 +14,6 @@ const GENRES = [
 
 const GAMES = [
   {
-    slug: 'star-flick', genre: 'action', players: '1–2P', date: '2026-10-06',
-    ja: {
-      title: 'STAR FLICK ― 宇宙船で消しピン',
-      desc: '宇宙船をはじいてぶつけ、相手を宇宙へ落とす消しピン。回転・ジェット・こわれないバリアで改造し、ガチャでパーツを集め、たおした敵の船はうばって使える。スマホにも対応。',
-    },
-    en: {
-      title: 'Star Flick',
-      desc: 'Flick-battle spaceships off stations, moons and the edge of a black hole. Add spin, jets and unbreakable barriers, pull parts from a gacha and steal the ships you beat. Plays on phones.',
-    },
-  },
-  {
     slug: 'neko-mart', genre: 'sandbox', players: '1P', date: '2026-10-06',
     ja: {
       title: 'NEKO MART ― ねこのお店やさん',

@@ -22,7 +22,7 @@ const Run = {
     const m = (id) => this.metaLv(id);
     const seed = (Math.random() * 1e9) | 0;
     this.state = {
-      day: 1, phase: 'morning', easy, seed,
+      day: 1, phase: 'morning', easy, seed, ver: 2,
       scrap: 70 + m('scrap') * 40 + (easy ? 30 : 0),
       food: 12 + m('food') * 8,
       fuel: 5 + m('fuel') * 2,
@@ -41,12 +41,46 @@ const Run = {
     this.save();
   },
 
-  save() { if (this.state) Save.write(Save.RUN, this.state); },
+  save() {
+    if (!this.state) return;
+    /* ひみつのコードを使ったランは、使ったぶんのスクラップをここで満たし直す */
+    if (this.state.cheat) this.state.scrap = CHEAT_SCRAP;
+    Save.write(Save.RUN, this.state);
+  },
   load() {
     const s = Save.read(Save.RUN);
     if (!s || !s.design) return false;
+    if (!s.ver) { this.addMissingWheels(s); s.ver = 2; }
     this.state = s;
     return true;
+  },
+
+  /* タイヤが部品になる前（ver なし）のセーブには、車のいちばん外の列の前と後ろにふつうのタイヤを足す。
+     車がマス目の端まで広がっていて外に付けられなければ、となりの空いたマスに4つまで付ける */
+  addMissingWheels(s) {
+    const d = s.design;
+    const [cols, rows] = GARAGE_GRID[s.base.garage];
+    const cs = d.map((x) => x.c), minC = Math.min(...cs), maxC = Math.max(...cs);
+    for (const [edge, wc] of [[minC, minC - 1], [maxC, maxC + 1]]) {
+      if (wc < 0 || wc >= cols) continue;
+      const rs = d.filter((x) => x.c === edge).map((x) => x.r);
+      for (const r of new Set([Math.min(...rs), Math.max(...rs)])) d.push({ c: wc, r, t: 'wheel', rot: 0 });
+    }
+    const free = (c, r) => c >= 0 && r >= 0 && c < cols && r < rows && !d.some((x) => x.c === c && x.r === r);
+    for (const x of d.slice()) {
+      for (const [dc, dr] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        if (d.filter((y) => y.t === 'wheel').length >= 4) return;
+        if (free(x.c + dc, x.r + dr)) d.push({ c: x.c + dc, r: x.r + dr, t: 'wheel', rot: 0 });
+      }
+    }
+  },
+
+  /* ひみつのコード。このランの設計図をすべてそろえ、スクラップを減らなくする */
+  cheat() {
+    const s = this.state;
+    s.cheat = true;
+    s.scrap = CHEAT_SCRAP;
+    for (const id of BP_POOL) if (!s.bps.includes(id)) s.bps.push(id);
   },
   clear() { this.state = null; Save.clear(Save.RUN); },
 
@@ -116,15 +150,21 @@ const Run = {
   },
 
   /* ------------------------------ 車の修理 ------------------------------ */
-  cellMax(c) { return Math.round(PARTS[c.t].hp * (1 + 0.1 * (this.state.meta.plate || 0))); },
+  cellMax(c) { return partMaxHp(c.t, c.lv, this.state.meta.plate); },
   cellHp(c) { return c.hp === undefined ? this.cellMax(c) : c.hp; },
+  /* その部品に使ったスクラップ（置いた値段と強化の値段） */
+  cellInvest(c) {
+    let v = PARTS[c.t].cost;
+    for (let l = 1; l < (c.lv || 1); l++) v += partUpCost(c.t, l);
+    return v;
+  },
   mechanics() { return this.state.survivors.filter((x) => x.trait === 'mechanic').length; },
   repairCost() {
     let cost = 0;
     for (const c of this.state.design) {
       const max = this.cellMax(c), hp = this.cellHp(c);
       if (hp >= max) continue;
-      const base = c.t === 'cabin' ? 30 : PARTS[c.t].cost;
+      const base = (c.t === 'cabin' ? 30 : PARTS[c.t].cost) * partHpMul(c.lv);
       cost += base * 0.5 * (1 - hp / max) + (hp <= 0 ? 1 : 0);
     }
     return Math.ceil(cost * Math.max(0.4, 1 - 0.25 * this.mechanics()));

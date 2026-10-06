@@ -6,7 +6,8 @@
 'use strict';
 
 /* 部品1つを描く。(0,0) がマスの中心、+x が車の前。
-   open は外にむき出しの辺（1=前 2=右 4=後ろ 8=左）、aim は砲身の向き（ローカル角）。 */
+   open は外にむき出しの辺（1=前 2=右 4=後ろ 8=左）、aim は砲身の向き（ローカル角）。
+   タイヤは spin（0〜1）で溝が流れ、steer の角度だけ向きを変える。lv は強化の印。 */
 function drawPart(ctx, t, rot, s, o = {}) {
   const d = PARTS[t];
   const hs = s / 2;
@@ -84,20 +85,25 @@ function drawPart(ctx, t, rot, s, o = {}) {
       break;
     }
     case 'spikes': {
-      ctx.fillStyle = '#c8cfd6';
-      for (let side = 0; side < 4; side++) {
-        if (!(open & (1 << side))) continue;
-        ctx.save(); ctx.rotate(side * Math.PI / 2);
-        for (let i = -1; i <= 1; i++) {
-          ctx.beginPath();
-          ctx.moveTo(hs - 1, i * hs * 0.62 - hs * 0.26); ctx.lineTo(hs + s * 0.42, i * hs * 0.62); ctx.lineTo(hs - 1, i * hs * 0.62 + hs * 0.26);
-          ctx.closePath(); ctx.fill();
+      /* トゲトゲの壁。向けた側の縁に厚い板が立ち、そこから長いトゲが外へ並ぶ。
+         となりと同じ向きに並べると、ひとつながりの壁になる */
+      plate(shade(base, -0.4), 0, 2);
+      ctx.save(); ctx.rotate(rot * Math.PI / 2);
+      if (open & (1 << rot)) {
+        for (let i = 0; i < 5; i++) {
+          const y = -hs + s * (i + 0.5) / 5, len = i % 2 ? s * 0.42 : s * 0.72;
+          ctx.fillStyle = i % 2 ? '#aab2ba' : '#e1e6eb';
+          ctx.beginPath(); ctx.moveTo(hs * 0.3, y - s * 0.09); ctx.lineTo(hs + len, y); ctx.lineTo(hs * 0.3, y + s * 0.09); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 0.6; ctx.stroke();
         }
-        ctx.restore();
       }
-      plate(shade(base, -0.25), 0, 2);
-      ctx.fillStyle = '#c8cfd6';
-      ctx.beginPath(); ctx.arc(0, 0, s * 0.16, 0, TAU); ctx.fill();
+      ctx.fillStyle = shade(base, -0.08);
+      ctx.fillRect(hs * 0.05, -hs, hs * 0.8, s);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(hs * 0.05, -hs, hs * 0.14, s);
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(hs * 0.05, -hs + 0.5, hs * 0.8, s - 1);
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      for (const y of [-hs * 0.6, 0, hs * 0.6]) { ctx.beginPath(); ctx.arc(hs * 0.45, y, s * 0.06, 0, TAU); ctx.fill(); }
+      ctx.restore();
       break;
     }
     case 'saw': {
@@ -110,6 +116,34 @@ function drawPart(ctx, t, rot, s, o = {}) {
       ctx.closePath(); ctx.fill();
       ctx.fillStyle = '#8a939c'; ctx.beginPath(); ctx.arc(0, 0, s * 0.3, 0, TAU); ctx.fill();
       ctx.fillStyle = '#50575e'; ctx.beginPath(); ctx.arc(0, 0, s * 0.12, 0, TAU); ctx.fill();
+      ctx.restore();
+      break;
+    }
+    case 'wheel': case 'bikewheel': case 'bigwheel': case 'spikewheel': {
+      /* となりの部品へ軸をのばし、その上にタイヤを前後に長く描く */
+      const wd = d.wheel, len = s * (t === 'bigwheel' ? 1.1 : 0.98), wid = s * wd.w, sp = o.spin || 0;
+      ctx.fillStyle = '#5d656d';
+      for (let side = 0; side < 4; side++) {
+        if (open & (1 << side)) continue;
+        ctx.save(); ctx.rotate(side * Math.PI / 2); ctx.fillRect(0, -s * 0.09, hs + 0.5, s * 0.18); ctx.restore();
+      }
+      ctx.save(); ctx.rotate(o.steer || 0);
+      if (t === 'spikewheel') {
+        ctx.fillStyle = '#d5dbe1';
+        for (const sy of [-1, 1]) for (let i = 0; i < 4; i++) {
+          const x = (((i + 0.5) / 4 + sp) % 1) * len - len / 2;
+          ctx.beginPath(); ctx.moveTo(x - s * 0.08, sy * wid * 0.4); ctx.lineTo(x, sy * (wid / 2 + s * 0.24)); ctx.lineTo(x + s * 0.08, sy * wid * 0.4); ctx.closePath(); ctx.fill();
+        }
+        for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * len * 0.4, -s * 0.08); ctx.lineTo(sx * (len / 2 + s * 0.2), 0); ctx.lineTo(sx * len * 0.4, s * 0.08); ctx.closePath(); ctx.fill(); }
+      }
+      ctx.fillStyle = '#16181b';
+      roundRect(ctx, -len / 2, -wid / 2, len, wid, wid * 0.4); ctx.fill();
+      ctx.save(); ctx.clip();
+      ctx.fillStyle = '#3a3e44';
+      for (let i = 0; i < 5; i++) { const x = ((i / 5 + sp) % 1) * len - len / 2; ctx.fillRect(x, -wid / 2, s * 0.11, wid); }
+      ctx.restore();
+      ctx.fillStyle = t === 'spikewheel' ? '#c9453b' : '#8a929b';
+      ctx.fillRect(-s * 0.1, -wid * 0.22, s * 0.2, wid * 0.44);
       ctx.restore();
       break;
     }
@@ -240,11 +274,16 @@ function drawPart(ctx, t, rot, s, o = {}) {
       break;
     }
   }
-  if (dmg < 0.55) {
+  if (dmg < 0.55 && !d.wheel) {
     ctx.fillStyle = `rgba(20,12,8,${(0.55 - dmg) * 0.9})`;
     ctx.fillRect(-hs, -hs, s, s);
     ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(-hs * 0.6, -hs * 0.2); ctx.lineTo(-hs * 0.1, hs * 0.1); ctx.lineTo(hs * 0.3, -hs * 0.3); ctx.lineTo(hs * 0.6, hs * 0.4); ctx.stroke();
+  }
+  /* 強化した部品には、前の左すみに金の印を Lv-1 個 */
+  for (let i = 1; i < (o.lv || 1); i++) {
+    ctx.fillStyle = '#ffd35a'; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.rect(hs - s * 0.24, -hs + s * 0.06 + (i - 1) * s * 0.22, s * 0.17, s * 0.17); ctx.fill(); ctx.stroke();
   }
   if (o.flash) { ctx.fillStyle = `rgba(255,255,255,${o.flash})`; ctx.fillRect(-hs, -hs, s, s); }
 }
@@ -253,27 +292,30 @@ function drawPart(ctx, t, rot, s, o = {}) {
 function carStats(cells, perks = {}, meta = {}) {
   const alive = cells.filter((c) => c.hp > 0);
   let M = 0, P = 0, cargo = 0, seats = 0, nitro = 0, magnet = 36, hp = 0, maxhp = 0, dps = 0, contact = 0;
+  let wheels = 0, load = 0, wgrip = 0, wspeed = 0, wturn = 0;
   let minR = 99, maxR = -99, minC = 99, maxC = -99;
-  const plate = 1 + 0.1 * (meta.plate || 0);
-  for (const c of cells) maxhp += Math.round(PARTS[c.t].hp * plate);
+  for (const c of cells) maxhp += partMaxHp(c.t, c.lv, meta.plate);
   for (const c of alive) {
-    const d = PARTS[c.t];
+    const d = PARTS[c.t], pw = partPowMul(c.lv);
     M += d.mass; hp += c.hp;
     if (c.t === 'cabin') P += 6;
-    if (d.power) P += d.power;
+    if (d.power) P += d.power * pw;
     if (d.cargo) cargo += d.cargo;
     if (d.seats) seats += d.seats;
     if (d.nitro) nitro += d.nitro;
     if (d.magnet) magnet += d.magnet;
-    if (d.contact) contact += d.contact;
-    if (d.weapon) { const w = WEAPONS[d.weapon]; dps += w.dmg * (w.pellets || 1) * w.rate * (w.chain ? 2 : 1) * (w.radius ? 2.5 : 1); }
+    if (d.contact) contact += d.contact * pw;
+    if (d.weapon) { const w = WEAPONS[d.weapon]; dps += w.dmg * (w.pellets || 1) * w.rate * (w.chain ? 2 : 1) * (w.radius ? 2.5 : 1) * pw; }
+    if (d.wheel) { wheels++; load += d.wheel.load * pw; wgrip += d.wheel.grip; wspeed += d.wheel.speed; wturn += d.wheel.turn; }
     minR = Math.min(minR, c.r); maxR = Math.max(maxR, c.r); minC = Math.min(minC, c.c); maxC = Math.max(maxC, c.c);
   }
   const diag = Math.hypot(maxR - minR + 1, maxC - minC + 1) * CS;
-  const sp = 1 + 0.08 * (perks.speed || 0);
-  const top = clamp(330 * Math.pow(P / (M * 0.45 + 3), 0.35), 170, 520) * sp;
-  const accel = 720 * P / (M + 6) * (1 + 0.12 * (perks.speed || 0));
-  const turn = 3.0 * clamp(1.25 - diag / 300 - M / 170, 0.45, 1.1) * (1 + 0.12 * (perks.grip || 0));
+  /* タイヤが重さを支えきれないと遅くなる。1つもなければ車体を引きずって這うだけ */
+  const support = wheels ? clamp(load / M, 0.25, 1) : 0.12;
+  const sp = (1 + 0.08 * (perks.speed || 0)) * (wheels ? wspeed / wheels : 1);
+  const top = clamp(330 * Math.pow(P / (M * 0.45 + 3), 0.35), 170, 520) * sp * (0.25 + 0.75 * support);
+  const accel = 720 * P / (M + 6) * (1 + 0.12 * (perks.speed || 0)) * support;
+  const turn = 3.0 * clamp(1.25 - diag / 300 - M / 170, 0.45, 1.1) * (1 + 0.12 * (perks.grip || 0)) * (wheels ? wturn / wheels : 0.6);
   const dmgMul = (1 + 0.18 * (perks.dmg || 0)) * (1 + 0.15 * (perks.rate || 0));
   return {
     M, P, top, accel, turn, hp, maxhp,
@@ -284,7 +326,8 @@ function carStats(cells, perks = {}, meta = {}) {
     dps: Math.round(dps * dmgMul),
     contact,
     ramPow: Math.sqrt(M / 8),
-    grip: 6.5 + (perks.grip || 0) * 1.6,
+    grip: (wheels ? wgrip / wheels : 3) + (perks.grip || 0) * 1.6,
+    wheels, load, support,
   };
 }
 
@@ -294,11 +337,10 @@ class Car {
     this.cols = cols; this.rows = rows;
     this.perks = run.perks; this.meta = run.meta;
     this.dmgTaken = (1 - 0.1 * (this.perks.armor || 0)) * (run.easy ? 0.6 : 1);
-    const plate = 1 + 0.1 * (this.meta.plate || 0);
     this.cells = design.map((d) => ({
-      c: d.c, r: d.r, t: d.t, rot: d.rot || 0, def: PARTS[d.t],
-      max: Math.round(PARTS[d.t].hp * plate),
-      hp: d.hp === undefined ? Math.round(PARTS[d.t].hp * plate) : d.hp,
+      c: d.c, r: d.r, t: d.t, rot: d.rot || 0, lv: d.lv || 1, def: PARTS[d.t],
+      max: partMaxHp(d.t, d.lv, this.meta.plate),
+      hp: d.hp === undefined ? partMaxHp(d.t, d.lv, this.meta.plate) : d.hp,
       alive: true, cd: rand(0.3), aim: (d.rot || 0) * Math.PI / 2, flash: 0, open: 15, smoke: 0,
     }));
     for (const c of this.cells) { if (c.hp > c.max) c.hp = c.max; if (c.hp <= 0) c.alive = false; }
@@ -325,6 +367,10 @@ class Car {
     this.st = carStats(this.cells.filter((c) => c.alive), this.perks, this.meta);
     this.weapons = this.cells.filter((c) => c.alive && c.def.weapon);
     this.contacts = this.cells.filter((c) => c.alive && c.def.contact);
+    /* いちばん前の列のタイヤが向きを変え、いちばん後ろの列のタイヤが横すべりの跡を残す */
+    this.wheels = this.cells.filter((c) => c.alive && c.def.wheel);
+    this.wheelR0 = Math.min(...this.wheels.map((c) => c.r));
+    this.wheelR1 = Math.max(...this.wheels.map((c) => c.r));
     let R = 0;
     for (const c of this.cells) {
       if (!c.alive) continue;
@@ -332,11 +378,12 @@ class Car {
       const nb = [[0, -1], [1, 0], [0, 1], [-1, 0]];
       nb.forEach(([dc, dr], i) => { const n = this.at(c.c + dc, c.r + dr); if (!n || !n.alive) open |= 1 << i; });
       c.open = open;
-      R = Math.max(R, Math.hypot(c.lf, c.lr));
+      /* スパイカーのトゲ先まで当たるので、そのぶん外側まで調べる */
+      const spike = c.def.reach && (open & (1 << c.rot)) ? c.def.reach * CS : 0;
+      R = Math.max(R, Math.hypot(c.lf, c.lr) + spike);
     }
     this.R = R + CS * 0.9;
     if (this.nitroT > this.st.nitro) this.nitroT = this.st.nitro;
-    /* 車輪は生きているマスの外枠の四隅につく */
     let minR = 99, maxR = -99, minC = 99, maxC = -99;
     for (const c of this.cells) if (c.alive) { minR = Math.min(minR, c.r); maxR = Math.max(maxR, c.r); minC = Math.min(minC, c.c); maxC = Math.max(maxC, c.c); }
     this.box = { minR, maxR, minC, maxC };
@@ -365,7 +412,13 @@ class Car {
         const cell = this.at(cc, rr);
         if (!cell || !cell.alive) continue;
         const dxf = lf - cell.lf, dxr = lr - cell.lr;
-        const qf = clamp(dxf, -H, H), qr = clamp(dxr, -H, H);
+        /* スパイカーのトゲは向けた側へ突き出ているので、その側だけ当たる範囲を広げる */
+        let f0 = -H, f1 = H, r0 = -H, r1 = H;
+        if (cell.def.reach && (cell.open & (1 << cell.rot))) {
+          const e = cell.def.reach * CS;
+          if (cell.rot === 0) f1 += e; else if (cell.rot === 1) r1 += e; else if (cell.rot === 2) f0 -= e; else r0 -= e;
+        }
+        const qf = clamp(dxf, f0, f1), qr = clamp(dxr, r0, r1);
         const ex = dxf - qf, ey = dxr - qr;
         const d = Math.hypot(ex, ey);
         if (d < r && d < bestD) {
@@ -377,6 +430,12 @@ class Car {
       }
     }
     return best;
+  }
+
+  /* 向きのある部品に、向けた側から触れているか（hit は contactCell の結果） */
+  facing(hit) {
+    const a = hit.cell.rot * Math.PI / 2;
+    return Math.cos(a) * hit.nf + Math.sin(a) * hit.nr > 0.3;
   }
 
   damageCell(cell, amt) {
@@ -515,10 +574,10 @@ class Car {
     }
     /* 急な横すべりはタイヤ痕を残す */
     if (Math.abs(vl) > 110 && world.decal) {
-      for (const sx of [-1, 1]) {
-        const lr = (sx < 0 ? this.box.minC - this.cx - 0.4 : this.box.maxC - this.cx + 0.4) * CS;
-        const lf = (this.cy - this.box.maxR) * CS;
-        world.decal.skid(this.x + ca * lf - sa * lr, this.y + sa * lf + ca * lr, Math.min(0.3, Math.abs(vl) / 900));
+      for (const c of this.wheels) {
+        if (c.r !== this.wheelR1) continue;
+        const [wx, wy] = this.cellWorld(c);
+        world.decal.skid(wx, wy, Math.min(0.3, Math.abs(vl) / 900));
       }
     }
   }
@@ -598,35 +657,25 @@ class Car {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.a);
-    /* 影 */
+    /* 影。タイヤはタイヤの幅だけ */
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    for (const c of this.cells) if (c.alive) ctx.fillRect(c.lf - CS / 2 + 4, c.lr - CS / 2 + 5, CS, CS);
-    /* 車輪 */
-    const b = this.box;
-    const wheelRows = [b.minR, b.maxR];
-    if (b.maxR - b.minR >= 6) wheelRows.push(Math.round((b.minR + b.maxR) / 2));
-    const spin = (G.time * this.vf * 0.08) % 1;
-    for (const r of wheelRows) {
-      for (const side of [-1, 1]) {
-        const col = side < 0 ? b.minC : b.maxC;
-        const lf = (this.cy - r) * CS, lr = (col - this.cx + side * 0.55) * CS;
-        ctx.save(); ctx.translate(lf, lr);
-        if (r === b.minR) ctx.rotate(this.steerVis * 0.45);
-        ctx.fillStyle = '#16181b'; roundRect(ctx, -CS * 0.5, -CS * 0.26, CS, CS * 0.52, 3); ctx.fill();
-        ctx.fillStyle = '#3a3e44';
-        for (let i = 0; i < 3; i++) { const x = ((i / 3 + spin) % 1) * CS - CS * 0.5; ctx.fillRect(x, -CS * 0.26, 2, CS * 0.52); }
-        ctx.restore();
-      }
+    for (const c of this.cells) {
+      if (!c.alive) continue;
+      const w = c.def.wheel ? c.def.wheel.w : 1;
+      ctx.fillRect(c.lf - CS / 2 + 4, c.lr - CS * w / 2 + 5, CS, CS * w);
     }
-    /* 車体のつなぎ目を目立たなくする下地 */
+    const b = this.box;
+    const spin = (((G.time * this.vf * 0.08) % 1) + 1) % 1;
+    /* 車体のつなぎ目を目立たなくする下地。タイヤの下には敷かない */
     ctx.fillStyle = '#2a2e33';
-    for (const c of this.cells) if (c.alive) ctx.fillRect(c.lf - CS / 2 - 0.5, c.lr - CS / 2 - 0.5, CS + 1, CS + 1);
+    for (const c of this.cells) if (c.alive && !c.def.wheel) ctx.fillRect(c.lf - CS / 2 - 0.5, c.lr - CS / 2 - 0.5, CS + 1, CS + 1);
     let riders = this.riders.length;
     let cargoLeft = this.cargo;
     for (const c of this.cells) {
       if (!c.alive) continue;
       ctx.save(); ctx.translate(c.lf, c.lr);
-      const o = { open: c.open, hpRatio: c.hp / c.max, flash: c.flash > 0 ? c.flash * 3 : 0, time: G.time };
+      const o = { open: c.open, hpRatio: c.hp / c.max, flash: c.flash > 0 ? c.flash * 3 : 0, time: G.time, lv: c.lv };
+      if (c.def.wheel) { o.spin = spin; if (c.r === this.wheelR0 && this.wheelR0 !== this.wheelR1) o.steer = this.steerVis * 0.45; }
       if (c.def.weapon && c.def.weapon !== 'mines' && c.def.weapon !== 'tesla') o.aim = c.aim - this.a;
       if (c.t === 'saw') o.spin = G.time * 22;
       if (c.t === 'seat') { o.riders = Math.min(2, riders); riders -= o.riders; }
@@ -645,6 +694,6 @@ class Car {
 
   /* 基地へ持ち帰るための形。壊れた部品も hp 0 のまま残す */
   toDesign() {
-    return this.cells.map((c) => ({ c: c.c, r: c.r, t: c.t, rot: c.rot, hp: Math.max(0, Math.round(c.hp)) }));
+    return this.cells.map((c) => ({ c: c.c, r: c.r, t: c.t, rot: c.rot, lv: c.lv, hp: Math.max(0, Math.round(c.hp)) }));
   }
 }
