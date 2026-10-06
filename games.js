@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'neko-mart', genre: 'sandbox', players: '1P', date: '2026-10-06',
+    ja: {
+      title: 'NEKO MART ― ねこのお店やさん',
+      desc: '猫の町でお店をひらく経営ゲーム。仕入れた商品を棚にならべてレジで売り、ためたお金で自分だけの商品を作る。いぬやうさぎのお客さんのアンケートを読み、店長のきせかえも楽しめる。スマホにも対応。',
+    },
+    en: {
+      title: 'Neko Mart',
+      desc: 'Run a little shop in a town of cats. Stock the shelves, ring up animal customers who browse before they pay, read their request slips, craft your own goods and dress up your shopkeeper. Plays on phones.',
+    },
+  },
+  {
     slug: 'ore-to-armada', genre: 'sandbox', players: '1P', date: '2026-09-22',
     ja: {
       title: 'ORE TO ARMADA ― 鉱石から大艦隊へ',

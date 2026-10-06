@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>NEKO MART ― ねこのお店やさん</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= タイトル ================= -->
+<div id="title" class="screen">
+  <div class="tcard">
+    <p class="kicker">ねこの町で、自分だけのお店をひらく</p>
+    <h1>NEKO MART</h1>
+    <p class="sub">ねこのお店やさん</p>
+    <p class="lead">はじめは問屋さんの商品を売ってお金をためよう。ためたお金で素材を買えば、自分だけのジュースやおやつやぬいぐるみが作れる。名前をつけて、ラッピングに絵をかいて、値段も自分で決める。猫やいぬやうさぎのお客さんは、店の中をじっくり見てまわってからレジに来るよ。アンケートを読めば、みんながほしい物も分かる。</p>
+    <div class="tbtns">
+      <button class="btn primary" id="btnNew">はじめから</button>
+      <button class="btn" id="btnCont">つづきから</button>
+      <button class="btn ghost" id="btnHow">あそびかた</button>
+    </div>
+    <p id="newWarn">今のセーブデータは消えます。もう一度押すと、はじめからになります。</p>
+    <p class="foot">パソコンでもスマホでも遊べます。セーブは自動で、この端末のブラウザにだけ残ります。</p>
+  </div>
+</div>
+
+<!-- ================= お店づくり ================= -->
+<div id="setup" class="screen hide">
+  <div class="tcard wide">
+    <h2>お店をつくろう</h2>
+    <div class="setgrid">
+      <div class="setprev"><canvas id="heroPrev" width="220" height="220"></canvas></div>
+      <div class="setform">
+        <label class="field col"><span>お店の名前</span><input id="inShop" maxlength="12" value="ねこねこマート"></label>
+        <label class="field col"><span>店長ねこの名前</span><input id="inHero" maxlength="8" value="ミケ"></label>
+        <div id="setupCloset"></div>
+      </div>
+    </div>
+    <div class="tbtns">
+      <button class="btn" id="btnBack">もどる</button>
+      <button class="btn primary" id="btnStart">お店をはじめる!</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 遊んでいる間の表示 ================= -->
+<div id="hud" class="hide">
+  <div id="top">
+    <div class="box shopbox"><b id="hShop"></b><span id="hDay"></span></div>
+    <div class="box"><span id="hWeather"></span><b id="hClock"></b></div>
+    <div class="box money"><b id="hMoney"></b></div>
+    <div class="box"><span id="hStars" class="starsy"></span></div>
+    <div class="box btns"><button id="bSpeed" title="はやさ">▶</button><button id="bMenu" title="メニュー" class="emo">⚙️</button></div>
+  </div>
+  <div id="mission"></div>
+  <button id="btnOpen" class="bigbtn hide">開店する ▶</button>
+  <button id="btnAct" class="actbtn hide"></button>
+  <div id="toolbar">
+    <button data-p="order"><i>📦</i><span>しいれ</span></button>
+    <button data-p="mats"><i>🧺</i><span>素材</span></button>
+    <button data-p="products"><i>🏷️</i><span>値段</span></button>
+    <button data-p="work"><i>🛠️</i><span>工房</span></button>
+    <button data-p="closet"><i>👗</i><span>きせかえ</span></button>
+    <button data-p="edit"><i>🪑</i><span>もようがえ</span></button>
+  </div>
+  <div id="editBar" class="hide"></div>
+</div>
+
+<!-- ================= 小窓 ================= -->
+<div id="modal" class="modal hide">
+  <div class="mcard">
+    <div class="mhead"><h2 id="mTitle"></h2><button id="mClose" title="とじる">✕</button></div>
+    <div id="mTabs" class="mtabs"></div>
+    <div id="mBody"></div>
+    <div id="mFoot" class="mfoot"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="art.js"></script>
+<script src="sim.js"></script>
+<script src="agents.js"></script>
+<script src="render.js"></script>
+<script src="paint.js"></script>
+<script src="editor.js"></script>
+<script src="closet.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
