@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'slime-age', genre: 'action', players: '1P', date: '2026-10-20',
+    ja: {
+      title: 'SLIME AGE ― スライム文明',
+      desc: 'スライムをくっつけて大きくし、えだから始まって時代とともに進化する武器を持たせて戦うアクション。スマホ対応。',
+    },
+    en: {
+      title: 'Slime Age',
+      desc: 'Merge slimes into bigger ones and arm them with weapons that evolve through the ages, from a stick to a beam sword. Plays on phones.',
+    },
+  },
+  {
     slug: 'hamster-quest', genre: 'rpg', players: '1P', date: '2026-10-20',
     ja: {
       title: 'ハムスターの冒険 ― HAMSTER QUEST',

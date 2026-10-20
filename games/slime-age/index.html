@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>SLIME AGE ― スライム文明</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= たたかい中の表示 ================= -->
+<div id="hud" class="hidden">
+  <div id="hudTop">
+    <button id="btnPause" class="hbtn" aria-label="ひとやすみ">II</button>
+    <button id="btnAuto" class="hbtn wide">オート: オフ</button>
+    <div id="eraBox" class="hbox">
+      <div class="hrow"><b id="eraName"></b><small id="eraInfo"></small></div>
+      <div class="bar"><i id="eraBar"></i></div>
+    </div>
+    <div id="ideaBox" class="hbox">
+      <div class="hrow"><span class="bulb">💡</span><img id="ideaIcon" class="hidden" alt=""><small id="ideaName"></small></div>
+      <div class="bar idea"><i id="ideaBar"></i></div>
+    </div>
+  </div>
+  <div id="teamBar"></div>
+  <div id="hint" class="hidden"></div>
+  <div id="pad">
+    <button id="pbAtk" class="pb atk">こうげき</button>
+    <button id="pbMerge" class="pb">くっつく</button>
+    <button id="pbSplit" class="pb">わかれる</button>
+    <button id="pbSwitch" class="pb">きりかえ</button>
+  </div>
+  <div id="keyHelp">WASD・やじるし いどう　スペース こうげき　E くっつく　X わかれる　Q きりかえ　Esc ひとやすみ</div>
+</div>
+
+<div id="banner" class="hidden"><small id="bnSub"></small><div class="bnRow"><img id="bnIcon" class="hidden" alt=""><b id="bnTitle"></b></div></div>
+<div id="toasts"></div>
+
+<!-- ================= メニュー画面 ================= -->
+<div id="screen" class="hidden">
+  <header id="scrHead">
+    <button id="btnBack" class="btn ghost small">← もどる</button>
+    <h2 id="scrTitle"></h2>
+  </header>
+  <main id="scrBody"></main>
+</div>
+
+<!-- ================= 窓 ================= -->
+<div id="modal" class="hidden">
+  <div class="mcard">
+    <h2 id="mTitle"></h2>
+    <div id="mBody"></div>
+    <div id="mFoot"></div>
+  </div>
+</div>
+
+<!-- ================= タイトル ================= -->
+<div id="titleScreen">
+  <div class="tcard">
+    <h1 class="logo"><span>SLIME</span> <span>AGE</span></h1>
+    <p class="sub">スライム文明</p>
+    <p class="lead">スライムを くっつけて 大きくし、武器を もたせて たたかおう。てきを たおして ひらめきを ためると 文明が すすみ、えだ → 木の剣 → 石のオノ … と 新しい 武器を はつめいできる。</p>
+    <div class="tbtns">
+      <button class="btn primary big" id="btnPlay">ぼうけん</button>
+      <button class="btn big" id="btnTeam">なかま</button>
+      <button class="btn" id="btnHelp">あそびかた</button>
+      <button class="btn" id="btnSound">おと: オン</button>
+    </div>
+    <p id="titleInfo"></p>
+    <p class="foot">セーブは自動。データはこの端末のブラウザにだけ残ります。<button id="btnReset" class="linkBtn">データを消す</button></p>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="art.js"></script>
+<script src="field.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
