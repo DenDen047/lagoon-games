@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'hamster-quest', genre: 'rpg', players: '1P', date: '2026-10-20',
+    ja: {
+      title: 'ハムスターの冒険 ― HAMSTER QUEST',
+      desc: '森の木で剣とカバンをつくり、町で売り買いしながら、山と谷をこえて3つの塔のボスから魔法の本を集める冒険RPG。スマホ対応。',
+    },
+    en: {
+      title: 'Hamster Quest',
+      desc: 'Craft a sword and backpack from the forest, trade in a hamster town, and cross mountains and valleys to win spellbooks from three tower bosses. Plays on phones.',
+    },
+  },
+  {
     slug: 'wild-inn', genre: 'sandbox', players: '1P', date: '2026-10-19',
     ja: {
       title: 'WILD INN ― どうぶつペットホテル',

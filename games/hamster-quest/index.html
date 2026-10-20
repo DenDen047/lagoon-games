@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#3e7a34" />
+<title>ハムスターの冒険 ― HAMSTER QUEST</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ============================== HUD ============================== -->
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="panel" id="statBox">
+      <div class="lvBadge">Lv<span id="lvNum">1</span></div>
+      <div class="bars">
+        <div class="barRow"><span class="tag hp">HP</span><div class="track"><div id="hpFill" class="fill hp"></div></div><span class="num" id="hpNum"></span></div>
+        <div class="barRow"><span class="tag mp">MP</span><div class="track"><div id="mpFill" class="fill mp"></div></div><span class="num" id="mpNum"></span></div>
+        <div class="barRow"><span class="tag ex">EX</span><div class="track thin"><div id="expFill" class="fill ex"></div></div></div>
+      </div>
+    </div>
+    <div class="panel" id="infoBox">
+      <span id="zoneLabel"></span>
+      <span class="coin">🪙<b id="coinNum">0</b></span>
+    </div>
+  </div>
+
+  <div id="topBtns">
+    <button class="rbtn" id="btnBag" title="カバン (I)">🎒<b id="bagNum"></b></button>
+    <button class="rbtn" id="btnMap" title="地図 (M)">🗺️</button>
+    <button class="rbtn" id="btnMenu" title="メニュー (Esc)">☰</button>
+  </div>
+
+  <div class="panel" id="quest"><span class="qmark">★</span><span id="questText"></span></div>
+
+  <button class="panel" id="spellBox" title="魔法をえらぶ (Q)"><span id="spellIcon"></span><span class="sname"><b id="spellName"></b><small id="spellCost"></small></span></button>
+
+  <div id="touchPad">
+    <button class="tbtn big" id="btnAtk">⚔️</button>
+    <button class="tbtn" id="btnMag">✨</button>
+    <button class="tbtn" id="btnRoll">💨</button>
+    <button class="tbtn" id="btnEat">🌻<b id="foodNum">0</b></button>
+    <button class="tbtn act" id="btnAct">…</button>
+  </div>
+
+  <div id="bossBar"><span id="bossName"></span><div class="track"><div id="bossFill"></div></div></div>
+  <div id="banner"></div>
+</div>
+
+<div id="toasts"></div>
+
+<!-- ============================= パネル ============================= -->
+<div id="panelWrap" class="hidden">
+  <div id="panel">
+    <div id="panelHead"><h2 id="panelTitle"></h2><button id="panelClose" aria-label="とじる">✕</button></div>
+    <div id="panelTabs"></div>
+    <div id="panelBody"></div>
+  </div>
+</div>
+
+<!-- ============================ 会話まど ============================ -->
+<div id="talkWrap" class="hidden">
+  <div id="talk">
+    <div id="talkName"></div>
+    <div id="talkText"></div>
+    <div id="talkChoices"></div>
+    <div id="talkHint"></div>
+  </div>
+</div>
+
+<!-- ============================ タイトル ============================ -->
+<div id="titleScreen">
+  <div class="tcard">
+    <div class="logoHam">🐹</div>
+    <h1>ハムスターの冒険</h1>
+    <p class="sub">HAMSTER QUEST</p>
+    <p class="lead">
+      森の小さなハムスターが、木をたたいて剣をつくり、カバンを背おって旅に出る。
+      町で売り買いし、魔法の杖を手に入れ、塔のボスをたおして魔法の本を集めよう。
+      山をこえ、谷をわたり、ノラネコ大王から「星の魔法の本」を取りもどせ！
+    </p>
+    <div class="tbtns">
+      <button class="btn primary" id="btnNew">はじめから</button>
+      <button class="btn" id="btnContinue">つづきから</button>
+      <button class="btn ghost" id="btnHelp">あそびかた</button>
+    </div>
+    <p id="newWarn">いまのセーブは消えます。もう一度おすと、最初からはじまります。</p>
+    <div id="titleHelp">
+      <div class="kgrid">
+        <div><b>WASD / 矢印</b><span>歩く</span></div>
+        <div><b>スペース / 左クリック</b><span>たたく・攻撃（木や岩をたたくと材料が出る）</span></div>
+        <div><b>K / 右クリック</b><span>魔法（杖がいる）</span></div>
+        <div><b>Shift</b><span>ころがって よける</span></div>
+        <div><b>E</b><span>話す・しらべる・お店にはいる</span></div>
+        <div><b>I</b><span>カバン（つくる・そうび）</span></div>
+        <div><b>F</b><span>食べて回復</span></div>
+        <div><b>M</b><span>地図とワープ</span></div>
+      </div>
+      <p class="hint">スマホ・タブレットでは、画面の左半分をなぞって歩き、右下のボタンで攻撃・魔法・しらべるを使います。セーブは自動で、この端末のブラウザにだけ残ります。</p>
+    </div>
+  </div>
+</div>
+
+<!-- =========================== 名前をつける =========================== -->
+<div id="nameScreen" class="hidden">
+  <div class="tcard">
+    <h1 class="small">なまえをつけよう</h1>
+    <p class="lead">冒険にでる ハムスターの なまえは？</p>
+    <div class="nameRow"><input id="heroInput" type="text" maxlength="8" placeholder="なまえ" autocomplete="off" /></div>
+    <div class="tbtns">
+      <button class="btn primary" id="btnStart">冒険にでる</button>
+      <button class="btn ghost" id="btnNameBack">もどる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= たおれた ============================= -->
+<div id="deadScreen" class="hidden">
+  <div class="tcard">
+    <h1 class="small red">きぜつしてしまった……</h1>
+    <p class="lead">目の前がまっくらになった。でも、まだ冒険はおわらない。<br><span id="deadLost"></span></p>
+    <div class="tbtns"><button class="btn primary" id="btnRevive">最後に休んだ場所で 目をさます</button></div>
+  </div>
+</div>
+
+<!-- ============================ おわり ============================ -->
+<div id="endScreen" class="hidden">
+  <div class="tcard">
+    <h1 class="small">🌻 おめでとう！ 🌻</h1>
+    <div id="endBody"></div>
+    <div class="tbtns">
+      <button class="btn primary" id="btnEndClose">冒険をつづける</button>
+      <button class="btn ghost" id="btnEndTitle">タイトルへ</button>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="audio.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="art.js"></script>
+<script src="render.js"></script>
+<script src="mobs.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
