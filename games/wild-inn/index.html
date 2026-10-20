@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>WILD INN ― どうぶつペットホテル</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= タイトル ================= -->
+<div id="title" class="screen">
+  <div class="tcard">
+    <p class="kicker">世界中の動物をあずかる、自分だけのペットホテル</p>
+    <h1>WILD INN</h1>
+    <p class="sub">どうぶつペットホテル</p>
+    <p class="lead">電話が鳴ったら、ペットをあずかるお仕事のはじまり。いぬやねこだけじゃなく、熱帯雨林のカメレオン、サバンナのライオン、こおりの国のペンギンまでやって来る。動物が生まれた場所に合わせて部屋をつくり、家具を置いて、なでたりえさをあげたりしてお世話しよう。ホテルの名前も料金も自分で決められて、部屋を広げたり2階建てにしたりもできるよ。</p>
+    <div class="tbtns">
+      <button class="btn primary" id="btnNew">はじめから</button>
+      <button class="btn" id="btnCont">つづきから</button>
+      <button class="btn ghost" id="btnHow">あそびかた</button>
+    </div>
+    <p id="newWarn">今のセーブデータは消えます。もう一度押すと、はじめからになります。</p>
+    <p class="foot">パソコンでもスマホでも遊べます。セーブは自動で、この端末のブラウザにだけ残ります。</p>
+  </div>
+</div>
+
+<!-- ================= ホテルづくり ================= -->
+<div id="setup" class="screen hide">
+  <div class="tcard wide">
+    <h2>ホテルをひらこう</h2>
+    <div class="setgrid">
+      <div class="setprev"><canvas id="ownerPrev" width="220" height="220"></canvas></div>
+      <div class="setform">
+        <label class="field col"><span>ホテルの名前</span><input id="inHotel" maxlength="12" value="もふもふホテル"></label>
+        <label class="field col"><span>オーナー (あなた) の名前</span><input id="inOwner" maxlength="8" value="ユウ"></label>
+        <div id="setLook"></div>
+      </div>
+    </div>
+    <div class="tbtns">
+      <button class="btn" id="btnBack">もどる</button>
+      <button class="btn primary" id="btnStart">ホテルをひらく!</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 遊んでいる間の表示 ================= -->
+<div id="hud" class="hide">
+  <div id="top">
+    <div class="box hotelbox"><b id="hName"></b><span id="hDay"></span></div>
+    <div class="box"><b id="hClock"></b></div>
+    <div class="box money"><b id="hMoney"></b></div>
+    <div class="box"><span id="hStars" class="starsy"></span></div>
+    <div class="box floors hide" id="hFloors"></div>
+    <div class="box btns"><button id="bSpeed" title="はやさ">▶</button><button id="bMenu" title="メニュー" class="emo">⚙️</button></div>
+  </div>
+  <div id="mission"></div>
+  <button id="ring" class="ring hide"><span class="emo">📞</span> 電話が鳴っているよ! <small>タップで出る (T)</small></button>
+  <div id="acts" class="acts hide"></div>
+  <div id="toolbar">
+    <button data-p="phone"><i>📞</i><span>でんわ</span></button>
+    <button data-p="guests"><i>🐾</i><span>ペット</span></button>
+    <button data-p="food"><i>🍖</i><span>えさ</span></button>
+    <button data-p="price"><i>💴</i><span>料金</span></button>
+    <button data-p="edit"><i>🛠️</i><span>もようがえ</span></button>
+    <button data-p="book"><i>📖</i><span>ずかん</span></button>
+  </div>
+  <div id="editBar" class="hide"></div>
+</div>
+
+<!-- ================= 小窓 ================= -->
+<div id="modal" class="modal hide">
+  <div class="mcard" id="mCard">
+    <div class="mhead"><h2 id="mTitle"></h2><button id="mClose" title="とじる">✕</button></div>
+    <div id="mBody"></div>
+    <div id="mFoot" class="mfoot"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="art.js"></script>
+<script src="sim.js"></script>
+<script src="agents.js"></script>
+<script src="render.js"></script>
+<script src="editor.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

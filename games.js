@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'wild-inn', genre: 'sandbox', players: '1P', date: '2026-10-19',
+    ja: {
+      title: 'WILD INN ― どうぶつペットホテル',
+      desc: '電話で頼まれた世界中の動物をあずかり、生まれた場所に合う部屋と家具でお世話するホテル経営。スマホ対応。',
+    },
+    en: {
+      title: 'Wild Inn',
+      desc: 'Run a pet hotel for animals from around the world, building rooms that match where each one comes from. Plays on phones.',
+    },
+  },
+  {
     slug: 'star-flick', genre: 'action', players: '1–2P', date: '2026-10-06',
     ja: {
       title: 'STAR FLICK ― 宇宙船で消しピン',
