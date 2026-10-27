@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>PAINT &amp; HIDE ― ぬって かくれんぼ</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= 基地の中 ================= -->
+<div id="hud" class="hidden">
+  <div id="hudTL">
+    <div id="people"></div>
+    <b id="leftN"></b>
+  </div>
+  <div id="phase"><small id="phLabel"></small><b id="phTime"></b></div>
+  <div id="hudTR">
+    <button id="btnMap" class="hbtn" data-ic="map" aria-label="地図"><kbd>M</kbd></button>
+    <button id="btnPause" class="hbtn" data-ic="pause" aria-label="ひとやすみ"></button>
+  </div>
+  <div id="ammo" class="hidden"></div>
+  <div id="acts">
+    <button id="actPaint" class="act" aria-label="ぬる"><span class="slot" data-ic="brush"></span><small>ぬる</small><kbd>Q</kbd></button>
+    <button id="actHide" class="act main" aria-label="かくれる"><span class="slot" data-ic="box"></span><small>かくれる</small><kbd>E</kbd></button>
+    <button id="actShoot" class="act main bad hidden" aria-label="うつ"><span class="slot" data-ic="gun"></span><small>うつ</small><kbd>Space</kbd></button>
+  </div>
+  <div id="hint" class="hidden"></div>
+</div>
+<div id="banner"></div>
+
+<!-- オニが 30 かぞえている あいだ -->
+<div id="blind" class="hidden"><p>目を つぶって かぞえよう</p><b id="blindNum">30</b><small>みんなが かくれている…</small></div>
+
+<!-- ================= ぬりえ ================= -->
+<div id="editor" class="hidden">
+  <div class="edCard">
+    <div class="edHead"><b id="edTitle"></b><span id="edTime"></span><button id="edDone" class="okBtn">できた</button></div>
+    <div class="edMain">
+      <canvas id="edCv"></canvas>
+      <div class="edSide">
+        <div id="edTools" class="edRow">
+          <button data-tool="brush"><span data-ic="brush"></span><small>ふで</small></button>
+          <button data-tool="fill"><span data-ic="bucket"></span><small>ぬりつぶし</small></button>
+          <button data-tool="dropper"><span data-ic="dropper"></span><small>スポイト</small></button>
+          <button data-tool="undo"><span data-ic="undo"></span><small>もどす</small></button>
+          <button data-tool="reset"><span data-ic="trash"></span><small>はじめから</small></button>
+        </div>
+        <div class="edRow"><span id="edNow"></span><div id="edSizes"><button data-size="0"><i style="width:6px;height:6px"></i></button><button data-size="1"><i style="width:12px;height:12px"></i></button><button data-size="2"><i style="width:20px;height:20px"></i></button></div></div>
+        <div id="edPal"></div>
+        <div id="edShape"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="mapWin" class="hidden"><canvas id="mapCv"></canvas></div>
+<div id="reveal" class="hidden"><canvas id="rvCv"></canvas><h2 id="rvTitle"></h2><p id="rvSub"></p></div>
+
+<div id="pause" class="hidden">
+  <div class="pCard">
+    <h2>ひとやすみ</h2>
+    <button id="pResume" class="bigBtn" data-ic="play" aria-label="つづける"></button>
+    <div class="pRow"><button id="pSound" class="hbtn" aria-label="おと"></button><button id="pHome" class="hbtn" data-ic="home" aria-label="タイトル"></button></div>
+  </div>
+</div>
+
+<div id="over" class="hidden">
+  <div class="oCard">
+    <h2 id="oTitle"></h2>
+    <p id="oSub"></p>
+    <div id="oList"></div>
+    <p id="oMine"></p>
+    <p id="oWait" class="hidden">ホストが つぎの ゲームを はじめるのを まっています</p>
+    <div class="oBtns"><button id="oAgain" class="bigBtn" data-ic="replay" aria-label="もういちど"></button><button id="oHome" class="hbtn" data-ic="home" aria-label="タイトル"></button></div>
+  </div>
+</div>
+
+<div id="online" class="hidden">
+  <div class="olCard">
+    <button id="olClose" class="hbtn" data-ic="close" aria-label="とじる"></button>
+    <h2>みんなで あそぶ</h2>
+    <div id="olStart">
+      <button id="olHost" class="olBtn">へやを 作る</button>
+      <div class="olJoin"><input id="olCode" maxlength="4" placeholder="あいことば" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="olJoin" class="olBtn">へやに 入る</button></div>
+      <p class="olNote">へやを 作ると 4もじの あいことばが 出るよ。友だちに おしえて、同じ へやに 入ってもらおう。</p>
+    </div>
+    <div id="olRoom" class="hidden">
+      <p class="olNote">あいことば</p>
+      <b id="olCodeShow"></b>
+      <div id="olPeople"></div>
+      <p id="olInfo" class="olNote"></p>
+      <button id="olGo" class="bigBtn" data-ic="play" aria-label="はじめる"></button>
+    </div>
+    <p id="olMsg"></p>
+  </div>
+</div>
+
+<div id="help" class="hidden">
+  <div class="hCard">
+    <button id="helpClose" class="hbtn" data-ic="close" aria-label="とじる"></button>
+    <div id="helpBody"></div>
+  </div>
+</div>
+
+<!-- ================= タイトル ================= -->
+<div id="titleScreen">
+  <div class="tCard">
+    <h1 class="logo">PAINT <span>&amp;</span> HIDE</h1>
+    <p class="sub">ぬって かくれんぼ</p>
+    <div class="tMain">
+      <button id="btnPaint" class="meBtn" aria-label="じぶんを ぬる"><canvas id="meCv"></canvas><small>じぶんを ぬる</small></button>
+      <button id="btnPlay" class="bigBtn play" data-ic="play" aria-label="あそぶ"></button>
+    </div>
+    <div class="tRow">
+      <div class="opts">
+        <div id="rolePick" class="segs"></div>
+        <div id="oniPick" class="segs"></div>
+      </div>
+      <div class="tBtns"><button id="btnOnline" class="wideBtn" aria-label="みんなで あそぶ"><span data-ic="people"></span>みんなで</button><button id="btnHelp" class="hbtn" data-ic="help" aria-label="あそびかた"></button><button id="btnSound" class="hbtn" aria-label="おと"></button></div>
+    </div>
+  </div>
+</div>
+
+<script src="core.js"></script>
+<script src="icons.js"></script>
+<script src="map.js"></script>
+<script src="art.js"></script>
+<script src="skin.js"></script>
+<script src="agents.js"></script>
+<script src="editor.js"></script>
+<script src="game.js"></script>
+<script src="net.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

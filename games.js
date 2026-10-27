@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'paint-hide', genre: 'party', players: '1P / オンライン', players_en: '1P / Online', date: '2026-10-27',
+    ja: {
+      title: 'PAINT & HIDE ― ぬってかくれんぼ',
+      desc: '自分の体を好きな色にぬって背景にとけこみ、銃を持ったオニから隠れるかくれんぼ。オンラインで友だちとも遊べる。スマホ対応。',
+    },
+    en: {
+      title: 'Paint & Hide',
+      desc: 'Hide-and-seek where you paint your own body to blend into the room while the oni hunts with a blaster. Play online with friends, too. Plays on phones.',
+    },
+  },
+  {
     slug: 'slime-age', genre: 'action', players: '1P', date: '2026-10-20',
     ja: {
       title: 'SLIME AGE ― スライム文明',

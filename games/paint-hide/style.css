@@ -1,0 +1,252 @@
+/* PAINT & HIDE ― 画面まわり。基地は canvas、ボタンと ぬりえは DOM。 */
+:root {
+  --ink: #f2f8ff;
+  --dim: #a9bdd4;
+  --panel: rgba(12, 24, 44, 0.86);
+  --panel2: rgba(20, 36, 62, 0.97);
+  --edge: rgba(170, 215, 255, 0.22);
+  --gold: #ffd23a;
+  --red: #e8403f;
+  --green: #5ce07a;
+  --font: "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  background: #0b1626; color: var(--ink); font-family: var(--font);
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+canvas#game { display: block; width: 100vw; height: 100vh; touch-action: none; }
+.hidden { display: none !important; }
+button { font-family: var(--font); color: var(--ink); cursor: pointer; }
+button:disabled { cursor: default; }
+h2, h3, p { margin: 0; }
+
+.ic { width: 1em; height: 1em; display: block; flex: none; }
+kbd {
+  position: absolute; right: 4px; bottom: 3px; font: 800 10px/1 var(--font); color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.45); border-radius: 4px; padding: 2px 4px; pointer-events: none;
+}
+.touch kbd { display: none; }
+.touchOnly { display: none !important; }
+.touch .touchOnly { display: flex !important; }
+.touch .keys { display: none !important; }
+
+.hbtn {
+  position: relative; width: 46px; height: 46px; border-radius: 14px; font-size: 24px;
+  background: var(--panel); border: 1px solid var(--edge);
+  display: inline-flex; align-items: center; justify-content: center; pointer-events: auto;
+}
+.hbtn:hover { background: var(--panel2); }
+.bigBtn {
+  position: relative; width: 96px; height: 96px; border-radius: 50%; border: 3px solid #fff3b8; font-size: 48px;
+  background: radial-gradient(circle at 35% 30%, #fff1a0, #ffc21a 55%, #e88a10); color: #3a2400;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 0 #8a4a00, 0 0 30px rgba(255, 210, 60, 0.45); transition: transform 0.08s;
+}
+.bigBtn:hover { transform: scale(1.05); }
+.bigBtn:active { transform: translateY(3px); }
+.bigBtn.play .ic, #pResume .ic { margin-left: 6px; }
+.okBtn { white-space: nowrap; flex: none; font: 900 16px var(--font); padding: 10px 22px; border-radius: 14px; border: 2px solid #fff3b8; background: linear-gradient(180deg, #ffe27a, #f0a81a); color: #3a2400; }
+
+/* ------------------------------- タイトル ------------------------------- */
+#titleScreen { position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; z-index: 20; pointer-events: none; }
+.tCard { display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: auto; }
+.logo {
+  margin: 0; font-size: clamp(44px, 9vw, 96px); font-weight: 900; letter-spacing: 0.03em; line-height: 0.95; white-space: nowrap;
+  background: linear-gradient(180deg, #ffffff 15%, #ffd0e8 50%, #ff7ab0); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 4px 0 #3a1030) drop-shadow(0 0 18px rgba(255, 120, 190, 0.45));
+}
+.logo span { background: linear-gradient(180deg, #fff6c0, #ffd23a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sub { margin-top: -4px; font-size: clamp(15px, 2.6vw, 22px); font-weight: 900; letter-spacing: 0.3em; color: #e2f4ff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); }
+.tMain { display: flex; align-items: center; gap: 22px; margin: 6px 0; }
+.meBtn {
+  width: 96px; height: 120px; border-radius: 18px; border: 2px solid var(--edge); background: var(--panel);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px;
+}
+.meBtn:hover { border-color: var(--gold); }
+#meCv { width: 64px; height: 86px; }
+.meBtn small, .seg small, .act small, #edTools small { font-size: 11px; font-weight: 800; white-space: nowrap; }
+.tRow { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.opts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.segs { display: flex; background: var(--panel); border: 1px solid var(--edge); border-radius: 16px; padding: 4px; gap: 4px; }
+.seg {
+  min-width: 66px; height: 60px; border-radius: 12px; border: 2px solid transparent; background: transparent; padding: 4px 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; opacity: 0.55; font-size: 24px;
+}
+.seg.on { opacity: 1; background: rgba(255, 255, 255, 0.12); border-color: var(--gold); }
+.onis { display: flex; color: #ff7a7a; }
+.tBtns { display: flex; gap: 10px; }
+.wideBtn { display: inline-flex; align-items: center; gap: 6px; height: 46px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--edge); background: var(--panel); font-size: 15px; font-weight: 900; pointer-events: auto; }
+.wideBtn .ic { font-size: 24px; color: #8ec5ff; }
+.wideBtn:hover { background: var(--panel2); }
+
+/* ------------------------------- みんなで あそぶ ------------------------------- */
+#online { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(4, 10, 22, 0.75); padding: 14px; }
+.olCard { position: relative; width: min(440px, 100%); max-height: 100%; overflow-y: auto; background: var(--panel2); border: 1px solid var(--edge); border-radius: 22px; padding: 20px; display: flex; flex-direction: column; gap: 12px; text-align: center; }
+.olCard h2 { font-size: 22px; }
+#olClose { position: absolute; right: 10px; top: 10px; }
+#olStart, #olRoom { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.olBtn { font: 900 17px var(--font); padding: 12px 22px; border-radius: 14px; border: 2px solid #fff3b8; background: linear-gradient(180deg, #ffe27a, #f0a81a); color: #3a2400; white-space: nowrap; }
+.olJoin { display: flex; gap: 8px; }
+#olCode { width: 140px; font: 900 22px var(--font); letter-spacing: 0.2em; text-align: center; text-transform: uppercase; border-radius: 12px; border: 2px solid var(--edge); background: #0b1626; color: #fff; padding: 8px; -webkit-user-select: text; user-select: text; }
+.olNote { font-size: 13px; color: var(--dim); line-height: 1.6; }
+#olCodeShow { font-size: 48px; letter-spacing: 0.25em; color: var(--gold); }
+#olPeople { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.olP { width: 44px; height: 62px; background: rgba(255, 255, 255, 0.08); border-radius: 10px; }
+.olP canvas { width: 100%; height: 100%; display: block; }
+#olMsg { font-size: 14px; font-weight: 800; min-height: 1em; }
+#olMsg.bad { color: #ff8a8a; }
+#oWait { font-size: 14px; color: var(--dim); }
+
+/* ------------------------------- あそびかた ------------------------------- */
+#help, #pause, #over, #mapWin { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(4, 10, 22, 0.72); padding: 14px; }
+.hCard { position: relative; background: var(--panel2); border: 1px solid var(--edge); border-radius: 22px; padding: 18px; max-width: 620px; width: 100%; max-height: 100%; overflow-y: auto; -webkit-user-select: text; user-select: text; }
+.hCard h2 { font-size: 22px; margin-bottom: 10px; }
+#helpClose { position: absolute; right: 10px; top: 10px; }
+.hSec { border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--edge); }
+.hSec.hider { background: rgba(58, 123, 240, 0.14); border-color: rgba(90, 160, 255, 0.35); }
+.hSec.oni { background: rgba(232, 64, 63, 0.13); border-color: rgba(255, 110, 110, 0.35); }
+.hSec h3 { display: flex; align-items: center; gap: 6px; font-size: 16px; }
+.hSec p { font-size: 14px; line-height: 1.7; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hi { font-size: 22px; } .hi.gold { color: var(--gold); }
+.hSec kbd { position: static; font-size: 12px; padding: 3px 6px; background: rgba(255, 255, 255, 0.16); color: #fff; }
+
+/* ------------------------------- 役わり発表 ------------------------------- */
+#reveal { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; cursor: pointer; text-align: center; }
+#reveal.hiderSide { background: radial-gradient(circle at 50% 40%, #1d4a8a, #08142a 70%); }
+#reveal.oniSide { background: radial-gradient(circle at 50% 40%, #6a1a2a, #12060c 70%); }
+#rvCv { width: min(40vw, 180px); height: min(58vw, 262px); animation: pop 0.6s cubic-bezier(.2, 1.6, .4, 1); }
+#rvTitle { font-size: clamp(28px, 6vw, 46px); font-weight: 900; animation: drop 0.5s ease-out; }
+.oniSide #rvTitle { color: #ff8a8a; }
+#rvSub { max-width: 520px; font-size: 16px; line-height: 1.7; color: #dfeaf8; }
+@keyframes pop { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes drop { from { transform: translateY(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ------------------------------- 基地の中 ------------------------------- */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+#hudTL { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 6px 8px; }
+#people { display: flex; gap: 2px; }
+.pp { position: relative; width: 26px; height: 38px; }
+.pp canvas { width: 100%; height: 100%; display: block; }
+.pp.me { background: rgba(255, 255, 255, 0.14); border-radius: 6px; }
+.pp.out canvas { filter: grayscale(1) opacity(0.45); }
+.pp.out i::before, .pp.out i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 26px; background: #ff6a6a; border-radius: 2px; }
+.pp.out i::before { transform: translate(-50%, -50%) rotate(45deg); }
+.pp.out i::after { transform: translate(-50%, -50%) rotate(-45deg); }
+#leftN { font-size: 12px; text-align: center; }
+#phase { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 4px 16px; }
+#phase small { font-size: 12px; font-weight: 800; color: var(--dim); }
+#phase b { font-size: 26px; font-variant-numeric: tabular-nums; }
+#phase.hurry { border-color: #ff7a7a; animation: blink 0.5s infinite alternate; }
+#phase.hurry b { color: #ff9a9a; }
+@keyframes blink { to { box-shadow: 0 0 18px rgba(255, 90, 90, 0.8); } }
+#hudTR { position: absolute; right: 10px; top: 10px; display: flex; gap: 8px; }
+#acts { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 12px; align-items: flex-end; }
+.act {
+  position: relative; width: 78px; height: 78px; border-radius: 50%; pointer-events: auto; touch-action: none;
+  background: radial-gradient(circle at 35% 30%, #4a6a94, #233a5c); border: 3px solid rgba(255, 255, 255, 0.55);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 34px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35); transition: opacity 0.15s, transform 0.08s;
+}
+.act.main { width: 96px; height: 96px; font-size: 42px; background: radial-gradient(circle at 35% 30%, #fff1a0, #ffc21a 60%, #e88a10); color: #3a2400; border-color: #fff3b8; }
+.act.bad { background: radial-gradient(circle at 35% 30%, #ff9a9a, #c02a2a); color: #fff; border-color: #ffd0d0; }
+.act.off { opacity: 0.4; filter: grayscale(0.6); }
+.act.down { transform: scale(0.93); }
+.act .slot { display: flex; }
+#ammo { position: absolute; right: 18px; bottom: 120px; display: flex; gap: 4px; background: var(--panel); border-radius: 10px; padding: 6px 8px; }
+#ammo i { width: 9px; height: 16px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); }
+#ammo i.on { background: var(--gold); }
+#hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--panel); border-radius: 12px; padding: 8px 14px; font-size: 13px; white-space: nowrap; max-width: calc(100vw - 260px); overflow: hidden; text-overflow: ellipsis; }
+.touch #hint { left: 14px; transform: none; bottom: 16px; white-space: normal; max-width: calc(100vw - 230px); }
+#banner {
+  position: fixed; left: 50%; top: 84px; z-index: 45; transform: translate(-50%, -12px); opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
+  background: rgba(12, 24, 44, 0.92); border: 2px solid var(--gold); border-radius: 16px; padding: 10px 22px; width: max-content; max-width: calc(100vw - 24px);
+}
+#banner.show { opacity: 1; transform: translate(-50%, 0); }
+#banner b { font-size: clamp(20px, 4vw, 28px); }
+#banner small { font-size: 14px; color: #dfeaf8; }
+#banner.bad { border-color: #ff7a7a; }
+#banner.good { border-color: var(--green); }
+#blind { position: fixed; inset: 0; z-index: 15; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: radial-gradient(circle, #1a0a12, #050208); text-align: center; }
+#blind p { font-size: 22px; font-weight: 900; color: #ff9a9a; }
+#blind b { font-size: 120px; line-height: 1; font-variant-numeric: tabular-nums; }
+#blind small { font-size: 14px; color: var(--dim); }
+#mapCv { border-radius: 14px; border: 2px solid var(--edge); }
+
+/* ------------------------------- ぬりえ ------------------------------- */
+#editor { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(4, 10, 22, 0.8); padding: 10px; }
+.edCard { background: var(--panel2); border: 2px solid rgba(255, 210, 60, 0.5); border-radius: 22px; padding: 12px; max-height: 100%; overflow-y: auto; }
+.edHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.edHead b { font-size: 18px; }
+#edTime { margin-left: auto; font-size: 15px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+.edMain { display: flex; gap: 14px; align-items: flex-start; }
+#edCv { display: block; border-radius: 14px; touch-action: none; cursor: crosshair; flex: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2); }
+.edSide { display: flex; flex-direction: column; gap: 10px; width: 300px; }
+.edRow { display: flex; align-items: center; gap: 6px; }
+#edTools button { flex: 1; height: 56px; border-radius: 12px; border: 2px solid transparent; background: rgba(255, 255, 255, 0.08); font-size: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px; }
+#edTools button.on { border-color: var(--gold); background: rgba(255, 210, 60, 0.18); }
+#edTools small { font-size: 10px; }
+#edNow { width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff; flex: none; }
+#edSizes { display: flex; gap: 6px; }
+#edSizes button { width: 46px; height: 40px; border-radius: 10px; border: 2px solid transparent; background: rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: center; }
+#edSizes button.on { border-color: var(--gold); }
+#edSizes i { display: block; border-radius: 50%; background: #fff; }
+#edPal { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; }
+.sw { aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); padding: 0; position: relative; }
+.sw.on { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+.sw.pick { background: conic-gradient(#f44, #ff4, #4f4, #4ff, #44f, #f4f, #f44); overflow: hidden; cursor: pointer; }
+.sw.pick input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+#edShape { display: flex; flex-direction: column; gap: 6px; }
+.slider { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; }
+.slider span { width: 110px; flex: none; }
+.slider input { flex: 1; accent-color: var(--gold); }
+
+/* ------------------------------- ひとやすみ・おわり ------------------------------- */
+.pCard, .oCard { display: flex; flex-direction: column; align-items: center; gap: 14px; background: var(--panel2); border: 1px solid var(--edge); border-radius: 26px; padding: 22px 26px; max-width: 100%; max-height: 100%; overflow-y: auto; text-align: center; }
+.pCard h2 { font-size: 20px; }
+.pRow, .oBtns { display: flex; gap: 12px; align-items: center; }
+#oTitle { font-size: clamp(28px, 6vw, 42px); font-weight: 900; }
+.hiderWin #oTitle { color: #8ec5ff; }
+.oniWin #oTitle { color: #ff8a8a; }
+#oSub { font-size: 15px; color: var(--dim); }
+#oMine { font-size: 17px; font-weight: 900; }
+.youWin #oMine { color: var(--gold); }
+#oList { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 560px; }
+.oP { width: 62px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 2px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); }
+.oP canvas { width: 44px; height: 62px; }
+.oP b { font-size: 12px; }
+.oP small { font-size: 10px; color: var(--dim); }
+.oP.safe small { color: var(--green); }
+.oP.oni { background: rgba(232, 64, 63, 0.2); }
+.oP.out canvas { filter: grayscale(1) opacity(0.5); }
+.oP.me { box-shadow: 0 0 0 2px #fff inset; }
+#over.youWin .oCard { border-color: var(--gold); box-shadow: 0 0 40px rgba(255, 210, 60, 0.35); }
+
+/* ------------------------------- せまい画面 ------------------------------- */
+@media (max-width: 760px), (max-height: 560px) {
+  .edMain { flex-direction: column; align-items: center; }
+  .edSide { width: min(360px, calc(100vw - 44px)); }
+  .act { width: 66px; height: 66px; font-size: 28px; }
+  .act.main { width: 82px; height: 82px; font-size: 36px; }
+  #ammo { bottom: 104px; }
+}
+@media (max-width: 480px) {
+  #banner { top: 124px; }
+  .pp { width: 20px; height: 30px; }
+  #phase b { font-size: 22px; }
+  #phase { top: 64px; }
+  .edHead b { font-size: 15px; }
+}
+@media (max-height: 560px) and (min-width: 700px) {
+  #titleScreen { padding-top: 10px; }
+  .tCard { gap: 6px; }
+  .tRow { flex-direction: row; }
+  .bigBtn { width: 76px; height: 76px; font-size: 38px; }
+  .meBtn { width: 76px; height: 96px; }
+  #meCv { width: 50px; height: 68px; }
+  .edMain { flex-direction: row; }
+}

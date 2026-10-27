@@ -38,7 +38,7 @@ CC0 なのでクレジットは法的には不要ですが、配布 ZIP の `ク
 | [PeerJS 1.5.4](https://github.com/peers/peerjs) | オンライン対戦の通信 | [MIT License](https://github.com/peers/peerjs/blob/master/LICENSE) — 商用利用可、著作権表示が必要 |
 | [Mermaid 11](https://github.com/mermaid-js/mermaid) | ドキュメント内の図 | [MIT License](https://github.com/mermaid-js/mermaid/blob/master/LICENSE) |
 
-PeerJS は `games/war-zone/vendor/` に同梱していて、ライセンス全文を同じ場所に置いています。
+PeerJS は `games/war-zone/vendor/` と `games/paint-hide/vendor/` に同梱していて、ライセンス全文を同じ場所に置いています。
 
 ## 自分たちで作ったもの
 
