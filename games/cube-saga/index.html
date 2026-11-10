@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>CUBE SAGA ― キューブおうこくの ゆうしゃ</title>
+<meta name="description" content="ブロックをほって集めて作るサンドボックス。自分で描いたスキンで、勇者の森の剣さがし、天空の竜との戦い、古代の世界での化石ほりや恐竜つかまえに挑む。スマホ対応。">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ============ あそんでいる ときの 画面 ============ -->
+<div id="hud" class="hidden">
+  <div id="cross"></div>
+  <div id="ring"></div>
+  <div id="hand"></div>
+  <div id="quest"><b id="qText"></b><div id="qArrow"><i></i><span id="qDist"></span></div></div>
+  <div id="topR"><span id="coins"></span><button id="btnView" class="hbtn touchOnly" aria-label="してん">してん</button><button id="btnPause" class="hbtn" aria-label="ひとやすみ">II</button></div>
+  <div id="boss" class="hidden"><b id="bossName"></b><div class="bar"><i id="bossBar"></i></div></div>
+  <div id="bottom">
+    <div id="stats"><div id="hearts"></div><div id="food"></div></div>
+    <div id="mpRow"><div class="bar mp"><i id="mpBar"></i></div><small id="mpText"></small></div>
+    <div id="hotbar"></div>
+    <div id="selName"></div>
+  </div>
+  <div id="touch" class="hidden">
+    <div id="stick"><i></i></div>
+    <div id="tbtns">
+      <button data-k="use" class="tb">つかう</button>
+      <button data-k="dig" class="tb big">こわす<br>こうげき</button>
+      <button data-k="jump" class="tb">ジャンプ</button>
+      <button data-k="down" class="tb small hidden">さがる</button>
+      <button data-k="inv" class="tb small">もちもの</button>
+    </div>
+  </div>
+</div>
+<div id="toasts"></div>
+<div id="banner"></div>
+<div id="hurtFx"></div>
+<div id="portalFx"></div>
+<div id="flashFx"></div>
+
+<!-- ============ タイトル ============ -->
+<div id="title" class="screen">
+  <div class="tCard">
+    <h1>CUBE SAGA</h1>
+    <p class="sub">キューブおうこくの ゆうしゃ</p>
+    <div class="col">
+      <button class="btn big ok" data-go="worlds">あそぶ</button>
+      <button class="btn big" data-go="skin">スキンを つくる</button>
+      <button class="btn big" data-go="help">あそびかた</button>
+    </div>
+    <p class="foot"><a href="../../">← ゲームいちらんへ</a></p>
+  </div>
+</div>
+
+<!-- ============ ワールド選び ============ -->
+<div id="worlds" class="screen hidden">
+  <div class="card wide">
+    <div class="cHead"><b>ワールドを えらぶ</b><span class="sp"></span><button class="btn" data-go="title">もどる</button></div>
+    <div id="wList"></div>
+    <div class="newW">
+      <b>あたらしい ワールド</b>
+      <label>なまえ <input id="wName" maxlength="16" placeholder="わたしの せかい" /></label>
+      <div class="modes">
+        <button class="mode on" data-mode="survival"><b>サバイバル</b><small>あつめて つくって いきのこる。おうこくの ゆうしゃを めざそう</small></button>
+        <button class="mode" data-mode="creative"><b>クリエイティブ</b><small>ブロック とりほうだい。空も とべる</small></button>
+      </div>
+      <label>シード (かかなくても いい) <input id="wSeed" maxlength="12" placeholder="おまかせ" /></label>
+      <button class="btn ok big" id="wCreate">つくって はいる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ スキン ============ -->
+<div id="skin" class="screen hidden"></div>
+
+<!-- ============ あそびかた ============ -->
+<div id="help" class="screen hidden">
+  <div class="card wide">
+    <div class="cHead"><b>あそびかた</b><span class="sp"></span><button class="btn" data-go="back">もどる</button></div>
+    <div class="helpBody">
+      <h3>おはなし</h3>
+      <p>キューブおうこくの おうさまが、ゆうしゃを さがしています。「ゆうしゃの森」の どこかに ねむる <b>ゆうしゃのつるぎ</b> を みつけて、おうさまに みせよう。ゆうしゃに なったら、てんくうの せかいに すむ りゅう <b>ゼフィロス</b> に いどもう。</p>
+      <p>おうこくの <b>こだいのゲート</b> を くぐると、むかしの いきものが くらす <b>こだいの せかい</b> へ いける。<b>かせき</b> を ほったり、<b>つかまえアミ</b> で マンモスや きょうりゅうを つかまえて、<b>はくぶつかん</b> で うると おかねに なるよ。</p>
+      <h3>パソコン</h3>
+      <table>
+        <tr><td>W A S D</td><td>あるく</td></tr>
+        <tr><td>マウス</td><td>まわりを みる (画面を クリックすると はじまる)</td></tr>
+        <tr><td>スペース</td><td>ジャンプ (クリエイティブで 2かい おすと とぶ)</td></tr>
+        <tr><td>シフト</td><td>はしる / とんでいる ときは さがる</td></tr>
+        <tr><td>ひだりクリック</td><td>こわす・こうげき (おしつづける)</td></tr>
+        <tr><td>みぎクリック</td><td>おく・つかう・はなしかける・まほう</td></tr>
+        <tr><td>1〜9 / ホイール</td><td>もつ ものを えらぶ</td></tr>
+        <tr><td>E</td><td>もちもの と クラフト</td></tr>
+        <tr><td>Q</td><td>もっている ものを 1こ すてる</td></tr>
+        <tr><td>V</td><td>じぶんを うしろから みる</td></tr>
+        <tr><td>Esc</td><td>ひとやすみ・セーブ</td></tr>
+      </table>
+      <h3>スマホ・タブレット</h3>
+      <p>ひだりの まるで あるく、みぎがわを なぞって まわりを みる。ボタンで こわす・つかう・ジャンプ。</p>
+      <h3>まめちしき</h3>
+      <ul>
+        <li>き → いたざい → ぼう と さぎょうだい。さぎょうだいの ちかくで どうぐが つくれる。</li>
+        <li>てつや きんは かまどの ちかくで せきたんと いっしょに やくと インゴットに なる。</li>
+        <li>ちかの ふかい ところに ひかる <b>まほうのこうせき</b> がある。まほうのつえの ざいりょうだよ。</li>
+        <li>よるは モンスターが でる。たいまつで あかるくしよう。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ひとやすみ ============ -->
+<div id="pause" class="screen hidden">
+  <div class="card">
+    <div class="cHead"><b>ひとやすみ</b></div>
+    <div class="col">
+      <button class="btn big ok" data-act="resume">つづける</button>
+      <button class="btn" data-act="help">あそびかた</button>
+      <div class="setRow">みえる きょり <button class="btn small" data-dist="4">ちかい</button><button class="btn small" data-dist="6">ふつう</button><button class="btn small" data-dist="8">とおい</button></div>
+      <div class="setRow">マウスの はやさ <input type="range" id="sens" min="1" max="10" value="5" /></div>
+      <button class="btn" data-act="quit">セーブして タイトルへ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ もちもの・クラフト・お店・はなし ============ -->
+<div id="panel" class="screen hidden"></div>
+
+<!-- ============ たおれた ============ -->
+<div id="dead" class="screen hidden">
+  <div class="card center">
+    <h2>たおれて しまった…</h2>
+    <p>もちものは なくならないよ。</p>
+    <button class="btn big ok" data-act="respawn">おしろで ふっかつ</button>
+  </div>
+</div>
+
+<!-- ============ よみこみ ============ -->
+<div id="loading" class="screen hidden"><div class="card center"><b id="loadText">せかいを つくっています…</b><div class="bar load"><i id="loadBar"></i></div></div></div>
+
+<div id="cursorItem"></div>
+<div id="noGL" class="screen hidden"><div class="card center"><h2>このブラウザでは うごきません</h2><p>WebGL が つかえる ブラウザ (Chrome, Safari, Edge など) で ひらいてね。</p></div></div>
+
+<script src="core.js"></script>
+<script src="blocks.js"></script>
+<script src="world.js"></script>
+<script src="render.js"></script>
+<script src="skin.js"></script>
+<script src="entities.js"></script>
+<script src="ui.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

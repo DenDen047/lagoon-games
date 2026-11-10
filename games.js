@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'cube-saga', genre: 'sandbox', players: '1P', date: '2026-11-10',
+    ja: {
+      title: 'CUBE SAGA ― キューブおうこくの ゆうしゃ',
+      desc: 'ブロックをほって集めて作るサンドボックス。自分で描いたスキンで、勇者の森の剣さがし、天空の竜との戦い、古代の世界での化石ほりや恐竜つかまえに挑む。スマホ対応。',
+    },
+    en: {
+      title: 'Cube Saga',
+      desc: 'A block sandbox where you mine, craft and build in a skin you paint yourself, find the hero sword, fight the sky dragon, and dig fossils and catch dinosaurs in the ancient world. Plays on phones.',
+    },
+  },
+  {
     slug: 'paint-hide', genre: 'party', players: '1P / オンライン', players_en: '1P / Online', date: '2026-10-27',
     ja: {
       title: 'PAINT & HIDE ― ぬってかくれんぼ',
