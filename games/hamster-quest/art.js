@@ -63,6 +63,14 @@ function drawWeaponShape(g, wid, len = 1) {
   const w = GEAR[wid];
   if (!w) return;
   const col = w.col || '#ccc';
+  if (w.stick) {
+    /* ただの木の棒。ふしと小枝がある */
+    line(g, 0, 0, 7 + 16 * len, -1, INK, 4.2);
+    line(g, 0, 0, 7 + 16 * len, -1, col, 2.8);
+    line(g, 10 * len + 4, -0.6, 13 * len + 6, -5, col, 1.6);
+    circ(g, 6 + 6 * len, -0.4, 1.1, '#6a4422');
+    return;
+  }
   if (w.kind === 'sword') {
     line(g, 0, 0, 6, 0, '#7a4a28', 3);
     line(g, 6, -4, 6, 4, '#d8b04a', 2.5);
@@ -186,7 +194,7 @@ function drawHamster(g, x, y, o) {
   g.save();
   g.translate(x, y);
   if (o.scale) g.scale(o.scale, o.scale);
-  shadow(g, 0, 0, 11, 4);
+  if (!o.noShadow) shadow(g, 0, 0, 11, 4);
   const fur = o.fur || FURS.gold[0], belly = o.belly || FURS.gold[1];
   const furD = shade(fur.startsWith('#') ? fur : '#eda24f', -40);
 
@@ -279,12 +287,14 @@ function drawHamster(g, x, y, o) {
     ell(g, 0, -6.5, 7.5, 6.2, belly);
     drawClothes(g, o.body, view, 12, 11, BODY_Y);
     if (o.apron) { g.save(); g.beginPath(); g.ellipse(0, BODY_Y, 12, 11, 0, 0, TAU); g.clip(); rrect(g, -6, -10, 12, 10, 2, o.apron); g.restore(); }
-    /* ほお袋 */
-    const cr = 3.2 + cheek * 4.2;
-    circ(g, -9.5 - cheek * 1.5, -9.5, cr, fur, INK, 1.2);
-    circ(g, 9.5 + cheek * 1.5, -9.5, cr, fur, INK, 1.2);
-    ell(g, -8.5 - cheek, -9.5, 2.4, 1.4, 'rgba(255,140,150,.5)');
-    ell(g, 8.5 + cheek, -9.5, 2.4, 1.4, 'rgba(255,140,150,.5)');
+    /* ほお袋: 物が入るまでは かくしておく (ふくらむ前だと 腕のこぶに見えるため) */
+    if (cheek > 0.05) {
+      const cr = 2.6 + cheek * 4.8;
+      circ(g, -9.5 - cheek * 1.5, -9.5, cr, fur, INK, 1.2);
+      circ(g, 9.5 + cheek * 1.5, -9.5, cr, fur, INK, 1.2);
+    }
+    ell(g, -8 - cheek, -9.5, 2.4, 1.4, 'rgba(255,140,150,.5)');
+    ell(g, 8 + cheek, -9.5, 2.4, 1.4, 'rgba(255,140,150,.5)');
     /* 顔 */
     const blink = (Math.sin(o.t * 0.9 + (o.seed || 0)) > 0.985);
     if (blink) { line(g, -6, -14, -2.5, -14, '#1a1010', 1.4); line(g, 2.5, -14, 6, -14, '#1a1010', 1.4); }
@@ -305,8 +315,10 @@ function drawHamster(g, x, y, o) {
     ell(g, 0, BODY_Y, 12, 11, fur, INK, 1.6);
     ell(g, 0, BODY_Y - 3, 8, 6, shade(fur.startsWith('#') ? fur : '#eda24f', 12));
     drawClothes(g, o.body, view, 12, 11, BODY_Y);
-    circ(g, -12 - cheek * 1.5, -9.5, 2.2 + cheek * 3.2, fur, INK, 1);
-    circ(g, 12 + cheek * 1.5, -9.5, 2.2 + cheek * 3.2, fur, INK, 1);
+    if (cheek > 0.05) {
+      circ(g, -12 - cheek * 1.5, -9.5, 1.6 + cheek * 3.8, fur, INK, 1);
+      circ(g, 12 + cheek * 1.5, -9.5, 1.6 + cheek * 3.8, fur, INK, 1);
+    }
     circ(g, 0, -1.5, 2.2, belly, INK, 0.8);
     drawBag(g, o.bag, 'back');
   } else {
@@ -316,8 +328,7 @@ function drawHamster(g, x, y, o) {
     ell(g, 4, -6.5, 6.5, 5, belly);
     drawClothes(g, o.body, view, 12.5, 10.5, BODY_Y);
     if (o.apron) { g.save(); g.beginPath(); g.ellipse(0, BODY_Y, 12.5, 10.5, 0, 0, TAU); g.clip(); rrect(g, 0, -10, 10, 10, 2, o.apron); g.restore(); }
-    const cr = 3 + cheek * 4;
-    circ(g, 7 + cheek, -9, cr, fur, INK, 1.1);
+    if (cheek > 0.05) circ(g, 7 + cheek, -9, 2.4 + cheek * 4.6, fur, INK, 1.1);
     ell(g, 7.5 + cheek, -9.5, 2.2, 1.3, 'rgba(255,140,150,.5)');
     circ(g, 6.5, -14.5, 2.2, '#1a1010'); circ(g, 7.2, -15.2, 0.8, '#fff');
     if (o.glasses) circ(g, 6.5, -14.5, 3.4, null, '#3a3a4a', 1);
@@ -327,11 +338,7 @@ function drawHamster(g, x, y, o) {
     circ(g, 6.5, -5, 2.2, '#f2a6a6', INK, 0.9);
   }
   drawHat(g, o.hat, view);
-  if (o.flash > 0) {
-    g.globalCompositeOperation = 'source-atop';
-    g.fillStyle = `rgba(255,255,255,${o.flash})`; g.fillRect(-20, -34, 40, 40);
-    g.globalCompositeOperation = 'source-over';
-  }
+  if (o.flash > 0) ell(g, 0, -13, 14, 14, `rgba(255,255,255,${o.flash * 0.6})`);
   g.restore();
 
   if (view === 'back') staffOnBack();
@@ -475,6 +482,7 @@ function drawMob(g, m, t) {
       break;
     }
     case 'snake': {
+      g.scale(1.5, 1.5);
       g.beginPath();
       for (let i = 0; i <= 12; i++) {
         const x = -20 + i * 2.4, y = -5 + Math.sin(t * 7 + i * 0.7) * 3;
@@ -483,9 +491,10 @@ function drawMob(g, m, t) {
       g.strokeStyle = INK; g.lineWidth = 7.5; g.lineCap = 'round'; g.stroke();
       g.strokeStyle = '#7a5aa8'; g.lineWidth = 5.5; g.stroke();
       g.setLineDash([2, 4]); g.strokeStyle = '#e8d84a'; g.lineWidth = 2; g.stroke(); g.setLineDash([]);
-      ell(g, 10, -6, 6, 4.4, '#8a6ab8', INK, 1.2);
-      circ(g, 12, -7.5, 1.3, '#ffe680');
-      if (Math.sin(t * 8 + m.id) > 0.3) { line(g, 15, -5, 19, -5, '#e0405a', 1); }
+      poly(g, [6, -9, 15, -9.5, 17, -6, 15, -2.5, 6, -3], '#8a6ab8', INK, 1.2);
+      poly(g, [10, -9, 14, -8, 11, -7], '#ffe680'); line(g, 11.5, -9, 12, -7.2, '#1a1010', 0.9);
+      line(g, 9, -10, 13, -9.6, INK, 1.1);
+      if (Math.sin(t * 8 + m.id) > 0.3) { line(g, 17, -5.5, 21, -5.5, '#e0405a', 1); line(g, 21, -5.5, 23, -7, '#e0405a', 0.8); line(g, 21, -5.5, 23, -4, '#e0405a', 0.8); }
       break;
     }
     case 'shroom': {
@@ -497,6 +506,48 @@ function drawMob(g, m, t) {
       g.fillStyle = '#d0404a'; g.fill(); g.strokeStyle = INK; g.lineWidth = 1.4; g.stroke();
       circ(g, -5, -15, 2.4, '#fff'); circ(g, 4, -17, 2, '#fff'); circ(g, 8, -13, 1.6, '#fff');
       g.restore();
+      break;
+    }
+    case 'boar': {
+      const st = Math.sin(t * 10 + m.id) * (Math.abs(m.vx) > 2 ? 3 : 0);
+      for (const [lx, s2] of [[-14, 1], [-6, -1], [8, 1], [15, -1]]) rrect(g, lx - 3, -10 + st * s2 * 0.3, 6, 11, 2, '#5a3a24', INK, 1.2);
+      ell(g, -2, -22, 26, 17, '#7a5236', INK, 2);
+      for (let i = 0; i < 7; i++) line(g, -20 + i * 6, -37, -22 + i * 6, -31, '#4a2e1c', 2.2);
+      ell(g, 20, -20, 12, 11, '#7a5236', INK, 1.8);
+      ell(g, 30, -17, 6, 5, '#d89a8a', INK, 1.3); circ(g, 29, -18, 1, INK); circ(g, 32, -17, 1, INK);
+      g.beginPath(); g.moveTo(26, -12); g.quadraticCurveTo(34, -14, 34, -24); g.strokeStyle = '#fff6e0'; g.lineWidth = 3; g.lineCap = 'round'; g.stroke();
+      circ(g, 22, -25, 2, '#ff4a3a'); poly(g, [14, -30, 18, -38, 21, -29], '#5a3a24', INK, 1.1);
+      break;
+    }
+    case 'troll': {
+      const sw = Math.sin(t * 6 + m.id) * (Math.abs(m.vx) > 2 ? 4 : 0);
+      rrect(g, -12, -16 + sw * 0.3, 9, 16, 3, '#5a7a4a', INK, 1.4); rrect(g, 4, -16 - sw * 0.3, 9, 16, 3, '#5a7a4a', INK, 1.4);
+      ell(g, 0, -34, 22, 24, '#6a8a5a', INK, 2);
+      ell(g, 0, -26, 14, 12, '#8aa878');
+      rrect(g, -16, -24, 32, 10, 3, '#7a5a3a', INK, 1.4);
+      circ(g, 2, -62, 14, '#6a8a5a', INK, 2);
+      ell(g, 6, -58, 5, 4, '#7a9a6a', INK, 1.2);
+      circ(g, -2, -66, 2.4, '#ffe680'); circ(g, 8, -66, 2.4, '#ffe680');
+      line(g, -6, -70, 1, -68, INK, 2); line(g, 12, -70, 6, -68, INK, 2);
+      poly(g, [-2, -53, 0, -49, 2, -53], '#fff');
+      /* こんぼう */
+      g.save(); g.translate(20, -40); g.rotate(-0.9 + sw * 0.08);
+      line(g, 0, 0, 0, -26, '#6a4422', 5); ell(g, 0, -32, 8, 11, '#8a5a32', INK, 1.6);
+      g.restore();
+      circ(g, -22, -38, 7, '#6a8a5a', INK, 1.5);
+      break;
+    }
+    case 'golem': {
+      const sw = Math.sin(t * 4 + m.id) * (Math.abs(m.vx) > 2 ? 3 : 0);
+      rrect(g, -16, -18 + sw * 0.4, 12, 18, 3, '#7a7268', INK, 1.6); rrect(g, 4, -18 - sw * 0.4, 12, 18, 3, '#7a7268', INK, 1.6);
+      rrect(g, -24, -56, 48, 40, 8, '#9a9286', INK, 2.2);
+      for (const [x, y] of [[-14, -46], [6, -40], [-4, -28], [14, -50]]) line(g, x, y, x + 6, y + 6, 'rgba(0,0,0,.3)', 1.4);
+      g.globalAlpha = 0.5 + Math.sin(t * 3) * 0.3; circ(g, 0, -38, 6, '#9fe8ff'); g.globalAlpha = 1;
+      circ(g, 0, -38, 3.5, '#d8f6ff', INK, 1);
+      rrect(g, -14, -76, 28, 22, 6, '#a8a094', INK, 2);
+      rrect(g, -9, -69, 6, 4, 1, '#ffd84a'); rrect(g, 3, -69, 6, 4, 1, '#ffd84a');
+      rrect(g, -36, -54 - sw, 14, 30, 5, '#8a8276', INK, 1.8); rrect(g, 22, -54 + sw, 14, 30, 5, '#8a8276', INK, 1.8);
+      g.fillStyle = '#6aa84a'; for (const [x, y] of [[-10, -76], [6, -77], [-20, -56]]) ell(g, x, y, 5, 2, '#6aa84a');
       break;
     }
     case 'catsol': case 'catmage': case 'catknight': {
@@ -527,10 +578,10 @@ function drawMob(g, m, t) {
       break;
     }
   }
+  /* 当たったときに白く光る。地面ごと白くならないよう、体の形にそった だ円で光らせる */
   if (m.flash > 0) {
-    g.globalCompositeOperation = 'source-atop';
-    g.fillStyle = `rgba(255,255,255,${m.flash * 0.9})`; g.fillRect(-30, -45, 60, 50);
-    g.globalCompositeOperation = 'source-over';
+    const big = d.ai === 'raider' ? 1.5 : 1;
+    ell(g, 0, -d.r * 0.8 * big, d.r * 1.15, d.r * 0.95 * big, `rgba(255,255,255,${m.flash * 0.6})`);
   }
   g.restore();
   if (m.slow > 0) { g.globalAlpha = 0.5; circ(g, m.x, m.y - 6, d.r + 2, null, '#9fe8ff', 2); g.globalAlpha = 1; }
@@ -600,11 +651,7 @@ function drawBoss(g, b, t) {
     circ(g, 4, -80, 2.6, '#e0445a');
     line(g, 26, -20, 30, -64, '#d8b04a', 3.5); circ(g, 30, -68, 6, '#b8ff6a', INK, 1.4);
   }
-  if (b.flash > 0) {
-    g.globalCompositeOperation = 'source-atop';
-    g.fillStyle = `rgba(255,255,255,${b.flash * 0.85})`; g.fillRect(-90, -110, 180, 120);
-    g.globalCompositeOperation = 'source-over';
-  }
+  if (b.flash > 0) ell(g, 0, -b.r * 1.1, b.r * 1.3, b.r * 1.2, `rgba(255,255,255,${b.flash * 0.55})`);
   g.restore();
 }
 
@@ -949,6 +996,81 @@ function drawStruct(g, s, t, st) {
       }
       break;
     }
+    case 'build': drawBuild(g, s.b, t); break;
+    case 'grave': {
+      /* たおれた場所に のこった もちものの袋 */
+      const k = Math.sin(t * 3) * 2;
+      shadow(g, cx, by - 4, 10, 3.5);
+      g.beginPath(); g.moveTo(cx - 11, by - 4); g.quadraticCurveTo(cx - 14, by - 22, cx - 4, by - 24 + k * 0.3); g.lineTo(cx + 4, by - 24 + k * 0.3); g.quadraticCurveTo(cx + 14, by - 22, cx + 11, by - 4); g.closePath();
+      g.fillStyle = '#c89a5c'; g.fill(); g.strokeStyle = INK; g.lineWidth = 1.5; g.stroke();
+      line(g, cx - 5, by - 24, cx + 5, by - 24, '#8a3a2a', 2.2);
+      g.globalAlpha = 0.5 + Math.sin(t * 4) * 0.3; g.fillStyle = '#ffe680'; g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('!', cx, by - 36 + k); g.globalAlpha = 1;
+      break;
+    }
+    case 'dock': {
+      /* さんばしと 小舟 */
+      for (let i = 0; i < s.w * 4; i++) rrect(g, x + i * 8, y + 2, 7, h - 4, 1.5, i % 2 ? '#b07a42' : '#c08a52', 'rgba(60,30,10,.5)', 0.8);
+      const bx = cx, byy = (s.boat === 'up' ? y - 12 : by + 16) + Math.sin(t * 2) * 2;
+      g.save(); g.translate(bx, byy);
+      g.beginPath(); g.moveTo(-26, -6); g.quadraticCurveTo(0, 14, 26, -6); g.closePath();
+      g.fillStyle = '#9a5a2a'; g.fill(); g.strokeStyle = INK; g.lineWidth = 1.6; g.stroke();
+      line(g, 0, -6, 0, -40, '#6a4422', 2.4);
+      poly(g, [1, -38, 1, -12, 20, -14], '#fff8e8', INK, 1.2);
+      g.restore();
+      break;
+    }
+    case 'ranch': {
+      /* アブラムシ牧場の柵 */
+      g.fillStyle = 'rgba(120,200,90,.25)'; g.fillRect(x, y, w, h);
+      for (let i = 0; i <= s.w; i++) { rrect(g, x + i * TILE - 3, y - 12, 6, 16, 2, '#8a5a32', INK, 1.1); rrect(g, x + i * TILE - 3, by - 12, 6, 16, 2, '#8a5a32', INK, 1.1); }
+      for (let j = 0; j <= s.h; j++) { if (j === 2) continue; rrect(g, x - 3, y + j * TILE - 12, 6, 16, 2, '#8a5a32', INK, 1.1); rrect(g, x + w - 3, y + j * TILE - 12, 6, 16, 2, '#8a5a32', INK, 1.1); }
+      line(g, x, y - 6, x + w, y - 6, '#a8743f', 2.4); line(g, x, by - 6, x + w, by - 6, '#a8743f', 2.4);
+      line(g, x, y - 6, x, y + TILE * 2 - 6, '#a8743f', 2.4); line(g, x + w, y - 6, x + w, by - 6, '#a8743f', 2.4);
+      line(g, x, y + TILE * 3 - 6, x, by - 6, '#a8743f', 2.4);
+      break;
+    }
+    case 'throne': {
+      /* 王さまの前の 赤いじゅうたん */
+      rrect(g, x + 20, y, w - 40, h, 4, '#c8364a', 'rgba(0,0,0,.25)', 1);
+      g.fillStyle = '#ffd86a'; g.fillRect(x + 24, y, 3, h); g.fillRect(x + w - 27, y, 3, h);
+      break;
+    }
+    case 'banner': {
+      line(g, cx, by, cx, y - 54, '#6a5a4a', 3);
+      poly(g, [cx, y - 52, cx + 20, y - 52, cx + 20, y - 18, cx + 10, y - 24, cx, y - 18], '#3a5ab8', INK, 1.4);
+      g.fillStyle = '#ffd86a'; g.font = '12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('🌊', cx + 10, y - 38);
+      break;
+    }
+    case 'castle': {
+      /* 湖の王国の城。左右に塔、まん中に大きな門 */
+      const wallC = '#d8d0c2', dark = '#a8a092';
+      shadow(g, cx, by, w * 0.55, 14);
+      rrect(g, x + 40, by - 150, w - 80, 150, 4, wallC, INK, 2.4);
+      for (let r = 0; r < 9; r++) for (let c = 0; c < 14; c++) {
+        const bx2 = x + 44 + c * ((w - 88) / 14) + (r % 2 ? 12 : 0);
+        if (bx2 > x + w - 64) continue;
+        rrect(g, bx2, by - 146 + r * 16, (w - 88) / 14 - 4, 12, 2, r % 3 ? '#cfc6b6' : '#d6cebf', 'rgba(0,0,0,.12)', 0.8);
+      }
+      for (let i = 0; i < 14; i++) rrect(g, x + 38 + i * ((w - 76) / 14), by - 164, (w - 76) / 14 - 6, 18, 2, dark, INK, 1.4);
+      /* 中央の大きな塔 */
+      rrect(g, cx - 50, by - 230, 100, 100, 4, wallC, INK, 2.2);
+      poly(g, [cx - 60, by - 228, cx + 60, by - 228, cx, by - 310], '#3a5ab8', INK, 2.2);
+      line(g, cx, by - 310, cx, by - 336, INK, 2); poly(g, [cx, by - 336, cx + 22, by - 330, cx, by - 322], '#ffd86a', INK, 1.2);
+      for (const wx of [cx - 30, cx + 14]) { rrect(g, wx, by - 210, 16, 26, 8, '#2a3a6a', INK, 1.4); g.globalAlpha = 0.5 + Math.sin(t * 2 + wx) * 0.2; rrect(g, wx + 3, by - 206, 10, 18, 5, '#ffe9a8'); g.globalAlpha = 1; }
+      /* 左右の塔 */
+      for (const tx2 of [x + 10, x + w - 70]) {
+        rrect(g, tx2, by - 200, 60, 200, 4, wallC, INK, 2.2);
+        poly(g, [tx2 - 8, by - 198, tx2 + 68, by - 198, tx2 + 30, by - 270], '#3a5ab8', INK, 2.2);
+        for (const wy of [by - 170, by - 110]) rrect(g, tx2 + 22, wy, 16, 24, 8, '#2a3a6a', INK, 1.4);
+        line(g, tx2 + 30, by - 270, tx2 + 30, by - 290, INK, 1.8); poly(g, [tx2 + 30, by - 290, tx2 + 46, by - 285, tx2 + 30, by - 280], '#c8364a', INK, 1);
+      }
+      /* 門 */
+      g.beginPath(); g.ellipse(cx, by - 46, 30, 34, 0, Math.PI, TAU); g.lineTo(cx + 30, by); g.lineTo(cx - 30, by); g.closePath();
+      g.fillStyle = '#4a3020'; g.fill(); g.strokeStyle = INK; g.lineWidth = 2.2; g.stroke();
+      for (let i = -2; i <= 2; i++) line(g, cx + i * 11, by - 76 + Math.abs(i) * 5, cx + i * 11, by, 'rgba(0,0,0,.35)', 1.6);
+      for (let i = 0; i < 3; i++) { g.globalAlpha = 0.5; rrect(g, x + 70 + i * 40, by - 120, 14, 22, 7, '#2a3a6a'); rrect(g, x + w - 84 - i * 40, by - 120, 14, 22, 7, '#2a3a6a'); g.globalAlpha = 1; }
+      break;
+    }
     case 'stairsDown': {
       for (let i = 0; i < 4; i++) rrect(g, x + 2 + i * 2, y + 4 + i * 6, TILE - 4 - i * 4, 6, 1, shade('#7a7a8a', -i * 22), 'rgba(0,0,0,.4)', 0.8);
       g.fillStyle = '#fff'; g.font = 'bold 10px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('▼', cx, y + 2);
@@ -990,10 +1112,11 @@ const GROUND = {
   [T.GRASS]: '#7cc35a', [T.FOREST]: '#72b453', [T.MEADOW]: '#86c95e', [T.PATH]: '#d8b47c', [T.TOWN]: '#92cf68',
   [T.ROCKY]: '#c8b898', [T.SNOW]: '#eef4fb', [T.VALLEY]: '#4f9a82', [T.MOON]: '#7a6aa8', [T.SAND]: '#ecd9a6',
   [T.FIELD]: '#9a7448', [T.BRIDGE]: '#b8844a', [T.COBBLE]: '#d8ccb8', [T.WATER]: '#4aa6dc', [T.CLIFF]: '#8a7a68',
-  [T.SNOWCLIFF]: '#c8d4e4', [T.CHASM]: '#1a1424', [T.DENSE]: '#3e7a34', [T.FLOOR]: '#8a7a5c', [T.WALL]: '#4d5e3a',
+  [T.SNOWCLIFF]: '#c8d4e4', [T.CHASM]: '#1a1424', [T.DENSE]: '#4a8a3c', [T.FLOOR]: '#8a7a5c', [T.WALL]: '#4d5e3a',
+  [T.RAMPART]: '#b8b0a2', [T.STAIR]: '#a8a092', [T.GATE]: '#8a6a4a',
 };
 
-const SOFT_GROUND = new Set([T.GRASS, T.FOREST, T.MEADOW, T.TOWN, T.VALLEY, T.MOON, T.SAND, T.ROCKY, T.SNOW, T.FIELD]);
+const SOFT_GROUND = new Set([T.GRASS, T.FOREST, T.DENSE, T.MEADOW, T.TOWN, T.VALLEY, T.MOON, T.SAND, T.ROCKY, T.SNOW, T.FIELD]);
 
 function bakeTile(g, m, tx, ty, px, py, pal) {
   const t = m.tiles[ty * m.w + tx];
@@ -1004,18 +1127,18 @@ function bakeTile(g, m, tx, ty, px, py, pal) {
   let base = GROUND[t];
   if (t === T.FLOOR && pal) base = (tx + ty) % 2 ? pal.floor : pal.floor2;
   if (t === T.WALL && pal) base = pal.wallTop;
-  if (t === T.DENSE && moonSide) base = '#3a3058';
+  if (t === T.DENSE && moonSide) base = '#5a4a80';
   g.fillStyle = base;
   g.fillRect(px, py, S, S);
   const n = World.noise ? World.noise(tx * 0.25, ty * 0.25) : 0.5;
-  if (t < 20 && ![T.COBBLE, T.FLOOR, T.BRIDGE, T.SNOW, T.SAND, T.PATH].includes(t)) {
+  if (t < 20 && ![T.COBBLE, T.FLOOR, T.BRIDGE, T.SNOW, T.SAND, T.PATH, T.STAIR, T.GATE].includes(t)) {
     g.fillStyle = n > 0.5 ? `rgba(255,255,255,${(n - 0.5) * 0.18})` : `rgba(0,0,0,${(0.5 - n) * 0.14})`;
     g.fillRect(px, py, S, S);
   }
   /* 崖や壁の下には影が落ちる */
   if (t < 20) {
     const up = at(0, -1);
-    if (up === T.CLIFF || up === T.SNOWCLIFF || up === T.WALL || up === T.DENSE) {
+    if (up === T.CLIFF || up === T.SNOWCLIFF || up === T.WALL) {
       const grd = g.createLinearGradient(0, py, 0, py + 12);
       grd.addColorStop(0, 'rgba(30,20,10,.28)'); grd.addColorStop(1, 'rgba(30,20,10,0)');
       g.fillStyle = grd; g.fillRect(px, py, S, 12);
@@ -1169,9 +1292,57 @@ function bakeTile(g, m, tx, ty, px, py, pal) {
       break;
     }
     case T.DENSE: {
-      const c1 = moonSide ? '#4a3a6a' : '#2e6a2a', c2 = moonSide ? '#5a4a7e' : '#3a7e34';
-      circ(g, px + 8 + h * 6, py + 12, 11, c1); circ(g, px + 22 - h2 * 4, py + 20, 12, c1);
-      circ(g, px + 10 + h * 4, py + 9, 6, c2); circ(g, px + 21, py + 16, 6, c2);
+      /* 深い森の地面: 落ち葉とコケ */
+      const c1 = moonSide ? '#4a3c6e' : '#3a7230';
+      for (let i = 0; i < 4; i++) ell(g, px + hash2(tx, ty, 150 + i) * 28 + 2, py + hash2(tx, ty, 160 + i) * 26 + 4, 3, 1.6, i % 2 ? c1 : (moonSide ? '#7a6aa0' : '#9a7a3a'));
+      if (h < 0.25) { line(g, px + 6, py + 22, px + 4, py + 16, c1, 1.4); line(g, px + 6, py + 22, px + 9, py + 17, c1, 1.4); }
+      break;
+    }
+    case T.RAMPART: {
+      /* 城壁の上: 石だたみの道。外がわのふちに 凸凹 (のこぎり壁) */
+      g.fillStyle = '#c4bcae'; g.fillRect(px, py, S, S);
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) rrect(g, px + c * 16 + 1, py + r * 16 + 1, 14, 14, 2, hash2(tx * 2 + c, ty * 2 + r, 9) > 0.5 ? '#cfc8ba' : '#bab2a4', 'rgba(80,70,60,.35)', 0.8);
+      const wallLike = (o) => o === T.RAMPART || o === T.GATE || o === T.STAIR;
+      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        const o = at(dx, dy);
+        if (wallLike(o)) continue;
+        g.fillStyle = '#8a8274';
+        if (dy === -1) for (let i = 0; i < 4; i++) g.fillRect(px + i * 8 + 1, py, 6, 6);
+        if (dx === -1) for (let i = 0; i < 4; i++) g.fillRect(px, py + i * 8 + 1, 6, 6);
+        if (dx === 1) for (let i = 0; i < 4; i++) g.fillRect(px + S - 6, py + i * 8 + 1, 6, 6);
+      }
+      /* 下が地面なら、壁の正面 (高さ) を描く */
+      const below = at(0, 1);
+      if (!wallLike(below)) {
+        g.fillStyle = '#8a8274'; g.fillRect(px, py + S - 14, S, 14);
+        g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 1;
+        for (let r = 0; r < 2; r++) { g.beginPath(); g.moveTo(px, py + S - 14 + r * 7); g.lineTo(px + S, py + S - 14 + r * 7); g.stroke(); for (let c = (r + tx) % 2 ? 8 : 0; c < S; c += 16) { g.beginPath(); g.moveTo(px + c, py + S - 14 + r * 7); g.lineTo(px + c, py + S - 7 + r * 7); g.stroke(); } }
+        if (below === T.WATER) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(px, py + S - 2, S, 2); }
+      }
+      break;
+    }
+    case T.STAIR: {
+      g.fillStyle = '#9a9284'; g.fillRect(px, py, S, S);
+      const vert = at(0, -1) === T.RAMPART || at(0, 1) === T.RAMPART;
+      for (let i = 0; i < 4; i++) {
+        const k = shade('#c8c0b2', -i * 10);
+        if (vert) rrect(g, px + 1, py + i * 8 + 1, S - 2, 7, 1, k, 'rgba(60,50,40,.4)', 0.8);
+        else rrect(g, px + i * 8 + 1, py + 1, 7, S - 2, 1, k, 'rgba(60,50,40,.4)', 0.8);
+      }
+      g.fillStyle = 'rgba(255,255,255,.7)'; g.font = 'bold 9px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      if (h < 0.5) g.fillText('▲', px + 16, py + 16);
+      break;
+    }
+    case T.GATE: {
+      /* 門: 下はくぐれる石の通路、上は城壁の道がつづく木の床 */
+      g.fillStyle = '#b8ac98'; g.fillRect(px, py, S, S);
+      for (let i = 0; i < 4; i++) rrect(g, px + 1, py + i * 8 + 0.5, S - 2, 7, 1.5, i % 2 ? '#a0805a' : '#b08e64', 'rgba(60,30,10,.4)', 0.8);
+      const side = (o) => o !== T.GATE;
+      g.fillStyle = 'rgba(0,0,0,.28)';
+      if (side(at(-1, 0)) && at(-1, 0) === T.RAMPART) g.fillRect(px, py, 5, S);
+      if (side(at(1, 0)) && at(1, 0) === T.RAMPART) g.fillRect(px + S - 5, py, 5, S);
+      if (side(at(0, -1)) && at(0, -1) === T.RAMPART) g.fillRect(px, py, S, 5);
+      if (side(at(0, 1)) && at(0, 1) === T.RAMPART) g.fillRect(px, py + S - 5, S, 5);
       break;
     }
   }

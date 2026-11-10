@@ -306,3 +306,34 @@ body.touch #quest { max-width: calc(100vw - 380px); }
   body.touch #touchPad { transform: scale(.82); transform-origin: right bottom; }
   #bossBar { top: 60px; }
 }
+
+/* ------------------------------ 建築 ------------------------------ */
+#buildBar {
+  position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); pointer-events: auto;
+  display: flex; gap: 6px; padding: 8px; max-width: calc(100vw - 24px); overflow-x: auto; z-index: 5;
+}
+#buildBar button {
+  flex: 0 0 auto; min-width: 74px; padding: 6px 6px 5px; border-radius: 12px; border: 2px solid var(--line);
+  background: var(--paper); display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer;
+}
+#buildBar button i { font-style: normal; font-size: 20px; line-height: 1.1; }
+#buildBar button b { font-size: 10px; white-space: nowrap; }
+#buildBar button small { font-size: 9px; color: var(--ink-dim); white-space: nowrap; }
+#buildBar button small.ng { color: var(--danger); }
+#buildBar button.on { background: #fff3c8; border-color: #e8a010; box-shadow: 0 0 0 2px #ffd86a; }
+#buildBar button.tool { min-width: 56px; }
+body.building #quest, body.building #spellBox { opacity: .35; }
+body.building #btnBuild { background: #fff3c8; border-color: #e8a010; }
+body.building.touch #touchPad { bottom: 96px; }
+.setup { display: flex; gap: 12px; align-items: flex-start; text-align: left; margin: 10px 0 4px; }
+.setup canvas { width: 120px; height: 120px; flex: 0 0 auto; background: #fff6e0; border-radius: 50%; border: 2px solid var(--line); }
+.setupMain { flex: 1; min-width: 0; }
+.setupMain h3 { margin: 4px 0 6px; font-size: 13px; }
+.furChip { width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px var(--line); cursor: pointer; padding: 0; }
+.furChip.on { box-shadow: 0 0 0 3px #e8a010; }
+.toggle { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; cursor: pointer; }
+.toggle input { width: 20px; height: 20px; margin-top: 2px; flex: 0 0 auto; }
+.toggle span { display: flex; flex-direction: column; gap: 2px; }
+.toggle small { color: var(--ink-dim); font-size: 11px; line-height: 1.4; }
+.boxGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-bottom: 8px; }
+@media (max-width: 480px) { .setup { flex-direction: column; align-items: center; } }

@@ -35,6 +35,15 @@ const UI = {
       el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); Snd.unlock(); fn(); });
     };
     tap('btnBag', () => this.openBag());
+    tap('btnBuild', () => { if (!this.isBusy()) Build.toggle(); });
+    $('buildBar').addEventListener('pointerdown', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      e.preventDefault(); e.stopPropagation();
+      if (b.dataset.bk) Build.select(b.dataset.bk);
+      else if (b.dataset.tool === 'rot') Build.rotate();
+      else if (b.dataset.tool === 'close') Build.toggle(false);
+    });
     tap('btnMap', () => this.openMap());
     tap('btnMenu', () => this.openMenu());
     tap('btnAtk', () => Input.virt('atk'));
@@ -85,11 +94,18 @@ const UI = {
     $('foodNum').textContent = food;
     $('bagNum').textContent = `${G.inv.length}/${Game.slots()}`;
     $('btnBag').classList.toggle('full', G.inv.length >= Game.slots());
+    if (Build.active) { const sig = G.inv.map((s) => s.id + s.n).join(); if (sig !== this.invSig) { this.invSig = sig; this.buildBar(true); } }
     if (G.boss) $('bossFill').style.width = (100 * clamp(G.boss.hp / G.boss.max, 0, 1)) + '%';
   },
   bossBar(b) {
     $('bossBar').classList.toggle('on', !!b);
     if (b) { $('bossName').textContent = b.name; $('bossFill').style.width = '100%'; }
+  },
+  /* 町をおそう大きな魔物の HP。塔のボスとは同時に出ないので、同じ棒を使う */
+  raidBar(m) {
+    if (Game.G.boss) return;
+    $('bossBar').classList.toggle('on', !!m);
+    if (m) { $('bossName').textContent = MOBS[m.type].name; $('bossFill').style.width = (100 * clamp(m.hp / m.max, 0, 1)) + '%'; }
   },
   banner(text) {
     const el = $('banner');
@@ -164,6 +180,7 @@ const UI = {
     else if (this.panel === 'map') { body.innerHTML = this.mapHtml(); this.drawMap(); }
     else if (this.panel === 'menu') body.innerHTML = this.menuHtml();
     else if (this.panel === 'board') body.innerHTML = this.boardHtml();
+    else if (this.panel === 'box') body.innerHTML = this.boxHtml();
     if (this.panel === 'bag' && this.tab === 'gear') this.drawPreview();
   },
 
@@ -266,7 +283,7 @@ const UI = {
     g.fillStyle = '#fff6e0'; g.beginPath(); g.arc(100, 100, 92, 0, TAU); g.fill();
     drawHamster(g, 100, 170, {
       face: 'down', t: R.t, moving: false, body: G.eq.body, hat: G.eq.hat, bag: Game.bagId(), weapon: G.eq.weapon, staff: G.eq.staff,
-      swing: -1, roll: -1, cheek: Game.bagFill(), scale: 3.4, aim: 0,
+      swing: -1, roll: -1, cheek: Game.bagFill(), scale: 3.4, aim: 0, fur: (FURS[G.fur] || FURS.gold)[0], belly: (FURS[G.fur] || FURS.gold)[1],
     });
   },
 
@@ -315,6 +332,57 @@ const UI = {
     return h + '</div>';
   },
 
+  /* ------------------------------ 建築 ------------------------------ */
+  buildBar(on) {
+    const el = $('buildBar');
+    el.classList.toggle('hidden', !on);
+    if (!on) return;
+    let h = '';
+    for (const k of BUILD_ORDER) {
+      const d = BUILDS[k];
+      const ok = Game.hasAll(d.cost);
+      const cost = Object.entries(d.cost).map(([id, n]) => `${ITEMS[id].icon}${n}`).join(' ');
+      h += `<button data-bk="${k}" class="${Build.sel === k ? 'on' : ''}" title="${esc(d.desc)}"><i>${d.icon}</i><b>${esc(d.name)}</b><small class="${ok ? '' : 'ng'}">${cost}</small></button>`;
+    }
+    h += `<button class="tool ${Build.sel === 'remove' ? 'on' : ''}" data-bk="remove"><i>🪓</i><b>こわす</b><small>もどる</small></button>`;
+    h += `<button class="tool" data-tool="rot"><i>${DIR_ARROW[Build.dir]}</i><b>向き</b><small>R</small></button>`;
+    h += '<button class="tool" data-tool="close"><i>✖</i><b>おわる</b><small>B</small></button>';
+    el.innerHTML = h;
+  },
+  openBox(b) {
+    if (this.panel) return;
+    this.boxB = b;
+    Sfx.door();
+    this.open('box', '📦 木箱', [], null);
+  },
+  boxHtml() {
+    const G = Game.G, b = this.boxB;
+    let h = '<p class="hint">木箱の中身（おすと カバンへ）</p><div class="boxGrid">';
+    const ids = Object.keys(b.store).filter((k) => b.store[k] > 0);
+    if (!ids.length) h += '<span class="hint">からっぽ</span>';
+    for (const id of ids) h += `<button class="slot" data-take="${id}"><i>${ITEMS[id].icon}</i><b>${b.store[id]}</b></button>`;
+    h += '</div><p class="hint">カバン（おすと 木箱へ）</p><div class="boxGrid">';
+    G.inv.forEach((s, i) => { h += `<button class="slot" data-put="${i}"><i>${ITEMS[s.id].icon}</i><b>${s.n}</b></button>`; });
+    return h + `</div><p class="hint">前（${DIR_ARROW[b.dir]}）にベルトコンベアがあると、中身を ひとつずつ ベルトへ だします。</p>`;
+  },
+
+  /* ------------------------------ はじめる前の設定 ------------------------------ */
+  setup: { fur: 'gold' },
+  initSettings() {
+    const row = $('furRow');
+    row.innerHTML = Object.keys(FURS).map((k) => `<button class="furChip ${this.setup.fur === k ? 'on' : ''}" data-fur="${k}" style="background:${FURS[k][0]}" title="${k}"></button>`).join('');
+    row.onclick = (e) => { const b = e.target.closest('[data-fur]'); if (!b) return; this.setup.fur = b.dataset.fur; Sfx.click(); this.initSettings(); };
+    this.drawFurPreview();
+  },
+  drawFurPreview() {
+    const c = $('furPreview');
+    if (!c) return;
+    const g = c.getContext('2d'), f = FURS[this.setup.fur];
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, 120, 120);
+    drawHamster(g, 60, 104, { face: 'down', t: 0, moving: false, fur: f[0], belly: f[1], weapon: 'stick', swing: -1, roll: -1, cheek: 0, scale: 2.6, aim: 0 });
+  },
+  newSettings() { return { fur: this.setup.fur, keepInv: $('keepInv').checked }; },
+
   /* ------------------------------ 地図 ------------------------------ */
   openMap(warp) {
     if (this.isBusy()) return;
@@ -324,6 +392,7 @@ const UI = {
   },
   mapHtml() {
     const G = Game.G;
+    if (G.map.kind === 'kingdom') return '<p class="hint">ここは 湖の王国 ミナモ。南の門を出た さんばしの舟で、かがみ湖の ふなつき場へ もどれる。城壁には 内がわの階段から のぼれる。</p>';
     if (G.map.kind !== 'over') return `<p class="hint">塔の中では 地図が見られない。いまは ${TOWERS[G.tower.id].name} の ${G.tower.floor}かい（ぜんぶで ${TOWERS[G.tower.id].floors}かい）。</p>`;
     const ws = World.warps.filter((w) => G.flags.warps[w.id]);
     let h = '<div class="mapBox"><canvas id="mapCv"></canvas></div><p class="hint">✦ = 道しるべ（さわるとワープ先になる）・★ = つぎの目的地</p>';
@@ -357,10 +426,11 @@ const UI = {
       if (s.kind === 'home') lab(s.x + 2, s.y + 1, '🏠', 14);
       if (s.kind === 'warp') { g.fillStyle = G.flags.warps[s.id] ? '#7af0ff' : '#888'; lab(s.x + 0.5, s.y + 0.5, '✦', 12); }
       if (s.kind === 'hut' || s.kind === 'tent') lab(s.x + 1.5, s.y + 1, '⛺', 13);
+      if (s.kind === 'dock') lab(s.x + 1.5, s.y, '⛵', 14);
     }
     g.fillStyle = '#fff'; g.font = 'bold 11px "Hiragino Maru Gothic ProN", sans-serif';
     const name = (x, y, s) => { if (!G.reveal[Math.floor(y / CELL) * CW + Math.floor(x / CELL)]) return; g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 3; g.strokeText(s, x * sc, y * sc); g.fillText(s, x * sc, y * sc); };
-    name(28, 60, 'ひまわりの森'); name(72, 70, 'ほおぶくろタウン'); name(72, 22, 'かがみ湖'); name(112, 64, 'ゴツゴツ山'); name(141, 90, 'きりの谷'); name(176, 80, '月の野原');
+    name(28, 60, 'ひまわりの森'); name(72, 70, 'ほおぶくろタウン'); name(72, 22, 'かがみ湖'); name(74, 34, '→ 湖の王国'); name(112, 64, 'ゴツゴツ山'); name(141, 90, 'きりの谷'); name(176, 80, '月の野原');
     if (G.target && G.target.map === 'over') { g.fillStyle = '#ffd84a'; lab(G.target.x / TILE, G.target.y / TILE, '★', 16); }
     const px = G.p.x / TILE * sc, py = G.p.y / TILE * sc;
     g.fillStyle = '#ff5a5a'; g.strokeStyle = '#fff'; g.lineWidth = 2;
@@ -377,10 +447,11 @@ const UI = {
     const G = Game.G;
     const keys = Input.isTouch
       ? '<p class="hint">左半分をなぞって歩く。⚔ でたたく・攻撃、✨ で魔法、💨 でころがる、まん中のボタンで話す・しらべる、🌻 で食べる。</p>'
-      : '<div class="kgrid"><div><b>WASD / 矢印</b><span>歩く</span></div><div><b>スペース / J / 左クリック</b><span>たたく・攻撃</span></div><div><b>K / 右クリック</b><span>魔法</span></div><div><b>Q / 1〜5</b><span>魔法をえらぶ</span></div><div><b>Shift / L</b><span>ころがる</span></div><div><b>E</b><span>話す・しらべる</span></div><div><b>F</b><span>食べる</span></div><div><b>I / B</b><span>カバン</span></div><div><b>M</b><span>地図</span></div></div>';
+      : '<div class="kgrid"><div><b>WASD / 矢印</b><span>歩く</span></div><div><b>スペース / J / 左クリック</b><span>たたく・攻撃</span></div><div><b>K / 右クリック</b><span>魔法</span></div><div><b>Q / 1〜5</b><span>魔法をえらぶ</span></div><div><b>Shift / L</b><span>ころがる</span></div><div><b>E</b><span>話す・しらべる</span></div><div><b>F</b><span>食べる</span></div><div><b>I / Tab</b><span>カバン</span></div><div><b>B</b><span>建築</span></div><div><b>R</b><span>建築の向き・動物からおりる</span></div><div><b>M</b><span>地図</span></div></div>';
     return `<div class="menuBtns"><button class="btn primary" data-menu="close">ゲームにもどる</button>` +
       `<button class="btn" data-menu="sound">音：${Options.sound ? 'オン' : 'オフ'}</button>` +
       `<button class="btn ghost" data-menu="title">セーブしてタイトルへ</button></div>` +
+      `<h3>せってい</h3><p class="hint">インベントリ保存：${G.keepInv ? 'オン（たおれても もちものが へらない）' : 'オフ（たおれた場所に 袋で のこる）'}。毛の色と せっていは「はじめから」のときに えらべます。</p>` +
       `<h3>あそびかた</h3>${keys}<p class="hint">プレイ時間 ${Math.floor(G.time / 60)}分 ・ たおした魔物 ${G.kills} ・ セーブは自動で、この端末のブラウザにだけ残ります。</p>`;
   },
 
@@ -431,6 +502,17 @@ const UI = {
       G.owned.delete(d.sellgear); G.coins += GEAR[d.sellgear].sell; Sfx.coin();
     }
     else if (d.warp) { Game.warpTo(d.warp); return; }
+    else if (d.take) {
+      const b = this.boxB, n = b.store[d.take] || 0;
+      const got = Game.add(d.take, n);
+      b.store[d.take] -= got; if (!b.store[d.take]) delete b.store[d.take];
+      if (got < n) toast('カバンが いっぱい', 'bad');
+      Sfx.pickup();
+    }
+    else if (d.put !== undefined) {
+      const s = G.inv[+d.put];
+      if (s) { Build.insert(this.boxB, s.id, s.n); G.inv.splice(+d.put, 1); Sfx.pickup(); }
+    }
     else if (d.menu) {
       if (d.menu === 'close') { this.closePanel(); return; }
       if (d.menu === 'sound') { Snd.unlock(); Snd.setOn(!Options.sound); }

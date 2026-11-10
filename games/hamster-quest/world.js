@@ -7,10 +7,12 @@
 /* タイルの種類。20 以上は歩けない。 */
 const T = {
   GRASS: 0, FOREST: 1, MEADOW: 2, PATH: 3, TOWN: 4, ROCKY: 5, SNOW: 6, VALLEY: 7, MOON: 8,
-  SAND: 9, FIELD: 10, BRIDGE: 11, FLOOR: 12, COBBLE: 13,
-  WATER: 20, CLIFF: 21, SNOWCLIFF: 22, CHASM: 23, DENSE: 24, WALL: 25,
+  SAND: 9, FIELD: 10, BRIDGE: 11, FLOOR: 12, COBBLE: 13, STAIR: 14, GATE: 15, DENSE: 16,
+  WATER: 20, CLIFF: 21, SNOWCLIFF: 22, CHASM: 23, WALL: 25, RAMPART: 26,
 };
-/* 0 = 歩ける, 1 = 壁 (弾も止まる), 2 = 水や谷 (弾と鳥はこえる) */
+/* 0 = 歩ける, 1 = 壁 (弾も止まる), 2 = 水や谷 (弾と鳥はこえる)
+   深い森 (DENSE) は木がしげっているだけで、中に入れる。
+   城壁の上 (RAMPART) は、階段からのぼったハムスターだけが歩ける。 */
 const tileSolid = (t) => (t === T.WATER || t === T.CHASM ? 2 : t >= 20 ? 1 : 0);
 
 /* たたくと素材が出るもの。drops: [アイテム, 最小, 最大, 確率] */
@@ -247,6 +249,7 @@ const World = {
     const S = (o) => this.addStruct(m, reserved, o);
     this.warps = [];
     this.rests = {};
+    this.kingdom = null;
 
     /* 家 */
     S({ kind: 'home', x: 16, y: 98, w: 4, h: 3, act: 'rest', rest: 'home', label: 'ハム太の家' });
@@ -308,6 +311,13 @@ const World = {
     W('east', 162, 66, '月の野原');
     W('moonTower', 172, 23, '月の塔の前');
 
+    /* 湖のふなつき場 (王国へ) と、家のそばのアブラムシ牧場 */
+    /* さんばしは水の上なので、まわりを地面にしない */
+    m.structs.push({ kind: 'dock', x: 73, y: 41, w: 3, h: 1, flat: true, solid: false, boat: 'up', act: 'boat', label: 'ふなつき場' });
+    S({ kind: 'sign', x: 71, y: 43, act: 'sign', sign: 'dock' });
+    S({ kind: 'ranch', x: 25, y: 104, w: 6, h: 4, flat: true, solid: false });
+    S({ kind: 'sign', x: 24, y: 103, act: 'sign', sign: 'ranch' });
+
     /* 宝箱 */
     const C = (id, x, y) => S({ kind: 'chest', id, x, y, act: 'chest' });
     C('forestNE', 52, 22); C('forestSW', 8, 60); C('lakeIsle', 82, 46); C('mtPocket', 112, 74);
@@ -317,7 +327,8 @@ const World = {
   /* --------------------------- 素材ノード --------------------------- */
   placeNodes(m, reserved) {
     const table = {
-      [T.FOREST]: [['tree', 0.22], ['bush', 0.06], ['sunflower', 0.006], ['mushroom', 0.004]],
+      [T.FOREST]: [['tree', 0.18], ['bush', 0.06], ['sunflower', 0.006], ['mushroom', 0.006]],
+      [T.DENSE]: [['tree', 0.2], ['pine', 0.08], ['bush', 0.05], ['mushroom', 0.02]],
       [T.MEADOW]: [['tree', 0.035], ['bush', 0.05], ['sunflower', 0.025]],
       [T.FIELD]: [['sunflower', 0.5], ['bush', 0.05]],
       [T.SAND]: [['rock', 0.025]],
@@ -330,7 +341,8 @@ const World = {
       for (let tx = 1; tx < m.w - 1; tx++) {
         const i = ty * m.w + tx;
         if (reserved[i]) continue;
-        const list = table[m.tiles[i]];
+        let list = table[m.tiles[i]];
+        if (m.tiles[i] === T.DENSE && tx >= 164) list = [['deadtree', 0.22], ['moonrock', 0.02], ['bush', 0.04]];
         if (!list) continue;
         let r = hash2(tx, ty, 99);
         for (const [type, p] of list) {
@@ -385,17 +397,33 @@ const World = {
   /* 四角い体 (半径 r) を動かす。壁にそって すべる。 */
   move(m, e, dx, dy, r, fly) {
     const lim = fly ? (m.kind === 'tower' ? 1 : 0) : 2;
+    /* 城壁: のぼっている (high) ときは壁の上と階段と門の上だけ、階段の上にいるときは壁の上にも出られる */
+    const climb = e.climber && m.kind === 'kingdom';
+    if (climb) { const t0 = this.tileAt(m, Math.floor(e.x / TILE), Math.floor(e.y / TILE)); e.lvl = e.high ? 2 : t0 === T.STAIR ? 1 : 0; }
+    else e.lvl = 0;
     if (dx) { e.x += dx; this.resolve(m, e, r, true, dx, lim); }
     if (dy) { e.y += dy; this.resolve(m, e, r, false, dy, lim); }
-    if (!fly) this.resolveNodes(m, e, r);
+    if (!fly && !e.high) this.resolveNodes(m, e, r);
     e.x = clamp(e.x, r + 2, m.w * TILE - r - 2);
     e.y = clamp(e.y, r + 2, m.h * TILE - r - 2);
+    if (climb) {
+      const t1 = this.tileAt(m, Math.floor(e.x / TILE), Math.floor(e.y / TILE));
+      if (t1 === T.RAMPART) e.high = true;
+      else if (t1 !== T.STAIR && t1 !== T.GATE) e.high = false;
+    }
+  },
+  /* のぼりかたに合わせた当たり判定 */
+  solidFor(m, e, tx, ty) {
+    if (!e.lvl) return this.solidAt(m, tx, ty);
+    const t = this.tileAt(m, tx, ty);
+    if (t === T.RAMPART || t === T.STAIR || t === T.GATE) return 0;
+    return e.lvl === 2 ? 1 : this.solidAt(m, tx, ty);
   },
   resolve(m, e, r, isX, d, lim) {
     const x0 = Math.floor((e.x - r) / TILE), x1 = Math.floor((e.x + r - 0.01) / TILE);
     const y0 = Math.floor((e.y - r) / TILE), y1 = Math.floor((e.y + r - 0.01) / TILE);
     for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
-      const s = this.solidAt(m, tx, ty);
+      const s = this.solidFor(m, e, tx, ty);
       if (!s || s > lim) continue;
       if (isX) e.x = d > 0 ? tx * TILE - r : (tx + 1) * TILE + r;
       else e.y = d > 0 ? ty * TILE - r : (ty + 1) * TILE + r;
@@ -440,6 +468,97 @@ const World = {
     if (m.kind !== 'over') return null;
     const cx = clamp(Math.floor(x / TILE / CELL), 0, CW - 1), cy = clamp(Math.floor(y / TILE / CELL), 0, CH - 1);
     return REGION_KEYS[m.region[cy * CW + cx]];
+  },
+
+  /* ============================== 湖の王国 ==============================
+     湖のまん中の島に、城壁でかこまれた大きな国がある。
+     城壁は 3 タイルの厚さ。内がわの階段からのぼると、上をぐるっと歩ける。 */
+  kingdom: null,
+  buildKingdom() {
+    if (this.kingdom) return this.kingdom;
+    const W = 150, H = 120;
+    const m = makeMap('kingdom', 'kingdom', W, H);
+    const nz = makeNoise(77);
+    const set = (x, y, t) => this.setTile(m, x, y, t);
+    const fill = (x0, y0, x1, y1, t) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, t); };
+    m.tiles.fill(T.WATER);
+    /* 島: 城壁のまわりに少しだけ岸がある */
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const dx = Math.max(17 - x, x - 133, 0), dy = Math.max(9 - y, y - 109, 0);
+      const d = Math.hypot(dx, dy) - (nz(x * 0.2, y * 0.2) - 0.5) * 4;
+      if (d < 0.5) set(x, y, d > -1.5 ? T.SAND : T.GRASS);
+    }
+    const X0 = 22, X1 = 128, Y0 = 14, Y1 = 104, TH = 3;
+    fill(X0 + TH, Y0 + TH, X1 - TH, Y1 - TH, T.MEADOW);
+    /* 城壁 */
+    for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) {
+      if (x < X0 + TH || x > X1 - TH || y < Y0 + TH || y > Y1 - TH) set(x, y, T.RAMPART);
+    }
+    /* 門 (下を歩いてくぐれる。上は城壁の道がつづく) */
+    fill(73, Y1 - TH + 1, 76, Y1, T.GATE); fill(73, Y0, 76, Y0 + TH - 1, T.GATE);
+    fill(X0, 58, X0 + TH - 1, 61, T.GATE); fill(X1 - TH + 1, 58, X1, 61, T.GATE);
+    /* 大通り */
+    fill(73, Y0 + TH, 76, Y1 - TH, T.COBBLE);
+    fill(X0 + TH, 58, X1 - TH, 61, T.COBBLE);
+    /* 運河と橋 */
+    for (const cy of [40, 82]) {
+      fill(X0 + TH, cy, X1 - TH, cy + 1, T.WATER);
+      for (const bx of [[36, 38], [73, 76], [111, 113]]) fill(bx[0], cy, bx[1], cy + 1, T.BRIDGE);
+    }
+    /* 城の前の広場と、まん中の広場 */
+    fill(58, 33, 91, 38, T.COBBLE);
+    fill(64, 51, 85, 68, T.COBBLE);
+    /* 内がわの階段 (2 タイルはば) */
+    const stairs = [];
+    for (const x of [44, 104]) { fill(x, Y1 - TH, x + 1, Y1 - TH, T.STAIR); fill(x, Y0 + TH, x + 1, Y0 + TH, T.STAIR); stairs.push([x, Y1 - TH], [x, Y0 + TH]); }
+    for (const y of [30, 90]) { fill(X0 + TH, y, X0 + TH, y + 1, T.STAIR); fill(X1 - TH, y, X1 - TH, y + 1, T.STAIR); stairs.push([X0 + TH, y], [X1 - TH, y]); }
+    /* 南の門の外のさんばし */
+    fill(73, Y1 + 1, 76, 113, T.BRIDGE);
+
+    const reserved = new Uint8Array(W * H);
+    const S = (o) => {
+      o.w = o.w || 1; o.h = o.h || 1; if (o.solid === undefined) o.solid = true;
+      m.structs.push(o);
+      for (let y = o.y - 1; y <= o.y + o.h; y++) for (let x = o.x - 1; x <= o.x + o.w; x++) if (x >= 0 && y >= 0 && x < W && y < H) reserved[y * W + x] = 1;
+      return o;
+    };
+    S({ kind: 'castle', x: 61, y: 19, w: 28, h: 13, label: 'ミナモ城' });
+    S({ kind: 'throne', x: 73, y: 33, w: 4, h: 3, flat: true, solid: false });
+    for (const x of [60, 89]) S({ kind: 'banner', x, y: 33 });
+    S({ kind: 'fountain', x: 73, y: 54, w: 3, h: 3 });
+    S({ kind: 'shop', shop: 'royal', x: 65, y: 63, w: 6, h: 4, act: 'shop', roof: '#3a5ab8', sign: '🛡️', label: '王国の武具屋' });
+    S({ kind: 'shop', x: 79, y: 63, w: 6, h: 4, act: 'rest', rest: 'kingdom', roof: '#c8364a', sign: '🛏️', label: '王国の宿屋' });
+    this.rests.kingdom = { x: 82, y: 68, name: '王国の宿屋', map: 'kingdom' };
+    S({ kind: 'dock', x: 74, y: 112, w: 2, h: 2, flat: true, solid: false, act: 'boat', label: 'ふなつき場' });
+    S({ kind: 'sign', x: 71, y: 106, act: 'sign', sign: 'kDock' });
+    for (const [x, y] of [[71, 50], [78, 50], [71, 69], [78, 69], [71, 100], [78, 100], [71, 18], [78, 18]]) S({ kind: 'lamp', x, y });
+    for (const [x, y] of [[66, 52], [83, 52], [62, 36], [88, 36]]) S({ kind: 'flowerbed', x, y, w: 3, h: 1 });
+    /* 家なみ */
+    const roofs = ['#d9734a', '#4a8ac8', '#e0a040', '#7aa04a', '#8a5a3a', '#e889b0', '#6a7a8c', '#b8504a'];
+    let k = 0;
+    for (const y of [44, 50, 64, 71, 86, 93]) for (let x = 27; x < 124; x += 8) {
+      if (x + 5 >= 70 && x <= 79) continue;
+      if (y >= 50 && y <= 71 && x + 5 >= 62 && x <= 87) continue;
+      if (y === 64 && (x <= 30 || x >= 120)) continue;
+      S({ kind: 'house', x, y, w: 5, h: 3, roof: roofs[k++ % roofs.length] });
+    }
+    for (const y of [24, 30]) for (const x of [28, 36, 44, 98, 106, 114]) if (!(y === 30 && (x === 28 || x === 120))) S({ kind: 'house', x, y, w: 5, h: 3, roof: roofs[k++ % roofs.length] });
+    /* 木 */
+    for (let y = Y0 + TH + 1; y < Y1 - TH; y++) for (let x = X0 + TH + 1; x < X1 - TH; x++) {
+      const i = y * W + x;
+      if (reserved[i] || m.tiles[i] !== T.MEADOW) continue;
+      if (hash2(x, y, 41) < 0.035) S({ kind: 'tree', x, y });
+    }
+    /* 階段の前はあけておく */
+    for (const [x, y] of stairs) for (let yy = y - 1; yy <= y + 2; yy++) for (let xx = x - 1; xx <= x + 2; xx++) {
+      m.structs = m.structs.filter((st) => !(st.kind === 'tree' && st.x === xx && st.y === yy));
+    }
+    m.region = null;
+    m.entry = { x: 75, y: 109 };
+    m.stairs = stairs;
+    this.rebuildSolid(m);
+    this.kingdom = m;
+    return m;
   },
 
   /* ================================ 塔 ================================ */

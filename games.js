@@ -61,11 +61,11 @@ const GAMES = [
     slug: 'hamster-quest', genre: 'rpg', players: '1P', date: '2026-10-20',
     ja: {
       title: 'ハムスターの冒険 ― HAMSTER QUEST',
-      desc: '森の木で剣とカバンをつくり、町で売り買いしながら、山と谷をこえて3つの塔のボスから魔法の本を集める冒険RPG。スマホ対応。',
+      desc: '木や草で道具をつくり、水車とベルトコンベアで木の工場を建て、ウサギやイモムシに乗って冒険する、終わりのないハムスターのくらしRPG。スマホ対応。',
     },
     en: {
       title: 'Hamster Quest',
-      desc: 'Craft a sword and backpack from the forest, trade in a hamster town, and cross mountains and valleys to win spellbooks from three tower bosses. Plays on phones.',
+      desc: 'Craft tools from wood and grass, build a wooden factory with waterwheels and conveyor belts, and ride rabbits and caterpillars in an endless hamster life RPG. Plays on phones.',
     },
   },
   {

@@ -127,6 +127,8 @@ const Mobs = {
           if (m.t > 2.6) { m.st = 'swoop'; m.t = 0; m.cdx = dx / dp; m.cdy = dy / dp; }
         }
       } else this.wander(m, dt, sp * 0.5);
+    } else if (d.ai === 'raider') {
+      const v = Raid.think(m, dt); vx = v.vx; vy = v.vy;
     } else if (d.ai === 'shooter') {
       if (sees) {
         if (dp < 110) { vx = -(dx / dp) * sp; vy = -(dy / dp) * sp; }
@@ -142,8 +144,8 @@ const Mobs = {
     m.kbx *= Math.pow(0.004, dt); m.kby *= Math.pow(0.004, dt);
     const ox = m.x, oy = m.y;
     World.move(G.map, m, mx, my, Math.min(m.r, 12), fly);
-    /* 町には入らない */
-    if (G.map.kind === 'over') {
+    /* 町には入らない (大きな魔物だけは おそってくる) */
+    if (G.map.kind === 'over' && !m.raider) {
       const rg = World.regionAt(G.map, m.x, m.y);
       if (rg && REGIONS[rg].safe) { m.x = ox; m.y = oy; }
     }
@@ -173,7 +175,8 @@ const Mobs = {
     if (m.dead) return;
     if (m.boss) { Boss.damage(m, dmg); return; }
     m.hp -= dmg; m.flash = 1;
-    m.kbx = kx; m.kby = ky;
+    const heavy = MOBS[m.type].heavy ? 0.15 : 1;
+    m.kbx = kx * heavy; m.kby = ky * heavy;
     m.aggro = true;
     if (m.st === 'tele') { m.st = 'rest'; m.t = 0; }
     FX.text(m.x, m.y - m.r * 2 - 4, String(dmg), '#fff6c8');
@@ -189,6 +192,7 @@ const Mobs = {
     Game.gainExp(d.exp);
     const c = randi(d.coin[0], d.coin[1]);
     if (c > 0) Game.dropCoins(m.x, m.y, c);
+    if (m.raider) { R.shake = 8; Sfx.fanfare(); toast(`${d.name}を おいはらった！ 町は守られた！`, 'good'); UI.raidBar(null); }
     for (const [id, p] of d.drops) if (Math.random() < p) Game.drop(m.x, m.y, id, 1);
     Sfx.hit();
   },
@@ -373,7 +377,8 @@ const Boss = {
     R.shake = 10; Sfx.boom(); Sfx.fanfare();
     Game.gainExp(d.exp);
     Game.dropCoins(b.x, b.y, d.coin);
-    Game.drop(b.x, b.y - 10, null, 1, { book: d.book, vx: 0, vy: 0, delay: 1 });
+    if (!G.books[d.book]) Game.drop(b.x, b.y - 10, null, 1, { book: d.book, vx: 0, vy: 0, delay: 1 });
+    else Game.dropCoins(b.x, b.y, Math.round(d.coin / 2));
     if (b.type === 'eagle') Game.drop(b.x + 30, b.y, 'feather', 5);
     G.map.structs.push({ kind: 'exit', x: 11, y: 8, w: 2, h: 1, solid: false, act: 'exit' });
     toast(`${b.name}を たおした！`, 'good');
@@ -452,6 +457,7 @@ const Shots = {
       if (dist(s.x, s.y, m.x, m.y - (m.boss ? 24 : 10)) > s.r + hr) continue;
       if (s.aoe) { this.explode(s, s.aoe); return true; }
       Mobs.damage(m, s.dmg, s.vx * 0.5, s.vy * 0.5);
+      if (s.slowMob && !m.boss) m.slow = s.slowMob;
       FX.burst(s.x, s.y, '#9fe8ff', 6, 50, 0.35);
       return true;
     }

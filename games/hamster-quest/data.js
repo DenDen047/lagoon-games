@@ -34,6 +34,8 @@ const ITEMS = {
   dango:    { name: 'タネだんご', icon: '🍡', kind: 'food', heal: 36, sell: 9, desc: 'タネを丸めただんご。HP を 36 回復。' },
   soup:     { name: 'きのこスープ', icon: '🍲', kind: 'food', heal: 70, sell: 22, desc: 'あったかいスープ。HP を 70 回復。' },
   potion:   { name: 'くすり', icon: '🧪', kind: 'food', heal: 55, sell: 15, desc: 'よく効くくすり。HP を 55 回復。' },
+  plank:    { name: '板', icon: '🪧', kind: 'mat', sell: 6, desc: '製材機で木を切った板。ベッドや床、木箱の材料。売ると木より高い。' },
+  honeydew: { name: 'あまつゆ', icon: '🫧', kind: 'food', heal: 12, sell: 4, desc: 'アブラムシからもらえる、あまいしずく。HP を 12 回復。' },
   ether:    { name: 'まほうの水', icon: '💧', kind: 'food', mp: 20, sell: 18, desc: 'MP を 20 回復。' },
 };
 
@@ -42,6 +44,7 @@ const ITEMS = {
    weapon.kind: paw (すで) / sword / spear / hammer */
 const GEAR = {
   paw:      { slot: 'weapon', name: 'すで', icon: '🐾', atk: 2, kind: 'paw' },
+  stick:    { slot: 'weapon', name: '木の棒', icon: '🦯', atk: 3, kind: 'sword', col: '#9a6a3a', stick: true, sell: 1 },
   wsword:   { slot: 'weapon', name: '木の剣', icon: '🗡️', atk: 4, kind: 'sword', col: '#c08a52', sell: 8 },
   ssword:   { slot: 'weapon', name: '石の剣', icon: '🗡️', atk: 7, kind: 'sword', col: '#a3a8ae', sell: 20 },
   cspear:   { slot: 'weapon', name: '銅のやり', icon: '🔱', atk: 9, kind: 'spear', col: '#d0864a', price: 150, sell: 60 },
@@ -138,12 +141,16 @@ const MOBS = {
   weasel:   { name: 'イタチ', hp: 48, atk: 8, spd: 80, exp: 16, coin: [3, 7], r: 12, ai: 'charger', drops: [['fur', 0.6]] },
   crow:     { name: 'カラス', hp: 30, atk: 6, spd: 105, exp: 12, coin: [2, 6], r: 11, ai: 'flyer', drops: [['feather', 0.7]] },
   yeti:     { name: 'ゆきオバケ', hp: 42, atk: 7, spd: 36, exp: 14, coin: [3, 6], r: 13, ai: 'shooter', shot: 'snow', drops: [['ice', 0.45]] },
-  snake:    { name: 'ヘビ', hp: 62, atk: 11, spd: 58, exp: 22, coin: [4, 9], r: 12, ai: 'charger', drops: [['leather', 0.6]] },
+  snake:    { name: 'ヘビ', hp: 62, atk: 11, spd: 58, exp: 22, coin: [4, 9], r: 16, ai: 'charger', drops: [['leather', 0.6]] },
   bat:      { name: 'コウモリ', hp: 36, atk: 9, spd: 118, exp: 16, coin: [3, 7], r: 10, ai: 'flyer', drops: [['feather', 0.4]] },
   shroom:   { name: 'キノコおばけ', hp: 54, atk: 9, spd: 32, exp: 20, coin: [4, 8], r: 13, ai: 'shooter', shot: 'spore', drops: [['mushroom', 0.7]] },
   catsol:   { name: 'ネコ兵', hp: 95, atk: 14, spd: 66, exp: 34, coin: [6, 12], r: 13, ai: 'walker', drops: [['moon', 0.3]] },
   catmage:  { name: 'ネコまどうし', hp: 72, atk: 13, spd: 46, exp: 34, coin: [6, 12], r: 12, ai: 'shooter', shot: 'dark', drops: [['dust', 0.4]] },
   owl:      { name: 'フクロウ', hp: 85, atk: 15, spd: 105, exp: 36, coin: [6, 12], r: 13, ai: 'flyer', drops: [['feather', 0.6]] },
+  /* 町をおそう大きな魔物。騎士だけではたおしきれない */
+  boar:     { name: '大イノシシ', hp: 200, atk: 7, spd: 46, exp: 40, coin: [40, 60], r: 24, ai: 'raider', heavy: true, drops: [['leather', 1], ['acorn', 1]] },
+  troll:    { name: '森のトロル', hp: 480, atk: 12, spd: 40, exp: 110, coin: [90, 130], r: 26, ai: 'raider', heavy: true, drops: [['fur', 1], ['iron', 1]] },
+  golem:    { name: '岩のゴーレム', hp: 1000, atk: 18, spd: 34, exp: 260, coin: [180, 240], r: 28, ai: 'raider', heavy: true, drops: [['crystal', 1], ['goldseed', 0.5]] },
   catknight:{ name: 'ネコ騎士', hp: 150, atk: 17, spd: 58, exp: 50, coin: [10, 18], r: 14, ai: 'charger', drops: [['moon', 0.5]] },
 };
 
@@ -155,15 +162,16 @@ const BOSSES = {
 
 /* ------------------------------- 地方 ------------------------------- */
 const REGIONS = {
-  forest:   { name: 'ひまわりの森', music: 'forest', spawn: [['ant', 4], ['worm', 3]] },
-  deepwood: { name: 'ふかい森', music: 'forest', spawn: [['ant', 2], ['worm', 2], ['beetle', 3], ['bee', 3]] },
-  lake:     { name: 'かがみ湖', music: 'forest', spawn: [['bee', 2], ['worm', 2]] },
+  forest:   { name: 'ひまわりの森', music: 'forest', spawn: [['ant', 4]] },
+  deepwood: { name: 'ふかい森', music: 'forest', spawn: [['ant', 2], ['beetle', 3], ['centi', 2]] },
+  lake:     { name: 'かがみ湖', music: 'forest', spawn: [['ant', 2]] },
   town:     { name: 'ほおぶくろタウン', music: 'town', spawn: [], safe: true },
-  outskirt: { name: '町はずれ', music: 'town', spawn: [['ant', 2], ['bee', 1]] },
+  outskirt: { name: '町はずれ', music: 'town', spawn: [['ant', 2]] },
   mountain: { name: 'ゴツゴツ山', music: 'mountain', spawn: [['lizard', 3], ['crow', 2], ['weasel', 2]] },
   snow:     { name: 'ゆきの山頂', music: 'snow', spawn: [['yeti', 3], ['weasel', 2], ['crow', 1]], cold: true },
   valley:   { name: 'きりの谷', music: 'valley', spawn: [['snake', 3], ['bat', 3], ['shroom', 3]] },
   moon:     { name: '月の野原', music: 'moon', spawn: [['catsol', 3], ['catmage', 2], ['owl', 2]] },
+  kingdom:  { name: '湖の王国 ミナモ', music: 'town', spawn: [], safe: true },
 };
 
 /* -------------------------------- 塔 -------------------------------- */
@@ -217,6 +225,11 @@ const SHOPS = {
     hello: '寒かったろう。ここで休んでいきなさい。',
     stock: [['item', 'potion', 50], ['item', 'ether', 55], ['item', 'rope', 18], ['gear', 'coat', 240], ['gear', 'ipick', 320]],
   },
+  royal: {
+    name: 'ミナモ王国 武具店', owner: '騎士団長 ガルド', fur: '#c8c0b0',
+    hello: '王国の騎士団と おなじ武具を あつかっておる。',
+    stock: [['gear', 'knight', 900, 'wind'], ['gear', 'ksword', 1400, 'wind'], ['gear', 'helmet', 300, 'fire'], ['gear', 'cspear', 140], ['item', 'potion', 40], ['item', 'ether', 45]],
+  },
   camp: {
     name: '谷の行商人', owner: 'たびのクルミ', fur: '#c4a07a',
     hello: 'やあ、こんな谷までよく来たね。なんでも買い取るよ。',
@@ -246,23 +259,15 @@ const REQUESTS = {
 /* -------------------------------- 会話 -------------------------------- */
 const ELDER = {
   name: '長老ハムじい',
-  first: [
-    'よく来たのう、森の小さな旅人よ。',
-    'この町は むかしから「星の魔法の本」に守られてきた。ところが ある夜、ノラネコ大王がその本をうばい、谷の向こうの「月の塔」にとじこもってしもうた。',
-    'それからというもの、森にも山にも魔物があふれておる。',
-    '月の塔の扉は「ほのおの本」と「かぜの本」をもつ者にしかひらかん。まずは北の森にある「森の塔」へ行くのじゃ。',
-    '魔法の本は、杖がなければつかえん。魔法屋で杖を手に入れておきなさい。森で集めた物は よろず屋で売れるぞ。',
+  tips: [
+    '水車は 水べにしか建てられん。まわる力を 軸やベルトで 機械まで とどけるのじゃ。',
+    '水車ひとつで 機械4つぶんの力じゃ。たりなければ 水車をふやして つなげばよい。',
+    'ベルトコンベアの上に もちものを すてると、ベルトが はこんでくれる。',
+    '製材機で つくった板は、木より 高く売れるぞ。',
+    '木箱の前に ベルトをおくと、中身を ひとつずつ ベルトへ だしてくれる。',
+    '塔のボスは 何度でも あらわれる。強くなったら 腕だめしに 行ってみなさい。',
+    'ウサギやヤモリと なかよくなると、旅が ずっと楽になるぞ。',
   ],
-  hint: {
-    staff: '魔法屋の「木の杖」は 100コイン じゃ。森の物を売ってためなさい。',
-    forestTower: '森の塔は 森の北西じゃ。てっぺんにクモの女王がおる。',
-    thorns: 'ほのおの本を手に入れたか！ 町の東の山道は いばらでふさがれておる。ファイアで燃やすのじゃ。',
-    coat: '山の上は ふぶきじゃ。けがわのコートは 洋服屋で買えるし、イタチの毛皮で作ることもできる。',
-    windTower: '雪の山頂に「風の塔」がある。あらしの大ワシをたおして かぜの本を手に入れるのじゃ。',
-    valley: '山をこえた東に きりの谷がある。大きな割れ目に つり橋をかけるには 木12本とロープ4本がいる。',
-    moonTower: 'ふたつの本がそろったな。谷の向こうの月の塔で ノラネコ大王をたおすのじゃ！',
-    done: '星の魔法の本が もどってきた！ そなたは この町の英雄じゃ。',
-  },
 };
 
 const GUIDE = {
@@ -281,6 +286,9 @@ const TOWNSFOLK = [
   '宿屋で休むと、HPもMPもぜんぶ回復するよ。',
   'ころがると（Shift / 💨）、ちょっとのあいだ攻撃が当たらないんだ。',
   'わたし、湖のほとりで金色のタネを見たことがあるの。',
+  '湖の北のふなつき場から、湖の王国へ行けるんだって。お城の壁の上を歩けるらしいよ！',
+  '町の入口は 騎士さんが守ってくれる。でも 大きな魔物がおそってきたら、いっしょに戦ってね。',
+  'ウサギやリスに ひまわりのタネをあげると、なかよくなって ついてきてくれるよ。',
   '山の鉄の岩は、ふつうの岩より黒っぽいんだ。',
 ];
 
@@ -291,7 +299,57 @@ const SIGNS = {
   townWest: 'ようこそ ほおぶくろタウンへ！',
   mtGate: 'この先 ゴツゴツ山。いばらに注意！',
   bridgeSite: 'ここに つり橋をかけられそうだ。木12本 と ロープ4本 があれば……',
-  moonGate: '月の塔。ほのおの本と かぜの本 をもつ者だけが入れる。',
+  moonGate: '月の塔。てっぺんには ノラネコ大王が すんでいる。',
   lakeSign: 'かがみ湖。およぐのは きけんです。',
   valleySign: 'きりの谷。ヘビとキノコおばけに注意。',
+  dock: 'ふなつき場。湖のまん中にある「湖の王国 ミナモ」へ 舟がでている。',
+  ranch: 'ハム太のアブラムシ牧場。なでると あまつゆを わけてくれる。',
+  kDock: '湖の王国 ミナモへ ようこそ！ 城壁には 内がわの階段から のぼれます。',
 };
+
+/* ------------------------------ 王国 ------------------------------ */
+const KING = {
+  name: 'ミナモ王',
+  first: [
+    'おお、小さな旅人よ。湖の王国ミナモへ よう来た。',
+    'わが国は 湖の上にたつ城壁の国。騎士たちが 魔物から民を守っておる。',
+    'ほおぶくろタウンには 騎士を何人か送っておいた。大きな魔物がおそってきたら、力をかしてやってくれ。',
+    'これは わしからの おくりものじゃ。旅に役立てなさい。',
+  ],
+  again: [
+    '城壁の上からの ながめは すばらしいぞ。階段から のぼってみるとよい。',
+    '湖のまわりには 水車にぴったりの 場所がたくさんあるぞ。',
+    '町をおそう 大きな魔物を たおしてくれたそうじゃな。礼をいうぞ。',
+  ],
+};
+const KNIGHT_LINES = [
+  'ここは われら騎士が守る。ふつうの魔物は 通さないぞ！',
+  '大きな魔物が来たら、角笛をふく。いっしょに戦ってくれ！',
+  '王国の騎士団は、湖の王国ミナモから来たのだ。',
+];
+
+/* ------------------------------ 建てる物 ------------------------------
+   B キーで建築。ハムスターの技術なので ぜんぶ木でできていて、力は水車でつくる。
+   power: つくる力 / use: つかう力 / conduct: 力をつたえる / dir: 向きがある / flat: 上を歩ける
+   recipes: 機械が自動でつくる物 (in を入れると t 秒で out ができる) */
+const BUILDS = {
+  waterwheel: { name: '水車', icon: '🎡', w: 3, h: 3, cost: { wood: 20, rope: 4, stone: 6 }, power: 8, water: true,
+    desc: '水べに建てると まわって力をつくる。軸やベルトで 機械に力をおくる。' },
+  shaft:   { name: '木の軸', icon: '🥢', w: 1, h: 1, cost: { wood: 2 }, conduct: true, flat: true, desc: '水車の力を となりへ つたえる。上を歩ける。' },
+  belt:    { name: 'ベルトコンベア', icon: '⏩', w: 1, h: 1, cost: { wood: 2, grass: 2 }, conduct: true, use: 0.25, dir: true, flat: true,
+    desc: '力が来ていると、のせた物を はこぶ。ハムスターも はこばれる。' },
+  sawmill: { name: '製材機', icon: '🪚', w: 2, h: 2, cost: { wood: 10, stone: 4, rope: 2 }, use: 2, dir: true,
+    recipes: [{ in: { wood: 1 }, out: ['plank', 2], t: 2.5 }], desc: '木を 板に する。' },
+  spinner: { name: '糸車', icon: '🧵', w: 2, h: 2, cost: { wood: 8, rope: 3 }, use: 2, dir: true,
+    recipes: [{ in: { grass: 3 }, out: ['rope', 1], t: 3 }, { in: { silk: 3 }, out: ['cloth', 1], t: 4 }], desc: '草を ロープに、クモの糸を 布に する。' },
+  mill:    { name: '石うす', icon: '⚙️', w: 2, h: 2, cost: { stone: 10, wood: 4 }, use: 2, dir: true,
+    recipes: [{ in: { seed: 3 }, out: ['dango', 1], t: 3 }, { in: { acorn: 2 }, out: ['dango', 1], t: 3 }], desc: 'タネや どんぐりを ひいて だんごに する。' },
+  box:     { name: '木箱', icon: '📦', w: 1, h: 1, cost: { wood: 6 }, dir: true, store: true,
+    desc: '物をしまっておける。ベルトから入れられ、前にベルトがあれば 中身を ひとつずつ だす。' },
+  bed:     { name: 'わらのベッド', icon: '🛏️', w: 2, h: 1, cost: { grass: 10, plank: 4 }, desc: 'ねむると回復して、たおれたときに ここで目をさます。' },
+  field:   { name: '畑', icon: '🌱', w: 1, h: 1, cost: { wood: 1, seed: 1 }, flat: true, desc: 'ひまわりが育つ。さいたら しらべて タネを とる。' },
+  fence:   { name: '柵', icon: '🚧', w: 1, h: 1, cost: { wood: 1 }, desc: '魔物も ハムスターも 通れない。' },
+  floor:   { name: '木の床', icon: '🟫', w: 1, h: 1, cost: { plank: 1 }, flat: true, desc: 'かざりの床。' },
+  lamp:    { name: 'ランプ', icon: '🏮', w: 1, h: 1, cost: { wood: 2, grass: 1 }, desc: 'あかりの柱。' },
+};
+const BUILD_ORDER = ['waterwheel', 'shaft', 'belt', 'sawmill', 'spinner', 'mill', 'box', 'bed', 'field', 'fence', 'floor', 'lamp'];

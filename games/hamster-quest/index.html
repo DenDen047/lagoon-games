@@ -31,6 +31,7 @@
   </div>
 
   <div id="topBtns">
+    <button class="rbtn" id="btnBuild" title="建築 (B)">🔨</button>
     <button class="rbtn" id="btnBag" title="カバン (I)">🎒<b id="bagNum"></b></button>
     <button class="rbtn" id="btnMap" title="地図 (M)">🗺️</button>
     <button class="rbtn" id="btnMenu" title="メニュー (Esc)">☰</button>
@@ -39,6 +40,8 @@
   <div class="panel" id="quest"><span class="qmark">★</span><span id="questText"></span></div>
 
   <button class="panel" id="spellBox" title="魔法をえらぶ (Q)"><span id="spellIcon"></span><span class="sname"><b id="spellName"></b><small id="spellCost"></small></span></button>
+
+  <div id="buildBar" class="panel hidden"></div>
 
   <div id="touchPad">
     <button class="tbtn big" id="btnAtk">⚔️</button>
@@ -96,8 +99,10 @@
         <div><b>スペース / 左クリック</b><span>たたく・攻撃（木や岩をたたくと材料が出る）</span></div>
         <div><b>K / 右クリック</b><span>魔法（杖がいる）</span></div>
         <div><b>Shift</b><span>ころがって よける</span></div>
-        <div><b>E</b><span>話す・しらべる・お店にはいる</span></div>
-        <div><b>I</b><span>カバン（つくる・そうび）</span></div>
+        <div><b>E</b><span>話す・しらべる・動物にのる・なかまにする</span></div>
+        <div><b>R</b><span>動物から おりる・建築で 向きをかえる</span></div>
+        <div><b>B</b><span>建築（水車・ベルトコンベア・機械・施設）</span></div>
+        <div><b>I / Tab</b><span>カバン（つくる・そうび）</span></div>
         <div><b>F</b><span>食べて回復</span></div>
         <div><b>M</b><span>地図とワープ</span></div>
       </div>
@@ -112,6 +117,15 @@
     <h1 class="small">なまえをつけよう</h1>
     <p class="lead">冒険にでる ハムスターの なまえは？</p>
     <div class="nameRow"><input id="heroInput" type="text" maxlength="8" placeholder="なまえ" autocomplete="off" /></div>
+    <div class="setup">
+      <canvas id="furPreview" width="120" height="120"></canvas>
+      <div class="setupMain">
+        <h3>毛の色</h3>
+        <div class="chips" id="furRow"></div>
+        <h3>せってい</h3>
+        <label class="toggle"><input type="checkbox" id="keepInv" /> <span><b>インベントリ保存</b><small>オンにすると、たおれても もちものが へらない。オフだと たおれた場所に 袋で のこる。</small></span></label>
+      </div>
+    </div>
     <div class="tbtns">
       <button class="btn primary" id="btnStart">冒険にでる</button>
       <button class="btn ghost" id="btnNameBack">もどる</button>
@@ -147,6 +161,9 @@
 <script src="art.js"></script>
 <script src="render.js"></script>
 <script src="mobs.js"></script>
+<script src="critters.js"></script>
+<script src="raid.js"></script>
+<script src="build.js"></script>
 <script src="ui.js"></script>
 <script src="main.js"></script>
 </body>

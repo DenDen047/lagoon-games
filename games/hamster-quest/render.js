@@ -24,19 +24,26 @@ const R = {
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 200));
   },
+  baseZoom: 1, highK: 0, fogK: 0,
   resize() {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.W = window.innerWidth; this.H = window.innerHeight;
     this.canvas.width = Math.round(this.W * this.dpr);
     this.canvas.height = Math.round(this.H * this.dpr);
     this.canvas.style.width = this.W + 'px'; this.canvas.style.height = this.H + 'px';
-    this.zoom = clamp(Math.sqrt(this.W * this.H) / (17 * TILE), 0.85, 2.1);
+    this.baseZoom = clamp(Math.sqrt(this.W * this.H) / (17 * TILE), 0.85, 2.1);
+    this.zoom = this.baseZoom * (1 - this.highK * 0.3);
     this.vignette = null;
   },
   get vw() { return this.W / this.zoom; },
   get vh() { return this.H / this.zoom; },
 
   follow(m, x, y, snap) {
+    /* 城壁の上にのぼると、遠くまで見わたせる */
+    const G = Game.G;
+    const high = G && G.p.high ? 1 : 0;
+    this.highK = snap ? high : lerp(this.highK, high, 0.06);
+    this.zoom = this.baseZoom * (1 - this.highK * 0.3);
     let tx = x - this.vw / 2, ty = y - this.vh / 2 - 10;
     const mw = m.w * TILE, mh = m.h * TILE;
     tx = mw < this.vw ? (mw - this.vw) / 2 : clamp(tx, 0, mw - this.vw);
@@ -77,7 +84,7 @@ const R = {
   draw(G) {
     const g = this.ctx, m = G.map;
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    g.fillStyle = m.kind === 'tower' ? '#0c0a14' : '#2e5a28';
+    g.fillStyle = m.kind === 'tower' ? '#0c0a14' : m.kind === 'kingdom' ? '#3f97cf' : '#2e5a28';
     g.fillRect(0, 0, this.W, this.H);
 
     const sh = this.shake > 0 ? this.shake : 0;
@@ -106,6 +113,7 @@ const R = {
       if (!this.inView(s.x * TILE, s.y * TILE, s.w * TILE, s.h * TILE, 64)) continue;
       drawStruct(g, s, this.t, st);
     }
+    for (const it of G.bitems || []) if (m.kind === 'over') drawBeltItem(g, it);
     for (const fx of G.marks) this.drawMark(g, fx);
 
     /* 奥から手前へ */
@@ -117,13 +125,15 @@ const R = {
       }
     }
     for (const s of m.structs) {
-      if (['stairsDown', 'stairsUp', 'torch', 'stakes', 'exit'].includes(s.kind)) continue;
+      if (s.flat || ['stairsDown', 'stairsUp', 'torch', 'stakes', 'exit'].includes(s.kind)) continue;
       if (!this.inView(s.x * TILE - 40, s.y * TILE - 260, s.w * TILE + 80, s.h * TILE + 280, 0)) continue;
       list.push({ y: (s.y + s.h) * TILE - 1, k: 1, o: s });
     }
     for (const d of G.drops) list.push({ y: d.y, k: 2, o: d });
     for (const n of G.npcs) if (n.map === m.id) list.push({ y: n.y, k: 3, o: n });
     for (const e of G.mobs) list.push({ y: e.y, k: 4, o: e });
+    for (const c of G.critters || []) list.push({ y: c.y, k: 7, o: c });
+    if (G.pet) list.push({ y: G.pet.y, k: 8, o: G.pet });
     if (G.boss) list.push({ y: G.boss.y, k: 5, o: G.boss });
     list.push({ y: G.p.y, k: 6, o: G.p });
     list.sort((a, b) => a.y - b.y);
@@ -136,16 +146,27 @@ const R = {
         case 4: drawMob(g, it.o, this.t); break;
         case 5: drawBoss(g, it.o, this.t); break;
         case 6: this.drawPlayer(g, G); break;
+        case 7: {
+          const c = it.o, d = CRITTERS[c.type];
+          const friend = d.ride || d.pet === 'tame' || d.milk;
+          drawCritter(g, c, this.t, { heart: friend && !G.ride && dist(c.x, c.y, G.p.x, G.p.y) < 70 });
+          break;
+        }
+        case 8: drawCritter(g, it.o, this.t, { pet: true, moving: it.o.moving }); break;
       }
     }
     for (const b of G.shots) this.drawShot(g, b);
+    /* 城壁の上にいるときは、ハムスターを手前にもう一度描く (家や木にかくれない) */
+    if (G.p.high) this.drawPlayer(g, G);
     for (const fx of G.zaps) this.drawZap(g, fx);
+    if (Build.active && Build.ghost) drawGhost(g, Build.ghost, this.t);
     FX.draw(g);
     this.drawPrompt(g, G);
     this.drawArrow(g, G);
 
     /* ここからは画面の座標 */
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drawFog(g, G);
     this.drawWeather(g, G);
     this.drawStick(g);
     if (G.p.hurtT > 0) {
@@ -186,12 +207,33 @@ const R = {
   drawPlayer(g, G) {
     const p = G.p;
     if (p.iframe > 0 && p.roll < 0 && Math.floor(this.t * 20) % 2) return;
-    drawHamster(g, p.x, p.y, {
-      face: p.face, t: this.t, moving: p.moving, fur: FURS.gold[0], belly: FURS.gold[1],
+    let y = p.y;
+    if (G.ride && p.roll < 0) {
+      /* のりものの虫や動物の上にのる */
+      const d = CRITTERS[G.ride.type];
+      const face = p.face === 'left' ? -1 : p.face === 'right' ? 1 : (G.ride.face || 1);
+      G.ride.face = face;
+      const mount = { type: G.ride.type, x: p.x, y: p.y, vx: p.moving ? face * 10 : 0, face, id: 7, snowy: G.ride.snowy, milkT: 1 };
+      drawCritter(g, mount, this.t, { riding: true, moving: p.moving });
+      const bob = p.moving ? Math.abs(Math.sin(this.t * (G.ride.type === 'rabbit' ? 9 : 12))) * (G.ride.type === 'rabbit' ? 7 : 2) : 0;
+      y = p.y - d.seat - bob - (G.ride.type === 'bee' ? Math.sin(this.t * 5 + 7) * 3 + 10 : 0);
+      shadow(g, p.x, y, 8, 2.5, 0.15);
+    }
+    const sx = G.ride && p.roll < 0 && G.ride.type === 'rabbit' ? p.x - 6 * (G.ride.face || 1) : p.x;
+    /* 小さなイモムシにのると、ぐらぐらして あぶなっかしい */
+    const wobble = G.ride && p.roll < 0 && G.ride.type === 'worm';
+    if (wobble) {
+      g.save(); g.translate(sx, y);
+      g.rotate(Math.sin(this.t * (p.moving ? 9 : 4)) * (p.moving ? 0.22 : 0.12));
+      g.translate(-sx, -y);
+    }
+    drawHamster(g, sx, y, {
+      face: p.face, t: this.t, moving: p.moving, fur: (FURS[G.fur] || FURS.gold)[0], belly: (FURS[G.fur] || FURS.gold)[1],
       body: G.eq.body, hat: G.eq.hat, bag: Game.bagId(), weapon: G.eq.weapon || 'paw', staff: G.eq.staff,
       swing: p.swing >= 0 ? p.swing / p.swingMax : -1, aim: p.aim, roll: p.roll >= 0 ? p.roll / 0.32 : -1,
-      cheek: Game.bagFill(), flash: p.flash, cast: p.castT > 0 ? p.castT / 0.3 : 0, seed: 1,
+      cheek: Game.bagFill(), flash: p.flash, cast: p.castT > 0 ? p.castT / 0.3 : 0, seed: 1, noShadow: !!G.ride,
     });
+    if (wobble) g.restore();
     if (p.slowT > 0) { g.globalAlpha = 0.55; circ(g, p.x, p.y - 10, 14, null, '#ffffff', 2); g.globalAlpha = 1; }
   },
 
@@ -199,7 +241,7 @@ const R = {
     const f = FURS[n.fur] || FURS.cream;
     drawHamster(g, n.x, n.y, {
       face: n.face, t: this.t + n.seed, moving: n.moving, fur: f[0], belly: f[1], body: n.body, hat: n.hat,
-      bag: n.bag || 'cheek', weapon: null, swing: -1, roll: -1, cheek: 0.1, seed: n.seed,
+      bag: n.bag || 'cheek', weapon: n.weapon || null, swing: n.swing >= 0 ? n.swing : -1, aim: n.aim || 0, roll: -1, cheek: 0, seed: n.seed,
       beard: n.beard, apron: n.apron, glasses: n.glasses, scale: n.scale || 1,
     });
     if (n.mark) {
@@ -321,6 +363,37 @@ const R = {
     g.globalAlpha = 0.35; circ(g, s.ox, s.oy, 56, null, '#fff', 3);
     g.globalAlpha = 0.5; circ(g, s.ox + s.dx * 56, s.oy + s.dy * 56, 22, '#fff');
     g.globalAlpha = 1;
+  },
+
+  /* ------------------------------ 森の霧 ------------------------------
+     森に入ると まわりが暗くなり、霧がただよう。深い森ほど 見える所がせまい。 */
+  fogBlobs: null,
+  drawFog(g, G) {
+    const m = G.map, p = G.p;
+    let want = 0;
+    if (m.kind === 'over') {
+      const t = World.tileAt(m, Math.floor(p.x / TILE), Math.floor(p.y / TILE));
+      if (t === T.DENSE) want = 1; else if (t === T.FOREST) want = 0.5;
+    }
+    this.fogK = lerp(this.fogK, want, 0.03);
+    const k = this.fogK;
+    if (k < 0.02) return;
+    const W = this.W, H = this.H;
+    const s = this.toScreen(p.x, p.y - 12);
+    const r0 = lerp(Math.max(W, H) * 0.6, 70 * this.zoom, k), r1 = r0 + lerp(260, 150, k) * this.zoom;
+    const grd = g.createRadialGradient(s.x, s.y, r0, s.x, s.y, r1);
+    const dark = m.kind === 'over' && p.x > 164 * TILE ? '28,18,44' : '14,30,20';
+    grd.addColorStop(0, `rgba(${dark},0)`); grd.addColorStop(1, `rgba(${dark},${0.92 * k})`);
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    if (!this.fogBlobs) this.fogBlobs = Array.from({ length: 12 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random(), p: Math.random() * TAU }));
+    for (const b of this.fogBlobs) {
+      b.x += (0.006 + b.s * 0.008) / 60;
+      if (b.x > 1.3) b.x = -0.3;
+      g.globalAlpha = (0.1 + 0.08 * Math.sin(this.t * 0.5 + b.p)) * k;
+      ell(g, b.x * W, b.y * H + Math.sin(this.t * 0.3 + b.p) * 20, (180 + b.s * 160) * this.zoom * 0.6, (50 + b.s * 40) * this.zoom * 0.6, '#e4efe6');
+    }
+    g.globalAlpha = 1;
+    g.fillStyle = `rgba(220,235,225,${0.1 * k})`; g.fillRect(0, 0, W, H);
   },
 
   /* ------------------------------ 天気 ------------------------------ */

@@ -46,6 +46,7 @@ const Game = {
     G.eq.weapon = 'wsword'; G.eq.hat = 'straw'; G.owned.add('leafbag');
     this.buildNpcsFor(G);
     this.G = G;
+    Build.attach(G.map);
     this.demoT = 0;
     R.dropChunks();
     R.follow(G.map, 24 * TILE, 101 * TILE, true);
@@ -73,6 +74,7 @@ const Game = {
       $('titleScreen').classList.add('hidden');
       $('nameScreen').classList.remove('hidden');
       $('heroInput').value = HERO_DEFAULT;
+      UI.initSettings();
       $('heroInput').focus();
     });
     cont.addEventListener('click', () => { Sfx.click(); this.continueGame(); });
@@ -82,7 +84,7 @@ const Game = {
       const name = ($('heroInput').value.trim() || HERO_DEFAULT).slice(0, 8);
       $('nameScreen').classList.add('hidden');
       Sfx.click();
-      this.newGame(name);
+      this.newGame(name, UI.newSettings());
     });
     $('heroInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnStart').click(); });
     $('btnRevive').addEventListener('click', () => this.revive());
@@ -107,8 +109,8 @@ const Game = {
     return {
       ver: 1, name,
       lv: 1, exp: 0, hp: 30, mp: 10, coins: 10,
-      inv: [], owned: new Set(['paw', 'cheek']),
-      eq: { weapon: 'paw', staff: null, body: null, hat: null },
+      inv: [], owned: new Set(['paw', 'cheek', 'stick']),
+      eq: { weapon: 'stick', staff: null, body: null, hat: null },
       books: { fire: false, wind: false, heal: false, star: false },
       spell: 'bolt',
       flags: { thorns: false, guide: false, bridge: false, chests: {}, warps: { home: true }, reqs: {}, elder: 0, bosses: {}, towers: {}, ending: false },
@@ -117,7 +119,8 @@ const Game = {
 
       map: null, tower: null,
       p: this.freshPlayer(),
-      mobs: [], boss: null, shots: [], zaps: [], marks: [], drops: [], npcs: [],
+      mobs: [], boss: null, shots: [], zaps: [], marks: [], drops: [], npcs: [], critters: [], pet: null, ride: null, raidT: 0,
+      builds: [], bitems: [], bedAt: null, grave: null, fur: 'gold', keepInv: false,
       near: null, target: null, region: 'forest', coldT: 0, regenT: 0, calmT: 0, mpT: 0,
       floorOpen: false, objective: '',
     };
@@ -128,21 +131,25 @@ const Game = {
       swing: -1, swingMax: 0.26, swingHit: false, cool: 0,
       roll: -1, rollCool: 0, rdx: 0, rdy: 1,
       iframe: 0, hurtT: 0, flash: 0, castT: 0, castCool: 0, slowT: 0, kbx: 0, kby: 0, dead: false,
+      climber: true, high: false,
     };
   },
 
-  newGame(name) {
+  newGame(name, opt = {}) {
     const G = this.fresh(name);
     this.G = G;
+    G.fur = FURS[opt.fur] ? opt.fur : 'gold';
+    G.keepInv = !!opt.keepInv;
     G.map = World.buildOverworld(G.flags);
+    Build.attach(G.map);
     const r = World.rests.home;
     G.p.x = r.x * TILE + 16; G.p.y = r.y * TILE + 20;
     this.buildNpcs();
     this.start();
     UI.talk('ハム太の家', [
-      `${name}は、ひまわりの森にすむ 小さなハムスター。`,
-      'ある朝、町のほうから「星の魔法の本がぬすまれた！」という さけび声がきこえた。',
-      'まずは木をたたいて 木を集め、剣をつくろう。🎒 ボタン（または I キー）で つくれるよ。',
+      `${name}の 新しいくらしが はじまった。`,
+      '木や草をたたいて 材料を集め、道具をつくろう（🎒 ボタン / I キー）。',
+      `材料がそろったら ${Input.isTouch ? '🔨 ボタン' : 'B キー'}で建築。水べに水車を建てて、ベルトコンベアと機械を うごかそう！`,
     ]);
   },
 
@@ -151,20 +158,25 @@ const Game = {
     if (!d) return;
     const G = this.fresh(d.name || HERO_DEFAULT);
     this.G = G;
-    for (const k of ['lv', 'exp', 'hp', 'mp', 'coins', 'spell', 'rest', 'time', 'kills', 'earned']) if (d[k] !== undefined) G[k] = d[k];
+    for (const k of ['lv', 'exp', 'hp', 'mp', 'coins', 'spell', 'rest', 'time', 'kills', 'earned', 'bedAt', 'grave', 'keepInv']) if (d[k] !== undefined) G[k] = d[k];
+    if (FURS[d.fur]) G.fur = d.fur;
+    G.builds = Build.load(d.builds);
     G.inv = (d.inv || []).filter((s) => ITEMS[s.id] && s.n > 0);
     G.owned = new Set((d.owned || []).filter((id) => GEAR[id]));
-    G.owned.add('paw'); G.owned.add('cheek');
+    G.owned.add('paw'); G.owned.add('cheek'); G.owned.add('stick');
     Object.assign(G.eq, d.eq || {});
     for (const k in G.eq) if (G.eq[k] && !G.owned.has(G.eq[k])) G.eq[k] = k === 'weapon' ? 'paw' : null;
     Object.assign(G.books, d.books || {});
     Object.assign(G.flags, d.flags || {});
     if (d.reveal) for (let i = 0; i < Math.min(d.reveal.length, G.reveal.length); i++) G.reveal[i] = d.reveal.charCodeAt(i) === 49 ? 1 : 0;
     G.map = World.buildOverworld(G.flags);
+    Build.attach(G.map);
     const pos = d.pos && World.walkable(G.map, d.pos.x, d.pos.y) ? d.pos : null;
-    const r = World.rests[G.rest] || World.rests.home;
+    const r = World.rests[G.rest] && !World.rests[G.rest].map ? World.rests[G.rest] : World.rests.home;
     G.p.x = pos ? pos.x : r.x * TILE + 16; G.p.y = pos ? pos.y : r.y * TILE + 20;
     G.hp = clamp(G.hp, 1, this.maxHp()); G.mp = clamp(G.mp, 0, this.maxMp());
+    Critters.loadPet();
+    this.placeGraveStruct();
     this.buildNpcs();
     this.start();
     toast('つづきから はじめます');
@@ -188,11 +200,13 @@ const Game = {
     if (!G) return;
     let pos = { x: G.p.x, y: G.p.y };
     if (G.tower) { const s = this.towerStruct(G.tower.id); const d = World.door(s); pos = { x: d.x * TILE + 16, y: (d.y + 1) * TILE + 8 }; }
+    if (G.map && G.map.kind === 'kingdom') pos = this.dockPos();
     Save.write({
       ver: 1, name: G.name, lv: G.lv, exp: G.exp, hp: G.hp, mp: G.mp, coins: G.coins,
       inv: G.inv, owned: [...G.owned], eq: G.eq, books: G.books, spell: G.spell, flags: G.flags,
       rest: G.rest, time: Math.round(G.time), kills: G.kills, earned: G.earned,
       reveal: Array.from(G.reveal, (v) => (v ? '1' : '0')).join(''), pos,
+      builds: Build.saveData(), bedAt: G.bedAt, grave: G.grave, fur: G.fur, keepInv: G.keepInv,
     });
   },
 
@@ -217,6 +231,17 @@ const Game = {
     folk.forEach(([name, fur, body, hat], i) => N({ id: 'folk' + i, role: 'folk', name, tx: spots[i][0], ty: spots[i][1], fur, body, hat, wander: 4, line: i }));
     N({ id: 'guide', role: 'guide', name: GUIDE.name, tx: 108, ty: 46, fur: 'brown', body: 'coat', hat: 'knitcap' });
     N({ id: 'kurumi', role: 'merchant', name: SHOPS.camp.owner, tx: 144, ty: 48, fur: 'brown', bag: 'advbag', hat: 'straw' });
+    /* 町の入口を守る騎士 */
+    KNIGHT_POSTS.forEach(([tx, ty], i) => N({ id: 'knight' + i, role: 'knight', name: '王国の騎士', tx, ty, fur: ['gray', 'brown', 'white', 'black'][i % 4], body: 'knight', hat: 'helmet', weapon: 'cspear', line: i }));
+    /* 湖の王国 */
+    const K = (o) => N(Object.assign({ map: 'kingdom' }, o));
+    K({ id: 'king', role: 'king', name: KING.name, tx: 75, ty: 34, fur: 'white', beard: true, body: 'royal', hat: 'crown', scale: 1.25 });
+    K({ id: 'garde', role: 'knight', name: '騎士団長 ガルド', tx: 72, ty: 35, fur: 'gray', body: 'knight', hat: 'helmet', weapon: 'ksword', line: 0 });
+    for (const [tx, ty] of [[72, 101], [77, 101], [72, 18], [77, 18], [25, 57], [25, 62], [125, 57], [125, 62]]) K({ id: 'kk' + tx + ty, role: 'knight', name: '王国の騎士', tx, ty, fur: 'gray', body: 'knight', hat: 'helmet', weapon: 'cspear', line: (tx + ty) % 3 });
+    /* 城壁の上を見まわる騎士 */
+    for (const [tx, ty] of [[50, 103], [100, 103], [50, 15], [100, 15], [23, 40], [127, 80]]) K({ id: 'kw' + tx + ty, role: 'knight', name: '城壁の見はり', tx, ty, fur: 'brown', body: 'knight', hat: 'helmet', weapon: 'cspear', line: 2 });
+    const kfolk = [['ルル', 'white', 'shirtB', 'ribbon', 74, 46], ['ペコ', 'cream', 'shirtR', 'straw', 60, 60], ['トト', 'choco', null, 'knitcap', 90, 60], ['ナナ', 'gray', 'shirtY', null, 74, 78], ['モカ', 'brown', 'shirtB', null, 40, 60], ['ソラ', 'panda', null, 'straw', 110, 60]];
+    kfolk.forEach(([name, fur, body, hat, tx, ty], i) => K({ id: 'kf' + i, role: 'folk', name, tx, ty, fur, body, hat, wander: 4, line: i + 3 }));
   },
 
   updateNpcs(dt) {
@@ -230,7 +255,7 @@ const Game = {
         n.face = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? (Math.cos(a) > 0 ? 'right' : 'left') : (Math.sin(a) > 0 ? 'down' : 'up');
         continue;
       }
-      if (!n.wander) continue;
+      if (!n.wander || n.fighting || n.stun) continue;
       if (!n.goal) {
         n.wait -= dt;
         if (n.wait <= 0) {
@@ -252,8 +277,8 @@ const Game = {
     for (const n of G.npcs) {
       n.mark = null;
       if (n.role === 'req' && !G.flags.reqs[n.req]) n.mark = this.hasAll(REQUESTS[n.req].need) ? '★' : '!';
-      if (n.role === 'elder' && this.elderStage() > G.flags.elder) n.mark = '!';
       if (n.role === 'guide' && !G.flags.guide) n.mark = '!';
+      if (n.role === 'king' && !G.flags.king) n.mark = '!';
     }
   },
 
@@ -440,6 +465,9 @@ const Game = {
     this.updateDrops(dt);
     this.updateNodes(dt);
     this.updateNpcs(dt);
+    Critters.update(dt);
+    Raid.update(dt);
+    Build.update(dt);
     FX.update(dt);
     for (let i = G.zaps.length - 1; i >= 0; i--) { G.zaps[i].t -= dt; if (G.zaps[i].t <= 0) G.zaps.splice(i, 1); }
     for (let i = G.marks.length - 1; i >= 0; i--) { G.marks[i].t -= dt; if (G.marks[i].t <= 0) G.marks.splice(i, 1); }
@@ -449,11 +477,13 @@ const Game = {
 
   keys() {
     const G = this.G;
-    if (Input.hit('Escape')) { UI.openMenu(); return; }
+    if (Input.hit('Escape')) { if (Build.active) Build.toggle(false); else UI.openMenu(); return; }
     if (Input.hit('m')) { UI.openMap(); return; }
-    if (Input.hit('i') || Input.hit('b') || Input.hit('Tab')) { UI.openBag(); return; }
+    if (Input.hit('i') || Input.hit('Tab')) { UI.openBag(); return; }
+    if (Input.hit('b')) Build.toggle();
     if (Input.hit('e') || Input.hit('Enter')) this.act();
     if (Input.hit('f')) this.quickEat();
+    if (Input.hit('r') && !Build.active) Critters.dismount();
     if (Input.hit('q')) this.cycleSpell(1);
     SPELL_ORDER.forEach((s, i) => { if (Input.hit(String(i + 1))) this.selectSpell(s); });
   },
@@ -506,7 +536,7 @@ const Game = {
       World.move(G.map, p, p.rdx * 330 * dt, p.rdy * 330 * dt, 8);
       if (p.roll >= ROLL_T) { p.roll = -1; p.rollCool = 0.45; }
     } else {
-      let sp = SPEED * (p.slowT > 0 ? 0.5 : 1) * (G.coldT >= 1 ? 0.55 : 1) * (p.swing >= 0 ? 0.45 : 1);
+      let sp = SPEED * Critters.speed() * (p.slowT > 0 ? 0.5 : 1) * (G.coldT >= 1 ? 0.55 : 1) * (p.swing >= 0 ? 0.45 : 1);
       const mx = ax.x * sp * dt + p.kbx * dt, my = ax.y * sp * dt + p.kby * dt;
       p.kbx *= Math.pow(0.002, dt); p.kby *= Math.pow(0.002, dt);
       if (mx || my) World.move(G.map, p, mx, my, 8);
@@ -516,11 +546,14 @@ const Game = {
     }
 
     /* ころがる */
-    if ((Input.hit('Shift') || Input.hit('l') || Input.hit('roll')) && p.roll < 0 && p.rollCool <= 0) {
+    if ((Input.hit('Shift') || Input.hit('l') || Input.hit('roll')) && p.roll < 0 && p.rollCool <= 0 && !G.ride) {
       if (!p.moving) { const a = this.faceAngle(p.face); p.rdx = Math.cos(a); p.rdy = Math.sin(a); }
       p.roll = 0; p.iframe = Math.max(p.iframe, ROLL_T + 0.05); p.swing = -1;
       Sfx.roll(); FX.burst(p.x, p.y - 4, '#d8c8a8', 5, 30, 0.4);
     }
+
+    /* 建築モードのときは クリックで建てる */
+    if (Build.input()) return;
 
     /* 攻撃 */
     let atkAim = null;
@@ -737,18 +770,47 @@ const Game = {
   die() {
     const G = this.G;
     G.hp = 0; G.p.dead = true;
-    const lost = Math.floor(G.coins * 0.1);
-    G.coins -= lost;
-    document.getElementById('deadLost').textContent = lost > 0 ? `コインを ${lost} まい 落としてしまった。` : '';
+    Build.toggle(false);
+    let msg = 'インベントリ保存が オンなので、もちものは そのまま。';
+    if (!G.keepInv) {
+      /* もちものと コインの半分を、たおれた場所に 袋で のこす (取りにもどれる) */
+      const coins = Math.floor(G.coins / 2);
+      const where = G.map.kind === 'over' ? { x: G.p.x, y: G.p.y } : G.tower ? (() => { const d = World.door(this.towerStruct(G.tower.id)); return { x: d.x * TILE + 16, y: (d.y + 1) * TILE + 16 }; })() : this.dockPos();
+      const items = G.inv.map((s) => ({ id: s.id, n: s.n }));
+      if (G.grave) { for (const s of G.grave.items) items.push(s); }
+      G.grave = { x: where.x, y: where.y, items, coins: coins + (G.grave ? G.grave.coins : 0) };
+      G.inv = []; G.coins -= coins;
+      msg = items.length || coins ? 'もちものと コインの半分を 落としてしまった。たおれた場所の 袋から ひろえる。' : '';
+    }
+    document.getElementById('deadLost').textContent = msg;
     document.getElementById('deadScreen').classList.remove('hidden');
     Music.play(null);
+  },
+  pickGrave() {
+    const G = this.G, g = G.grave;
+    if (!g) return;
+    G.grave = null;
+    for (const s of g.items) this.give(s.id, s.n, g.x, g.y);
+    G.coins += g.coins;
+    this.removeGraveStruct();
+    Sfx.fanfare();
+    toast('落とした もちものを ひろった！', 'good');
+    this.save();
+  },
+  removeGraveStruct() { World.over.structs = World.over.structs.filter((s) => s.kind !== 'grave'); },
+  placeGraveStruct() {
+    const G = this.G;
+    this.removeGraveStruct();
+    if (G.grave) World.over.structs.push({ kind: 'grave', x: Math.floor(G.grave.x / TILE), y: Math.floor(G.grave.y / TILE), w: 1, h: 1, solid: false, act: 'grave' });
   },
   revive() {
     const G = this.G;
     document.getElementById('deadScreen').classList.add('hidden');
     G.p = this.freshPlayer();
+    G.ride = null;
     G.hp = this.maxHp(); G.mp = this.maxMp(); G.coldT = 0;
     this.leaveTowerTo(World.rests[G.rest] || World.rests.home);
+    this.placeGraveStruct();
     this.save();
   },
 
@@ -835,25 +897,11 @@ const Game = {
     const lines = [`${BOOKS[b].icon} 「${BOOKS[b].name}」を手に入れた！`];
     if (sp) lines.push(`魔法「${SPELLS[sp].name}」がつかえるようになった。杖をもって ${keys} でつかおう。`);
     if (b === 'fire') lines.push('町の東の山道をふさぐ いばらも、これで燃やせるはずだ。');
-    if (b === 'wind') lines.push('これで本がふたつそろった。谷の向こうの 月の塔の扉が ひらくはずだ。');
-    UI.talk('', lines, () => { if (b === 'star') this.ending(); });
+    UI.talk('', lines);
     this.refreshObjective();
     this.save();
   },
 
-  ending() {
-    const G = this.G;
-    G.flags.ending = true;
-    this.gainGear('crown');
-    this.save();
-    Music.play('win');
-    const m = Math.floor(G.time / 60);
-    document.getElementById('endBody').innerHTML =
-      `<p class="lead">${G.name}は 星の魔法の本を取りもどした！<br>町には ひまわりの花がさきみだれ、ハムスターたちは いつまでも ${G.name}の冒険を語りついだという。</p>` +
-      `<div class="stats"><div><b>${G.lv}</b><span>レベル</span></div><div><b>${G.kills}</b><span>たおした魔物</span></div><div><b>${m}分</b><span>冒険の時間</span></div><div><b>${G.earned}</b><span>集めたコイン</span></div></div>` +
-      '<p class="hint">ごほうびに「王冠」をもらった。まだ集めていない宝箱や、町の頼みごとがあるかもしれない。</p>';
-    document.getElementById('endScreen').classList.remove('hidden');
-  },
 
   /* ============================== しらべる ============================== */
   findNear() {
@@ -865,6 +913,12 @@ const Game = {
     };
     for (const s of G.map.structs) {
       if (!s.act) continue;
+      if (p.high) break;
+      if (s.kind === 'build') {
+        const info = Build.act(s);
+        if (info) consider((s.x + s.w / 2) * TILE, (s.y + s.h) * TILE - 6, info.label, info.fn, s.h * TILE + 20, 26 + Math.max(s.w, s.h) * 14);
+        continue;
+      }
       const big = ['home', 'shop', 'magic', 'tower', 'hut', 'tent'].includes(s.kind);
       const d0 = World.door(s);
       const x = big ? d0.x * TILE + (s.w % 2 ? 16 : 0) : s.x * TILE + 16;
@@ -875,8 +929,10 @@ const Game = {
     }
     for (const n of G.npcs) {
       if (n.map !== G.map.id) continue;
-      consider(n.x, n.y, n.role === 'merchant' ? 'おみせ' : 'はなす', () => this.talkNpc(n), 48, 40);
+      consider(n.x, n.y, n.role === 'merchant' ? 'おみせ' : 'はなす', () => this.talkNpc(n), 48 * (n.scale || 1), 40);
     }
+    if (G.critters && !p.high) Critters.actions(consider);
+    if (!best && G.ride && Input.isTouch) best = { x: p.x, y: p.y, label: 'おりる', fn: () => Critters.dismount(), h: CRITTERS[G.ride.type].seat + 30 };
     G.near = best;
   },
 
@@ -901,6 +957,8 @@ const Game = {
       case 'up': return { label: 'のぼる', fn: () => this.goFloor(1) };
       case 'down': return { label: G.tower && G.tower.floor === 1 ? 'そとへ' : 'おりる', fn: () => this.goFloor(-1) };
       case 'exit': return { label: 'そとへ', fn: () => this.exitTower() };
+      case 'boat': return { label: 'ふねにのる', fn: () => this.takeBoat() };
+      case 'grave': return { label: 'ひろう', fn: () => this.pickGrave() };
     }
     if (s.kind === 'board') return { label: 'よむ', fn: () => UI.openBoard() };
     return null;
@@ -985,34 +1043,11 @@ const Game = {
   },
 
   /* ------------------------------ 会話 ------------------------------ */
-  elderStage() {
-    const G = this.G;
-    if (G.books.star) return 8;
-    if (G.books.fire && G.books.wind) return 7;
-    if (G.books.wind || G.flags.guide) return 6;
-    if (G.flags.thorns) return 5;
-    if (G.books.fire) return 4;
-    if (this.hasStaff()) return 3;
-    return 1;
-  },
   hasStaff() { const o = this.G.owned; return o.has('wstaff') || o.has('cstaff') || o.has('mstaff'); },
 
   talkNpc(n) {
     const G = this.G;
-    if (n.role === 'elder') {
-      if (!G.flags.elder) {
-        G.flags.elder = 1;
-        UI.talk(ELDER.name, ELDER.first, () => { this.refreshObjective(); this.save(); });
-        return;
-      }
-      const st = this.elderStage();
-      G.flags.elder = Math.max(G.flags.elder, st);
-      const h = ELDER.hint;
-      const line = st >= 8 ? h.done : st === 7 ? h.moonTower : st === 6 ? (G.books.wind ? h.valley : h.windTower)
-        : st === 5 ? h.coat : st === 4 ? h.thorns : st === 3 ? h.forestTower : h.staff;
-      UI.talk(ELDER.name, [line]);
-      return;
-    }
+    if (n.role === 'elder') { UI.talk(ELDER.name, [ELDER.tips[Math.floor(G.time / 15) % ELDER.tips.length]]); return; }
     if (n.role === 'req') { this.talkRequest(n); return; }
     if (n.role === 'guide') {
       if (G.flags.guide) { UI.talk(GUIDE.name, [GUIDE.after]); return; }
@@ -1029,6 +1064,20 @@ const Game = {
       return;
     }
     if (n.role === 'merchant') { UI.openShop('camp'); return; }
+    if (n.role === 'knight') { UI.talk(n.name, [KNIGHT_LINES[n.line % KNIGHT_LINES.length]]); return; }
+    if (n.role === 'king') {
+      if (!G.flags.king) {
+        UI.talk(KING.name, KING.first, () => {
+          G.flags.king = true;
+          G.coins += 200; G.earned += 200;
+          this.give('potion', 3);
+          Sfx.fanfare();
+          UI.talk('', ['🪙 200 コイン と 🧪 くすり ×3 を もらった！']);
+          this.save();
+        });
+      } else UI.talk(KING.name, [KING.again[Math.floor(G.time / 20) % KING.again.length]]);
+      return;
+    }
     UI.talk(n.name, [TOWNSFOLK[(n.line + Math.floor(G.time / 30)) % TOWNSFOLK.length]]);
   },
 
@@ -1052,7 +1101,7 @@ const Game = {
 
   /* ============================== 塔 ============================== */
   towerStruct(tid) { return World.over.structs.find((s) => s.kind === 'tower' && s.tower === tid); },
-  towerOpen(tid) { return tid !== 'moon' || (this.G.books.fire && this.G.books.wind); },
+  towerOpen() { return true; },
   towerCleared(tid) { return !!this.G.flags.bosses[TOWERS[tid].boss]; },
   structState() {
     const self = this;
@@ -1067,7 +1116,8 @@ const Game = {
     if (!this.towerOpen(tid)) { UI.talk('月の塔', [SIGNS.moonGate, 'とびらは かたく閉じている。']); return; }
     const G = this.G;
     Sfx.door();
-    this.transition(() => this.loadFloor(tid, 1));
+    if (G.ride) { toast(`${CRITTERS[G.ride.type].name}は 塔の外で まっている`); }
+    this.transition(() => { Critters.dismount(true); this.loadFloor(tid, 1); });
   },
   loadFloor(tid, floor, fromAbove) {
     const G = this.G, def = TOWERS[tid];
@@ -1075,20 +1125,14 @@ const Game = {
     G.map = World.buildTowerFloor(tid, floor, G.flags);
     G.mobs.length = 0; G.shots.length = 0; G.drops.length = 0; G.zaps.length = 0; G.boss = null;
     const m = G.map;
+    Critters.clear();
     if (fromAbove && m.up) { G.p.x = m.up.x * TILE + 16; G.p.y = (m.up.y + 1) * TILE + 16; }
     else { G.p.x = m.entry.x * TILE + 16; G.p.y = (m.entry.y - 1) * TILE + 16; }
     const cleared = G.flags.towers[tid] || 0;
     G.floorOpen = floor <= cleared;
     if (m.boss) {
-      if (this.towerCleared(tid)) {
-        m.structs.push({ kind: 'exit', x: 11, y: 8, w: 2, h: 1, solid: false, act: 'exit' });
-        /* 本を拾わずに出ていたら、もう一度置いておく */
-        const book = BOSSES[def.boss].book;
-        if (!G.books[book]) this.drop(12 * TILE, 7 * TILE, null, 1, { book, vx: 0, vy: 0, delay: 0.5 });
-        Music.play('tower');
-      } else {
-        Mobs.spawnBoss(def.boss, 12 * TILE, 7 * TILE);
-      }
+      /* ボスは 何度でも 挑める */
+      Mobs.spawnBoss(def.boss, 12 * TILE, 7 * TILE);
     } else {
       const n = floor <= cleared ? Math.ceil(def.base / 2) : def.base + floor;
       Mobs.spawnTower(def, n);
@@ -1126,14 +1170,42 @@ const Game = {
   leaveTowerTo(r) {
     const G = this.G;
     G.tower = null; G.boss = null;
-    G.map = World.over;
+    G.map = r.map === 'kingdom' ? World.buildKingdom() : World.over;
     G.mobs.length = 0; G.shots.length = 0; G.drops.length = 0; G.zaps.length = 0;
-    G.p.x = r.x * TILE + 16; G.p.y = r.y * TILE + 20;
+    G.p.x = r.x * TILE + 16; G.p.y = r.y * TILE + 20; G.p.high = false;
+    Critters.clear();
     R.dropChunks();
     R.follow(G.map, G.p.x, G.p.y, true);
     UI.bossBar(null);
     this.updateRegion(true);
     this.refreshObjective();
+  },
+
+  /* ============================== 湖の王国 ============================== */
+  dockPos() { const s = World.over.structs.find((x) => x.kind === 'dock'); return { x: s.x * TILE + 24, y: (s.y + 1) * TILE + 16 }; },
+  takeBoat() {
+    const G = this.G;
+    const toKingdom = G.map.kind === 'over';
+    UI.ask('ふなつき場', toKingdom ? '舟にのって、湖の王国 ミナモへ わたりますか？' : '舟にのって、かがみ湖の ふなつき場へ もどりますか？', [['のる', () => {
+      Sfx.door();
+      this.transition(() => {
+        G.mobs.length = 0; G.shots.length = 0; G.drops.length = 0; G.zaps.length = 0;
+        if (toKingdom) {
+          G.map = World.buildKingdom();
+          G.p.x = G.map.entry.x * TILE; G.p.y = G.map.entry.y * TILE + 16;
+        } else {
+          G.map = World.over;
+          const d = this.dockPos(); G.p.x = d.x; G.p.y = d.y;
+        }
+        G.p.high = false;
+        Critters.clear();
+        R.dropChunks();
+        R.follow(G.map, G.p.x, G.p.y, true);
+        this.updateRegion(true);
+        if (toKingdom) UI.banner(REGIONS.kingdom.name);
+        this.refreshObjective();
+      });
+    }], ['やめる', null]]);
   },
 
   transition(mid, after) {
@@ -1157,11 +1229,12 @@ const Game = {
     const G = this.G;
     if (G.boss && !G.boss.dead) return 'boss';
     if (G.map.kind === 'tower') return 'tower';
+    if (G.map.kind === 'kingdom') return 'town';
     return REGIONS[G.region] ? REGIONS[G.region].music : 'forest';
   },
   updateRegion(force) {
     const G = this.G;
-    const reg = G.map.kind === 'over' ? World.regionAt(G.map, G.p.x, G.p.y) : null;
+    const reg = G.map.kind === 'over' ? World.regionAt(G.map, G.p.x, G.p.y) : G.map.kind === 'kingdom' ? 'kingdom' : null;
     if (G.map.kind === 'over') {
       const cx = Math.floor(G.p.x / TILE / CELL), cy = Math.floor(G.p.y / TILE / CELL);
       for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 2; x <= cx + 2; x++) if (x >= 0 && y >= 0 && x < CW && y < CH) G.reveal[y * CW + x] = 1;
@@ -1179,30 +1252,27 @@ const Game = {
     const doorOf = (s) => { const d = World.door(s); return { map: 'over', x: d.x * TILE + (s.w % 2 ? 16 : 0), y: d.y * TILE + 10 }; };
     const npc = (id) => { const n = G.npcs.find((x) => x.id === id); return n ? { map: n.map, x: n.x, y: n.y } : null; };
     const st = (kind, key, val) => World.over.structs.find((s) => s.kind === kind && s[key] === val);
+    if (G.map.kind === 'kingdom') return { text: '湖の王国 ミナモ。王さまと話したり、城壁にのぼったりしよう（南の舟で もどれる）', target: G.flags.king ? null : npc('king') };
     if (G.tower) {
       const m = G.map;
       if (m.boss) return { text: G.boss && !G.boss.dead ? `${G.boss.name}をたおせ！` : '魔法陣にのって 外へ出よう', target: null };
       if (G.floorOpen) return { text: '階段をのぼろう（▲）', target: m.up ? { map: m.id, x: m.up.x * TILE + 16, y: m.up.y * TILE + 16 } : null };
       return { text: `この階の魔物を ぜんぶたおそう（のこり ${G.mobs.length}）`, target: null };
     }
-    const hasWeapon = G.eq.weapon !== 'paw' || [...G.owned].some((id) => GEAR[id].slot === 'weapon' && id !== 'paw');
+    const hasWeapon = [...G.owned].some((id) => GEAR[id].slot === 'weapon' && id !== 'paw' && id !== 'stick');
     if (!hasWeapon) {
       if (this.count('wood') < 5) return { text: `木をたたいて 木を集めよう（${this.count('wood')}/5）`, target: null };
-      return { text: '🎒 をひらいて「つくる」から 木の剣をつくろう', target: null };
+      return { text: '🎒 をひらいて「つくる」から 木の剣をつくろう（いまは 木の棒）', target: null };
     }
     if (this.bagId() === 'cheek') return { text: `草むらをたたいて草を集め、葉っぱのカバンをつくろう（草 ${this.count('grass')}/8・木 ${Math.min(2, this.count('wood'))}/2）`, target: null };
-    if (!G.flags.elder) return { text: '東の ほおぶくろタウン へ行き、長老と話そう', target: npc('elder') };
-    if (!this.hasStaff()) return { text: '森の物を よろず屋で売り、魔法屋で 木の杖(100コイン) を買おう', target: doorOf(st('magic', 'shop', 'magic')) };
-    if (!G.books.fire) return { text: '北西の「森の塔」にのぼり、クモの女王をたおそう', target: doorOf(st('tower', 'tower', 'forest')) };
-    if (!G.flags.thorns) return { text: '町の東、山道の入口の いばらを ファイア🔥 で燃やそう', target: { map: 'over', x: 89 * TILE, y: 86 * TILE } };
-    if (!G.flags.guide) {
-      if (!G.owned.has('coat') && !G.owned.has('royal')) return { text: 'けがわのコートを手に入れて（洋服屋で買う／毛皮でつくる）、山のガイドと話そう', target: npc('guide') };
-      return { text: 'コートを着て、山道の上の ガイドと話そう', target: npc('guide') };
-    }
-    if (!G.books.wind) return { text: '雪の山頂の「風の塔」で、あらしの大ワシをたおそう', target: doorOf(st('tower', 'tower', 'wind')) };
-    if (!G.flags.bridge) return { text: `山をこえて東の きりの谷へ。割れ目に つり橋をかけよう（木 ${this.count('wood')}/12・ロープ ${this.count('rope')}/4）`, target: { map: 'over', x: 146 * TILE + 16, y: 66 * TILE } };
-    if (!G.books.star) return { text: '月の塔にのぼり、ノラネコ大王をたおして 本を取りもどそう！', target: doorOf(st('tower', 'tower', 'moon')) };
-    return { text: '星の魔法の本を取りもどした！ 宝箱や頼みごとをさがして 世界を旅しよう', target: null };
+    const has = (k) => G.builds.some((b) => b.k === k);
+    const cost = (k) => Object.entries(BUILDS[k].cost).map(([id, n]) => `${ITEMS[id].name} ${Math.min(this.count(id), n)}/${n}`).join('・');
+    const bkey = Input.isTouch ? '🔨' : 'B キー';
+    if (!has('waterwheel')) return { text: `水べに 水車を建てよう（${bkey}・${cost('waterwheel')}）`, target: null };
+    if (!has('sawmill')) return { text: `製材機を建てて、水車と 軸でつなごう（${cost('sawmill')}）`, target: null };
+    if (!has('belt')) return { text: '機械の前に ベルトコンベアをならべ、木箱へ はこぼう', target: null };
+    if (!has('bed')) return { text: `板で わらのベッドをつくろう（${cost('bed')}）。たおれても ベッドで目をさます`, target: null };
+    return { text: '自由に 建てて 冒険しよう！ 塔のボスは 何度でも挑める', target: null };
   },
   refreshObjective() {
     if (!this.G) return;
