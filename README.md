@@ -21,8 +21,10 @@ open http://127.0.0.1:8801/
 2. `games.js` の `GAMES` に1件足す。日本語と英語のタイトル・紹介文、ジャンル、プレイ人数、公開日を書く。
 3. `./tools/capture-thumbs.sh <slug>` でサムネイルを作る。`assets/thumbs/<slug>.jpg` に出る。
 4. 出来た画像を目で見て確認する。タイトル画面ではなく設定フォームが写ることがある。
+5. ゲームの `index.html` の `<title>` の下に、`games.js` と同じ紹介文で `<meta name="description" content="…">` を書く。Google の検索結果に出る説明文になる。
+6. `node tools/build-sitemap.mjs` で `sitemap.xml` を作り直す。
 
-一覧ページはこの `games.js` だけを読んで組み立てるので、他に直す場所はありません。
+一覧ページはこの `games.js` だけを読んで組み立てます。
 
 ## 素材とライセンス
 
