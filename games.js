@@ -14,14 +14,14 @@ const GENRES = [
 
 const GAMES = [
   {
-    slug: 'cube-saga', genre: 'sandbox', players: '1P', date: '2026-11-10',
+    slug: 'slime-fusion', genre: 'rpg', players: '1P', date: '2026-11-10',
     ja: {
-      title: 'CUBE SAGA ― キューブおうこくの ゆうしゃ',
-      desc: 'ブロックをほって集めて作るサンドボックス。自分で描いたスキンで、勇者の森の剣さがし、天空の竜との戦い、古代の世界での化石ほりや恐竜つかまえに挑む。スマホ対応。',
+      title: 'SLIME FUSION ― スライム合成バトル',
+      desc: 'スライムを合成台でかけ合わせて進化させ、つのやトゲを好きな場所につけて、色を変えながら戦う討伐バトル。スマホ対応。',
     },
     en: {
-      title: 'Cube Saga',
-      desc: 'A block sandbox where you mine, craft and build in a skin you paint yourself, find the hero sword, fight the sky dragon, and dig fossils and catch dinosaurs in the ancient world. Plays on phones.',
+      title: 'Slime Fusion',
+      desc: 'Fuse slimes to grow and evolve them, place horns and spikes wherever you like, and switch colors mid-battle to hunt monsters. Plays on phones.',
     },
   },
   {

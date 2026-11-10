@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>SLIME FUSION ― スライム合成バトル</title>
+<meta name="description" content="スライムを合成台でかけ合わせて進化させ、つのやトゲを好きな場所につけて、色を変えながら戦う討伐バトル。スマホ対応。">
+<meta name="description" content="スライムを合成台でかけ合わせて進化させ、つのやトゲを好きな場所につけて、色を変えながら戦う討伐バトル。スマホ対応。">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= タイトル ================= -->
+<div id="titleScreen">
+  <div class="tcard">
+    <h1 class="logo"><span>SLIME</span> <span>FUSION</span></h1>
+    <p class="sub">スライム合成バトル</p>
+    <p class="lead">スライムを ごうせいだいに ぶちこんで、大きくしたり しんかさせたり。つの・トゲ・はねを すきな ばしょに つけて、色を かえながら たたかう とうばつバトル！</p>
+    <div class="tbtns">
+      <button class="btn primary big" id="btnStart">はじめる</button>
+      <button class="btn" id="btnHelpT">あそびかた</button>
+      <button class="btn ghost hidden" id="btnNew">さいしょから</button>
+    </div>
+    <p id="titleInfo"></p>
+    <p class="foot">セーブは じどう。データは この たんまつの ブラウザにだけ のこります。</p>
+  </div>
+</div>
+
+<!-- ================= ぼくじょう ================= -->
+<div id="homeUI" class="hidden">
+  <div id="topBar">
+    <div class="pill">🪙 <b id="coins">0</b></div>
+    <div class="pill">📖 <b id="dexCount">0</b></div>
+    <button id="btnMenu" class="btn small">メニュー</button>
+  </div>
+  <div id="ranchHint">スライムを タップすると くわしく 見られるよ</div>
+  <nav id="nav">
+    <button id="navQuest" class="nbtn"><span>⚔</span>とうばつ</button>
+    <button id="navTrain" class="nbtn"><span>🎯</span>くんれんじょう</button>
+    <button id="navLab" class="nbtn"><span>🧪</span>ごうせいだい</button>
+    <button id="navTeam" class="nbtn"><span>🟢</span>なかま</button>
+    <button id="navShop" class="nbtn"><span>🛒</span>ショップ</button>
+    <button id="navDex" class="nbtn"><span>📖</span>ずかん</button>
+  </nav>
+</div>
+
+<!-- ================= メニュー画面 ================= -->
+<div id="screen" class="hidden">
+  <header id="scrHead">
+    <button id="btnBack" class="btn ghost small">← もどる</button>
+    <h2 id="scrTitle"></h2>
+    <div class="pill">🪙 <b id="scrCoins">0</b></div>
+  </header>
+  <main id="scrBody"></main>
+</div>
+
+<!-- ================= バトル ================= -->
+<div id="battleUI" class="hidden">
+  <div id="bTop"><b id="bTitle"></b><button id="bFast" class="btn small">⏩ はやおくり</button></div>
+  <div id="bLog"></div>
+  <div id="cmd"></div>
+</div>
+
+<!-- ================= ごうせいムービー ================= -->
+<div id="fusionUI" class="hidden">
+  <div id="fzHint" class="hidden"></div>
+  <button id="fzSkip" class="btn small ghost">スキップ ▶</button>
+  <button id="fzStop" class="btn glow big hidden">ストップ！</button>
+  <div id="fzMsg" class="hidden">
+    <b id="fzBig"></b>
+    <p id="fzText"></p>
+    <button id="fzNext" class="btn primary">つぎへ</button>
+  </div>
+</div>
+
+<!-- ================= パーツを つける ================= -->
+<div id="editor" class="hidden">
+  <header><b id="edName"></b></header>
+  <canvas id="edCanvas"></canvas>
+  <div id="edPalette"></div>
+  <p id="edInfo"></p>
+  <div class="edBtns">
+    <button id="edClear" class="btn">ぜんぶ はずす</button>
+    <button id="edDone" class="btn primary big">かんせい！</button>
+  </div>
+</div>
+
+<!-- ================= 窓 ================= -->
+<div id="modal" class="hidden">
+  <div class="mcard">
+    <h2 id="mTitle"></h2>
+    <div id="mBody"></div>
+    <div id="mFoot"></div>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="model.js"></script>
+<script src="art.js"></script>
+<script src="battle.js"></script>
+<script src="lab.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

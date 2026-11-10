@@ -1,0 +1,209 @@
+/* SLIME FUSION ― 画面まわり。え は canvas、文字の 多い 画面は DOM。 */
+:root {
+  --ink: #f6f4ff;
+  --dim: #b4b0d4;
+  --panel: rgba(24, 18, 48, 0.92);
+  --panel2: rgba(34, 26, 66, 0.97);
+  --edge: rgba(200, 180, 255, 0.22);
+  --lime: #8be04e;
+  --gold: #ffd23a;
+  --pink: #ff7ab0;
+  --font: "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  background: #120c24; color: var(--ink); font-family: var(--font);
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+}
+canvas#game { display: block; width: 100vw; height: 100vh; touch-action: none; }
+.hidden { display: none !important; }
+.dim { color: var(--dim); }
+p { line-height: 1.7; margin: 0.5em 0; }
+small { font-size: 11px; }
+
+.btn {
+  font-family: var(--font); font-size: 14px; font-weight: 800; color: var(--ink);
+  background: #3a2e6a; border: 1px solid rgba(200, 180, 255, 0.35); border-radius: 12px;
+  padding: 10px 16px; cursor: pointer; transition: background 0.12s, transform 0.08s;
+}
+.btn:hover:not(:disabled) { background: #4a3c84; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: linear-gradient(180deg, #a6f06a, #4fb82a); color: #0b2a08; border-color: #d2ffb0; }
+.btn.primary:hover:not(:disabled) { background: linear-gradient(180deg, #bdf68e, #5cc836); }
+.btn.danger { background: linear-gradient(180deg, #ff7a7a, #d03a3a); border-color: #ffaaaa; }
+.btn.ghost { background: transparent; }
+.btn.small { font-size: 12px; padding: 6px 10px; border-radius: 9px; }
+.btn.big { font-size: 17px; padding: 13px 22px; }
+.btn.on { background: #2a6a4a; border-color: var(--lime); }
+.btn.glow, .nbtn.glow { background: linear-gradient(180deg, #ffe27a, #f0a81a); color: #2a1a00; border-color: #fff0b0; animation: pulse 0.8s ease-in-out infinite alternate; }
+@keyframes pulse { from { box-shadow: 0 0 0 rgba(255, 210, 60, 0); } to { box-shadow: 0 0 22px rgba(255, 210, 60, 0.9); } }
+.cdot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.35); flex: none; }
+.pill { background: rgba(0, 0, 0, 0.45); border-radius: 999px; padding: 5px 12px; font-size: 14px; white-space: nowrap; }
+
+/* ------------------------------- タイトル ------------------------------- */
+#titleScreen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px 16px; z-index: 20; overflow-y: auto; background: radial-gradient(ellipse at 50% 40%, rgba(20, 10, 40, 0.55), rgba(20, 10, 40, 0.1) 70%); }
+.tcard { width: min(480px, 100%); text-align: center; }
+.logo { margin: 0; font-size: clamp(46px, 9vw, 86px); font-weight: 900; letter-spacing: 0.03em; line-height: 0.95; }
+.logo span { background: linear-gradient(180deg, #ffffff 10%, #9ff07a 55%, #3aa82a); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 0 #0b2a08) drop-shadow(0 0 14px rgba(139, 224, 78, 0.5)); }
+.logo span + span { background: linear-gradient(180deg, #fff 10%, #d8a8ff 50%, #8a4af0); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 3px 0 #2a0a4a) drop-shadow(0 0 14px rgba(170, 100, 255, 0.6)); }
+.sub { font-size: 20px; font-weight: 900; color: #fff6c0; margin: 10px 0; letter-spacing: 0.25em; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
+.lead { font-size: 14px; color: #fff; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0, 0, 0, 0.6); }
+.tbtns { display: flex; flex-direction: column; gap: 10px; margin: 18px auto 12px; max-width: 280px; }
+#titleInfo { font-size: 13px; text-shadow: 0 1px 3px #000; }
+.foot { font-size: 11px; color: #e8e4ff; text-shadow: 0 1px 2px #000; }
+
+/* ------------------------------- ぼくじょう ------------------------------- */
+#topBar { position: fixed; top: 10px; left: 12px; right: 12px; display: flex; gap: 8px; align-items: center; z-index: 5; }
+#topBar .btn { margin-left: auto; }
+#ranchHint { position: fixed; top: 52px; left: 0; right: 0; text-align: center; font-size: 12px; color: #1a3a1a; font-weight: 700; pointer-events: none; }
+#nav { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(20, 14, 40, 0), rgba(20, 14, 40, 0.85) 30%); z-index: 5; }
+.nbtn { font-family: var(--font); font-size: 12px; font-weight: 800; color: var(--ink); background: var(--panel2); border: 1px solid var(--edge); border-radius: 14px; padding: 8px 2px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.nbtn span { font-size: 22px; }
+.nbtn:hover { background: #4a3c84; }
+@media (max-width: 560px) {
+  #nav { grid-template-columns: repeat(3, 1fr); }
+  .nbtn { font-size: 11px; padding: 6px 2px; }
+  .nbtn span { font-size: 18px; }
+}
+
+/* ------------------------------- メニュー画面 ------------------------------- */
+#screen { position: fixed; inset: 0; z-index: 10; background: rgba(14, 10, 30, 0.9); display: flex; flex-direction: column; }
+#scrHead { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--panel2); border-bottom: 1px solid var(--edge); }
+#scrHead h2 { margin: 0; font-size: 18px; flex: 1; }
+#scrBody { flex: 1; overflow-y: auto; padding: 14px 16px 40px; max-width: 900px; width: 100%; margin: 0 auto; -webkit-user-select: text; user-select: text; }
+.sec { margin: 18px 0 8px; font-size: 15px; color: #fff6c0; }
+.sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.scard { font-family: var(--font); color: var(--ink); background: var(--panel2); border: 1px solid var(--edge); border-radius: 14px; padding: 6px 4px 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; position: relative; }
+.scard:hover { background: #3a2e6a; }
+.scard.used { opacity: 0.35; }
+.scard.party { border-color: var(--gold); }
+.scard .nm { font-size: 11px; font-weight: 800; text-align: center; line-height: 1.25; min-height: 2.5em; display: flex; align-items: center; }
+.scard .sub { font-size: 10px; color: var(--dim); }
+.scard .cols { margin-top: 2px; }
+.scard .badge { position: absolute; top: 4px; left: 4px; font-size: 9px; background: var(--gold); color: #2a1a00; border-radius: 6px; padding: 1px 5px; font-weight: 900; }
+
+/* ごうせいだい */
+.labTop { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; }
+.labSlot { font-family: var(--font); color: var(--ink); width: 150px; min-height: 160px; background: rgba(120, 80, 255, 0.12); border: 2px dashed rgba(200, 180, 255, 0.4); border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+.labSlot.on { border-color: var(--gold); border-style: solid; box-shadow: 0 0 16px rgba(255, 210, 60, 0.4); }
+.labSlot .nm { font-size: 13px; font-weight: 800; text-align: center; }
+.labSlot .nm.empty { color: var(--dim); }
+.plus { font-size: 30px; font-weight: 900; color: #fff6c0; }
+.labPrev { text-align: center; margin: 12px auto; max-width: 520px; font-size: 14px; }
+.labGo { display: block; margin: 0 auto; min-width: 220px; }
+
+/* とうばつ */
+.area { border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.area.locked { filter: grayscale(0.8) brightness(0.6); }
+.aname { font-weight: 900; font-size: 16px; text-shadow: 0 2px 3px rgba(0, 0, 0, 0.7); }
+.aname small { font-weight: 700; opacity: 0.9; }
+.stages { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.stage { font-family: var(--font); font-weight: 900; font-size: 14px; min-width: 52px; padding: 9px 10px; border-radius: 10px; border: 2px solid rgba(255, 255, 255, 0.6); background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer; }
+.stage.boss { background: rgba(120, 0, 30, 0.7); border-color: #ffd23a; }
+.stage.done { background: rgba(40, 120, 40, 0.75); }
+.stage:disabled { opacity: 0.4; cursor: default; }
+.lockmsg { font-size: 12px; margin-top: 6px; }
+
+/* くんれんじょう / ショップ */
+.colorPick { display: flex; flex-wrap: wrap; gap: 6px; }
+.cbtn { font-family: var(--font); font-weight: 800; font-size: 14px; color: var(--ink); background: var(--panel2); border: 1px solid var(--edge); border-radius: 10px; padding: 9px 12px; cursor: pointer; }
+.cbtn:hover { background: #4a3c84; }
+.coach { display: block; width: 100%; text-align: left; font-family: var(--font); color: var(--ink); background: var(--panel2); border: 1px solid var(--edge); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; font-size: 15px; }
+.coach small { color: var(--dim); margin-left: 8px; }
+.coach.done { border-color: var(--lime); }
+.shopItem { display: flex; align-items: center; gap: 12px; background: var(--panel2); border: 1px solid var(--edge); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+.shopItem .ic { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; font-size: 38px; flex: none; }
+.shopItem .tx { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.shopItem .tx small { color: var(--dim); }
+
+/* ずかん */
+.dexGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.dcell { font-family: var(--font); color: var(--ink); background: var(--panel2); border: 1px solid var(--edge); border-radius: 12px; padding: 4px 2px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; }
+.dcell .nm { font-size: 10px; font-weight: 800; text-align: center; line-height: 1.2; min-height: 2.4em; }
+.dcell.unk .nm { color: var(--dim); }
+.dexBig { display: flex; justify-content: center; }
+
+/* くわしい画面 */
+.dTop { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.dTop canvas { background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent 70%); border-radius: 16px; }
+.dInfo { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.xbar { height: 6px; background: rgba(255, 255, 255, 0.12); border-radius: 3px; overflow: hidden; }
+.xbar i { display: block; height: 100%; background: #6ad8ff; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
+.detail h4 { margin: 12px 0 4px; font-size: 13px; color: #fff6c0; }
+.tlist div, .mlist .mv { font-size: 13px; padding: 2px 0; }
+.tlist small, .mlist small { color: var(--dim); }
+.plist { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+.plist span { background: rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 3px 8px; }
+
+/* ------------------------------- バトル ------------------------------- */
+#bTop { position: fixed; top: 8px; left: 10px; right: 10px; display: flex; align-items: center; gap: 8px; z-index: 5; }
+#bTop b { background: rgba(0, 0, 0, 0.5); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+#bTop .btn { margin-left: auto; }
+#bLog { position: fixed; top: 46px; left: 50%; transform: translateX(-50%); max-width: 92vw; background: rgba(10, 6, 24, 0.82); border: 1px solid var(--edge); border-radius: 12px; padding: 7px 16px; font-size: 15px; font-weight: 800; z-index: 5; text-align: center; min-height: 1em; }
+#bLog:empty { display: none; }
+#cmd { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 2px solid var(--edge); padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); z-index: 6; max-height: 52vh; overflow-y: auto; }
+#cmd .waiting { text-align: center; color: var(--dim); padding: 8px; font-size: 20px; letter-spacing: 0.3em; }
+.chead { font-size: 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chead small { color: var(--dim); }
+.pips { display: inline-flex; gap: 3px; }
+.pips i { width: 14px; height: 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); }
+.pips i.on { background: #6ad8ff; box-shadow: 0 0 6px #6ad8ff; }
+.crow { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 7px; }
+.crow .lbl { font-size: 12px; color: var(--dim); margin-right: 2px; }
+.colbtn { font-family: var(--font); font-weight: 800; font-size: 12px; color: var(--ink); background: rgba(255, 255, 255, 0.08); border: 2px solid transparent; border-radius: 999px; padding: 4px 9px; cursor: pointer; display: inline-flex; align-items: center; }
+.colbtn.cur { border-color: #fff; background: rgba(255, 255, 255, 0.2); }
+.colbtn:disabled { opacity: 0.35; cursor: default; }
+.colbtn em { font-style: normal; color: #ffb03a; margin-left: 3px; }
+.colbtn em.bad { color: #ff6a6a; }
+.mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-bottom: 4px; }
+.mbtn { font-family: var(--font); color: var(--ink); background: #3a2e6a; border: 1px solid rgba(200, 180, 255, 0.35); border-radius: 11px; padding: 7px 10px; cursor: pointer; text-align: left; position: relative; display: flex; flex-direction: column; gap: 1px; }
+.mbtn:hover:not(:disabled) { background: #4a3c84; }
+.mbtn:disabled { opacity: 0.4; cursor: default; }
+.mbtn .mn { font-size: 14px; font-weight: 900; display: flex; align-items: center; }
+.mbtn small { color: var(--dim); font-size: 11px; }
+.mbtn .cost { color: #6ad8ff; font-weight: 900; }
+.mbtn.sig { background: linear-gradient(180deg, #7a3ab0, #4a1a7a); border-color: #e0b0ff; }
+.mbtn.guard { background: #26405a; }
+@media (max-width: 560px) {
+  .mgrid { grid-template-columns: 1fr 1fr; }
+  .mbtn { padding: 6px 8px; }
+  .mbtn .mn { font-size: 13px; }
+}
+
+/* ------------------------------- ごうせいムービー ------------------------------- */
+#fusionUI { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+#fusionUI > * { pointer-events: auto; }
+#fzHint { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); font-size: 20px; font-weight: 900; background: rgba(0, 0, 0, 0.55); padding: 8px 18px; border-radius: 999px; white-space: nowrap; pointer-events: none; }
+#fzSkip { position: fixed; top: 12px; right: 12px; }
+#fzStop { position: fixed; bottom: 6vh; left: 50%; transform: translateX(-50%); font-size: 24px; padding: 16px 44px; }
+#fzMsg { position: fixed; left: 50%; bottom: 4vh; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: var(--panel2); border: 2px solid #d8b8ff; border-radius: 18px; padding: 14px 18px; text-align: center; box-shadow: 0 0 30px rgba(170, 100, 255, 0.5); animation: popin 0.25s ease-out; }
+#fzBig { display: block; font-size: 20px; color: #fff6c0; margin-bottom: 4px; }
+#fzText { font-size: 15px; margin: 4px 0 10px; }
+@keyframes popin { from { transform: translateX(-50%) scale(0.85); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+
+/* ------------------------------- パーツ エディター ------------------------------- */
+#editor { position: fixed; inset: 0; z-index: 9; background: #101828; display: flex; flex-direction: column; align-items: stretch; padding-bottom: env(safe-area-inset-bottom); }
+#editor header { padding: 10px 14px; background: var(--panel2); font-size: 16px; text-align: center; }
+#edCanvas { flex: 1; width: 100%; min-height: 0; touch-action: none; cursor: crosshair; }
+#edPalette { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 8px 10px 0; }
+.pchip { font-family: var(--font); font-weight: 800; font-size: 14px; color: var(--ink); background: var(--panel2); border: 2px solid var(--edge); border-radius: 12px; padding: 7px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.pchip.on { border-color: var(--gold); background: #5a4a1a; }
+.pchip small { color: var(--dim); margin-left: 4px; }
+.pchip .pic { font-size: 18px; }
+#edInfo { text-align: center; font-size: 12px; color: var(--dim); margin: 6px 12px; min-height: 1.4em; }
+.edBtns { display: flex; justify-content: center; gap: 10px; padding: 0 10px 12px; }
+
+/* ------------------------------- 窓 / トースト ------------------------------- */
+#modal { position: fixed; inset: 0; background: rgba(6, 4, 16, 0.6); display: flex; align-items: center; justify-content: center; z-index: 30; padding: 16px; }
+.mcard { width: min(560px, 100%); max-height: 90vh; display: flex; flex-direction: column; background: var(--panel2); border: 1px solid var(--edge); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.mcard h2 { margin: 0; padding: 14px 18px 6px; font-size: 19px; color: #fff6c0; }
+#mBody { padding: 4px 18px; overflow-y: auto; font-size: 14px; -webkit-user-select: text; user-select: text; }
+#mFoot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding: 12px 18px 16px; }
+.result .big { font-size: 17px; font-weight: 900; }
+.recruit { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 6px 10px; margin-top: 8px; }
+#toasts { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+.toast { background: rgba(20, 14, 40, 0.94); border: 1px solid var(--gold); border-radius: 12px; padding: 8px 16px; font-size: 14px; font-weight: 800; max-width: 90vw; text-align: center; animation: popin2 0.2s ease-out; }
+@keyframes popin2 { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
