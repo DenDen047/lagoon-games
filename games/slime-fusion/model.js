@@ -145,6 +145,7 @@ function fusionPlan(A, B) {
   if (A.sp === 'plain' && B.sp === 'plain') {
     if (A.size >= 5 && B.size >= 5) { plan.sp = 'daiou'; plan.recipe = true; return plan; }
     plan.wheel = PLAIN_WHEEL.map((w) => ({ ...w }));
+    plan.stars = 1;
     return plan;
   }
   for (const r of RECIPES) {
@@ -152,38 +153,66 @@ function fusionPlan(A, B) {
     if (r.test(colors, parts, A, B)) { plan.sp = r.id; plan.recipe = true; return plan; }
   }
   if (A.size >= 5 && B.size >= 5 && A.sp !== 'giant' && B.sp !== 'giant') { plan.sp = 'giant'; plan.recipe = true; return plan; }
-  if (A.sp === 'plain' || B.sp === 'plain') { plan.sp = A.sp === 'plain' ? B.sp : A.sp; plan.grow = true; return plan; }
-  if (sa.line && sb.line) {
-    if (sa.line === sb.line) {
-      const t = Math.max(sa.tier, sb.tier);
-      if (sa.tier === sb.tier && t < 5) plan.sp = sa.line + (t + 1);
-      else { plan.sp = sa.line + t; plan.grow = true; }
-      return plan;
-    }
-    plan.sp = hybridId(sa.line, sb.line, Math.max(sa.tier, sb.tier) >= 3);
-    return plan;
+
+  /* きまりで いちばん でやすい けっか。これを まんなかに して ルーレットを つくる */
+  const base = [];
+  if (A.sp === 'plain' || B.sp === 'plain') {
+    base.push({ kind: 'keep', sp: A.sp === 'plain' ? B.sp : A.sp, w: 20 });
+    base.push({ kind: 'grow', w: 10 });
+  } else if (sa.line && sb.line && sa.line === sb.line) {
+    const t = Math.max(sa.tier, sb.tier);
+    if (sa.tier === sb.tier && t < 5) base.push({ kind: 'sp', sp: sa.line + (t + 1), w: 20 });
+    else base.push({ kind: 'keep', sp: sa.line + t, w: 20 });
+  } else if (sa.line && sb.line) {
+    base.push({ kind: 'sp', sp: hybridId(sa.line, sb.line, Math.max(sa.tier, sb.tier) >= 3), w: 20 });
+  } else if (sa.hyb && A.sp === B.sp && A.sp.endsWith('_a')) {
+    base.push({ kind: 'sp', sp: A.sp.replace(/_a$/, '_b'), w: 20 });
   }
-  if (sa.hyb && A.sp === B.sp) {
-    if (A.sp.endsWith('_a')) plan.sp = A.sp.replace(/_a$/, '_b');
-    else { plan.sp = A.sp; plan.grow = true; }
-    return plan;
-  }
-  /* きまりが ないときは ルーレットで どちらに なるか きめる。まれに とつぜんへんい */
-  const mut = mutationCandidates(A, B);
-  plan.wheel = [
-    { kind: 'keep', sp: A.sp, w: 45 },
-    { kind: 'keep', sp: B.sp, w: 45 },
-  ];
-  if (A.sp === B.sp) plan.wheel = [{ kind: 'keep', sp: A.sp, w: 80 }];
-  if (mut.length) plan.wheel.push({ kind: 'sp', sp: pick(mut), w: 14, label: 'とつぜんへんい' });
+  for (const s of [A, B]) if (s.sp !== 'plain') base.push({ kind: 'keep', sp: s.sp, w: base.length ? 12 : 20 });
+  plan.wheel = fusionWheel(A, B, base);
+  plan.stars = wheelStars(A, B);
   return plan;
 }
 
-function mutationCandidates(A, B) {
-  const cols = new Set([...A.colors, ...B.colors]);
-  const maxT = Math.max(spOf(A).tier, spOf(B).tier);
-  return SPECIES.filter((s) => !s.special && s.tier > 0 && s.tier <= maxT + 1 && s.tier >= maxT && s.el.some((e) => cols.has(e)) && s.id !== A.sp && s.id !== B.sp).map((s) => s.id);
+/* ルーレットの つよさ。親が つよい (だんかいが たかい・大きい) ほど ふえる。0 から 7 くらい */
+function wheelPower(A, B) {
+  return (spOf(A).tier + spOf(B).tier) / 2 + (A.size + B.size - 2) * 0.25;
 }
+const wheelStars = (A, B) => clamp(Math.round(wheelPower(A, B)), 1, 5);
+
+/* きまりの けっか (base) に、親の つよさに あった スライムを まぜて ルーレットに する。
+   よわい 2ひきなら ひくい だんかいの スライムばかり、つよい 2ひきなら たかい だんかいや とくべつな スライムが でる */
+function fusionWheel(A, B, base) {
+  const pw = wheelPower(A, B);
+  const hi = Math.max(spOf(A).tier, spOf(B).tier);
+  const tMin = clamp(Math.floor(pw), 1, 5), tMax = clamp(Math.ceil(pw) + 1, 1, 5);
+  const cols = new Set([...A.colors, ...B.colors]);
+  const segs = [];
+  const has = (g) => segs.some((x) => x.kind === g.kind && x.sp === g.sp);
+  for (const g of base) if (!has(g)) segs.push(g);
+
+  /* 親の 色を もつ スライムほど でやすい。親より 上の だんかいは でにくい */
+  const pool = SPECIES.filter((s) => !s.special && s.tier >= tMin && s.tier <= tMax && !segs.some((g) => g.sp === s.id))
+    .map((s) => ({ id: s.id, tier: s.tier, k: (s.el.some((e) => cols.has(e)) ? 3 : 1) * (s.tier > hi ? 0.5 : 1) }));
+  for (let n = 0; n < 5 && pool.length; n++) {
+    let r = rand(pool.reduce((a, b) => a + b.k, 0));
+    const i = Math.max(0, pool.findIndex((c) => (r -= c.k) < 0));
+    const c = pool.splice(i, 1)[0];
+    segs.push({ kind: 'sp', sp: c.id, w: c.tier > hi ? 4 : 7 });
+  }
+  /* つよい ルーレットには とくべつな スライムも はいる */
+  if (pw >= 2.5) {
+    const sp = SPECIES.filter((s) => s.special && !RECIPE_ONLY.includes(s.id) && s.tier >= Math.max(3, tMin - 1) && s.tier <= tMax && !segs.some((g) => g.sp === s.id));
+    if (sp.length) segs.push({ kind: 'sp', sp: pick(sp).id, w: 3 });
+  }
+  if (pw >= 1.5) {
+    const lucky = pick(['goldy', 'silvery']);
+    if (!segs.some((g) => g.sp === lucky)) segs.push({ kind: 'sp', sp: lucky, w: 1.5 });
+  }
+  return segs;
+}
+/* ルーレットには でない (レシピでしか つくれない) スライム */
+const RECIPE_ONLY = ['rainbow', 'chaos', 'daiou', 'giant', 'triple', 'space'];
 
 /* ルーレットの けっかを うけて、あたらしい 1ぴきを つくる */
 function performFusion(A, B, plan, wheelHit) {

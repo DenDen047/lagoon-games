@@ -4,6 +4,8 @@
    ========================================================================= */
 'use strict';
 
+const starText = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+
 const Movie = {
   st: null,
 
@@ -68,7 +70,7 @@ const Movie = {
     s.wheel = { segs, ang: rand(TAU), vel: 9 + rand(3), stopping: false, done: false, last: -1, hold: 0 };
     s.phase = 'wheel';
     el('fzStop').classList.remove('hidden');
-    el('fzHint').textContent = s.plan.wheel.some((g) => g.kind === 'grow') ? 'ルーレットで しんかを きめよう！' : 'どっちに なるかな？';
+    el('fzHint').textContent = `${starText(s.plan.stars)} の ルーレット！ なにが でるかな？`;
     el('fzHint').classList.remove('hidden');
   },
   stopWheel() {
@@ -473,9 +475,8 @@ const Lab = {
     if (A && B) {
       const plan = fusionPlan(A, B);
       let t;
-      if (plan.wheel) t = plan.wheel.some((w) => w.kind === 'grow') ? '🎡 ルーレットで しんか！ (大きくなる か、色の スライムに なる か…)' : '🎡 ルーレットで どちらに なるか きまる！ (おおきさ ＋1)';
-      else if (plan.recipe) t = P.seen[plan.sp] ? `✨ ひみつのレシピ: ${SP[plan.sp].name}` : '✨ なにかが おこりそう…！？';
-      else t = (P.seen[plan.sp] ? `→ ${SP[plan.sp].name}` : '→ ？？？ (まだ 見たことが ない スライム)') + (plan.grow ? ' (おおきさ ＋1)' : '');
+      if (plan.wheel) t = `🎡 ${starText(plan.stars)} の ルーレット！ (つよい 2ひき ほど つよい スライムが でやすい)`;
+      else t = P.seen[plan.sp] ? `✨ ひみつのレシピ: ${SP[plan.sp].name}` : '✨ なにかが おこりそう…！？';
       prev.innerHTML = `<b>${t}</b><br><small>パーツ・色・とくせいの 一部は うけつがれるよ。2ひきは 1ぴきに なるよ</small>`;
     } else prev.innerHTML = '<small>スライムを 2ひき えらんで ごうせいだいに いれよう。トゲの ついた スライムと くっつけると トゲの とくちょうが のこるよ</small>';
     body.appendChild(prev);
