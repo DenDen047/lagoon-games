@@ -109,7 +109,7 @@ const Build = {
     }
     if (!d.flat) {
       const p = G.p;
-      if (p.x + 8 > x * TILE && p.x - 8 < (x + d.w) * TILE && p.y + 8 > y * TILE && p.y - 8 < (y + d.h) * TILE) return 'ハムスターが じゃま。少し はなれよう';
+      if (p.x + 8 > x * TILE && p.x - 8 < (x + d.w) * TILE && p.y + 8 > y * TILE && p.y - 8 < (y + d.h) * TILE) return 'ネズミが じゃま。少し はなれよう';
     }
     if (!Game.hasAll(d.cost)) return '材料が たりない';
     return null;

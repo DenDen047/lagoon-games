@@ -227,8 +227,8 @@ const R = {
       g.rotate(Math.sin(this.t * (p.moving ? 9 : 4)) * (p.moving ? 0.22 : 0.12));
       g.translate(-sx, -y);
     }
-    drawHamster(g, sx, y, {
-      face: p.face, t: this.t, moving: p.moving, fur: (FURS[G.fur] || FURS.gold)[0], belly: (FURS[G.fur] || FURS.gold)[1],
+    drawMouse(g, sx, y, {
+      face: p.face, t: this.t, moving: p.moving, furKey: G.fur,
       body: G.eq.body, hat: G.eq.hat, bag: Game.bagId(), weapon: G.eq.weapon || 'paw', staff: G.eq.staff,
       swing: p.swing >= 0 ? p.swing / p.swingMax : -1, aim: p.aim, roll: p.roll >= 0 ? p.roll / 0.32 : -1,
       cheek: Game.bagFill(), flash: p.flash, cast: p.castT > 0 ? p.castT / 0.3 : 0, seed: 1, noShadow: !!G.ride,

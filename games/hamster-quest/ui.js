@@ -281,9 +281,9 @@ const UI = {
     const g = c.getContext('2d'), G = Game.G;
     g.clearRect(0, 0, 200, 200);
     g.fillStyle = '#fff6e0'; g.beginPath(); g.arc(100, 100, 92, 0, TAU); g.fill();
-    drawHamster(g, 100, 170, {
+    drawMouse(g, 100, 170, {
       face: 'down', t: R.t, moving: false, body: G.eq.body, hat: G.eq.hat, bag: Game.bagId(), weapon: G.eq.weapon, staff: G.eq.staff,
-      swing: -1, roll: -1, cheek: Game.bagFill(), scale: 3.4, aim: 0, fur: (FURS[G.fur] || FURS.gold)[0], belly: (FURS[G.fur] || FURS.gold)[1],
+      swing: -1, roll: -1, cheek: Game.bagFill(), scale: 3.4, aim: 0, furKey: G.fur,
     });
   },
 
@@ -370,16 +370,16 @@ const UI = {
   setup: { fur: 'gold' },
   initSettings() {
     const row = $('furRow');
-    row.innerHTML = Object.keys(FURS).map((k) => `<button class="furChip ${this.setup.fur === k ? 'on' : ''}" data-fur="${k}" style="background:${FURS[k][0]}" title="${k}"></button>`).join('');
+    row.innerHTML = Object.keys(FURS).map((k) => `<button class="furChip ${this.setup.fur === k ? 'on' : ''}" data-fur="${k}" style="background:${MOUSE_FURS[k][0]}" title="${k}"></button>`).join('');
     row.onclick = (e) => { const b = e.target.closest('[data-fur]'); if (!b) return; this.setup.fur = b.dataset.fur; Sfx.click(); this.initSettings(); };
     this.drawFurPreview();
   },
   drawFurPreview() {
     const c = $('furPreview');
     if (!c) return;
-    const g = c.getContext('2d'), f = FURS[this.setup.fur];
+    const g = c.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, 120, 120);
-    drawHamster(g, 60, 104, { face: 'down', t: 0, moving: false, fur: f[0], belly: f[1], weapon: 'stick', swing: -1, roll: -1, cheek: 0, scale: 2.6, aim: 0 });
+    drawMouse(g, 60, 104, { face: 'down', t: 0, moving: false, furKey: this.setup.fur, weapon: 'stick', swing: -1, roll: -1, cheek: 0, scale: 2.6, aim: 0 });
   },
   newSettings() { return { fur: this.setup.fur, keepInv: $('keepInv').checked }; },
 

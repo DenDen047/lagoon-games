@@ -146,8 +146,8 @@ function drawClothes(g, body, view, rx, ry, cy) {
   g.restore();
   if ((body === 'royal') && view !== 'front') {
     /* マントは背中で広がる */
-    poly(g, [-11, cy - 6, 11, cy - 6, 14, cy + 10, -14, cy + 10], b.col, INK, 1.2);
-    line(g, -11, cy - 6, 11, cy - 6, b.trim, 2);
+    poly(g, [1 - rx, cy - 6, rx - 1, cy - 6, rx + 2, cy + 10, -rx - 2, cy + 10], b.col, INK, 1.2);
+    line(g, 1 - rx, cy - 6, rx - 1, cy - 6, b.trim, 2);
   }
 }
 
@@ -198,6 +198,11 @@ function drawHamster(g, x, y, o) {
   const fur = o.fur || FURS.gold[0], belly = o.belly || FURS.gold[1];
   const furD = shade(fur.startsWith('#') ? fur : '#eda24f', -40);
 
+  if (o.roll >= 0 && o.mouse) {
+    drawMouseRoll(g, o, fur, belly, o.furD || furD);
+    g.restore();
+    return;
+  }
   if (o.roll >= 0) {
     g.translate(0, -10);
     g.rotate(o.roll * TAU * 1.5 * (o.face === 'left' ? -1 : 1));
@@ -216,8 +221,12 @@ function drawHamster(g, x, y, o) {
   const cheek = clamp(o.cheek || 0, 0, 1);
 
   /* 足 */
-  ell(g, -5, -1 + (view === 'side' ? 0 : step * 0.5), 3.2, 2.2, '#f2a6a6', INK, 1);
-  ell(g, 5, -1 - (view === 'side' ? 0 : step * 0.5), 3.2, 2.2, '#f2a6a6', INK, 1);
+  if (o.mouse) {
+    g.save(); g.scale(flip, 1); drawMouseFeet(g, view, step); g.restore();
+  } else {
+    ell(g, -5, -1 + (view === 'side' ? 0 : step * 0.5), 3.2, 2.2, '#f2a6a6', INK, 1);
+    ell(g, 5, -1 - (view === 'side' ? 0 : step * 0.5), 3.2, 2.2, '#f2a6a6', INK, 1);
+  }
 
   g.translate(0, -bob);
   const BODY_Y = -11;
@@ -278,7 +287,9 @@ function drawHamster(g, x, y, o) {
   g.save();
   g.scale(flip, 1);
 
-  if (view === 'front') {
+  if (o.mouse) {
+    drawMouseBody(g, o, view, fur, belly, o.furD || furD);
+  } else if (view === 'front') {
     drawBag(g, o.bag, 'front');
     if (o.body === 'royal') poly(g, [-12, -16, 12, -16, 14, -2, -14, -2], GEAR.royal.col, INK, 1.2);
     circ(g, -8, -20, 4.2, fur, INK, 1.3); circ(g, -8, -20, 2.2, '#f7b8b8');
@@ -345,6 +356,209 @@ function drawHamster(g, x, y, o) {
   else if (view === 'side') staffOnBack();
   if (!weaponBehind) weaponLayer();
   g.restore();
+}
+
+/* ============================== ネズミ (主人公) ==============================
+   絵本の挿し絵や、二本足で旅をするネズミのゲームを手本にした。
+   頭と胴が分かれていて、大きな丸い耳の内がわは うすい桃色。鼻先はとがり、長いひげ、
+   ビーズのような黒い目、毛のない長いしっぽ。線はほかの絵と同じこげ茶にして、
+   毛は光と影のグラデーションで丸みを出す。
+   色は [毛, おなか, 影] */
+const MOUSE_FURS = {
+  gold:  ['#b98a5c', '#f1e3cd', '#7c5a3a'],
+  white: ['#f3eee6', '#ffffff', '#c9bfb0'],
+  gray:  ['#8f8a86', '#dcd6ce', '#5f5a57'],
+  cream: ['#dcc29a', '#faf1e2', '#ad8f66'],
+  brown: ['#94653f', '#eedfc8', '#62422a'],
+  black: ['#4a4442', '#77706d', '#272322'],
+  choco: ['#6c4832', '#c4a286', '#45301f'],
+  panda: ['#3f3a3b', '#f6f2ea', '#262223'],
+};
+const M_SKIN = '#e8aaa1', M_EAR_IN = '#f2bdb5', M_NOSE = '#e0868c';
+
+function drawMouse(g, x, y, o) {
+  const f = MOUSE_FURS[o.furKey] || MOUSE_FURS.gold;
+  drawHamster(g, x, y, Object.assign({}, o, { mouse: true, fur: f[0], belly: f[1], furD: f[2] }));
+}
+
+/* 毛のやわらかい丸み。光は左上から */
+function furGrad(g, x, y, r, fur, furD) {
+  const gr = g.createRadialGradient(x - r * 0.35, y - r * 0.45, r * 0.1, x, y, r * 1.15);
+  gr.addColorStop(0, shade(fur, 16)); gr.addColorStop(0.55, fur); gr.addColorStop(1, furD);
+  return gr;
+}
+/* 根もとが太く、先へいくほど細くなる しっぽ。p は3次ベジェの4点 */
+function mouseTail(g, p, w0) {
+  const N = 16, P = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, u = 1 - t;
+    P.push([u * u * u * p[0] + 3 * u * u * t * p[2] + 3 * u * t * t * p[4] + t * t * t * p[6],
+            u * u * u * p[1] + 3 * u * u * t * p[3] + 3 * u * t * t * p[5] + t * t * t * p[7]]);
+  }
+  g.lineCap = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < N; i++) {
+      const w = lerp(w0, 0.6, i / N);
+      g.beginPath(); g.moveTo(P[i][0], P[i][1]); g.lineTo(P[i + 1][0], P[i + 1][1]);
+      g.lineWidth = pass ? w : w + 1.2; g.strokeStyle = pass ? M_SKIN : INK; g.stroke();
+    }
+  }
+  /* うっすら見える 輪の節 */
+  g.strokeStyle = 'rgba(150,80,72,.4)'; g.lineWidth = 0.45;
+  for (let i = 2; i < N - 2; i += 2) {
+    const dx = P[i + 1][0] - P[i][0], dy = P[i + 1][1] - P[i][1], l = Math.hypot(dx, dy) || 1;
+    const w = lerp(w0, 0.6, i / N) * 0.5, nx = -dy / l * w, ny = dx / l * w;
+    g.beginPath(); g.moveTo(P[i][0] - nx, P[i][1] - ny); g.lineTo(P[i][0] + nx, P[i][1] + ny); g.stroke();
+  }
+}
+/* 大きな丸い耳。内がわは 血の色がすける うすい桃色 */
+function mouseEar(g, x, y, r, fur, furD, inner) {
+  ell(g, x, y, r, r * 1.04, fur, INK, 1.2);
+  if (!inner) { ell(g, x + 0.4, y + 0.6, r * 0.6, r * 0.62, furD); return; }
+  ell(g, x, y + 0.5, r * 0.7, r * 0.74, M_EAR_IN);
+  ell(g, x - r * 0.2, y + r * 0.35, r * 0.42, r * 0.36, 'rgba(205,120,118,.38)');
+  line(g, x + r * 0.05, y + r * 0.5, x + r * 0.2, y - r * 0.35, 'rgba(190,100,100,.4)', 0.5);
+}
+function mouseHand(g, x, y) {
+  ell(g, x, y, 1.9, 1.6, M_SKIN, INK, 0.8);
+  line(g, x - 0.7, y + 0.6, x - 0.9, y + 1.6, INK, 0.5);
+  line(g, x + 0.5, y + 0.7, x + 0.6, y + 1.7, INK, 0.5);
+}
+function mouseWhiskers(g, x, y, dir, len) {
+  g.strokeStyle = 'rgba(40,26,20,.6)'; g.lineWidth = 0.45; g.lineCap = 'round';
+  for (const [dy, bend] of [[-3.2, -1], [-0.6, -0.3], [2.2, 0.6]]) {
+    g.beginPath(); g.moveTo(x, y);
+    g.quadraticCurveTo(x + dir * len * 0.55, y + dy * 0.45 + bend, x + dir * len, y + dy);
+    g.stroke();
+  }
+}
+/* はじめの小さなカバンは、腰につけた こぶくろ。物が入るほど ふくらむ */
+function mousePouch(g, x, y, fill) {
+  const r = 2.2 + fill * 1.8;
+  line(g, x - 0.5, y - r - 2.2, x, y - r + 0.4, '#7a5030', 0.9);
+  ell(g, x, y, r * 0.95, r, '#b98552', INK, 0.9);
+  line(g, x - r * 0.6, y - r * 0.55, x + r * 0.6, y - r * 0.55, '#7a5030', 0.8);
+  ell(g, x - r * 0.3, y - r * 0.1, r * 0.3, r * 0.25, 'rgba(255,240,210,.45)');
+}
+
+/* 地面の足。後ろ足は長く、指が見える */
+function drawMouseFeet(g, view, step) {
+  if (view === 'side') {
+    ell(g, 1 - step, -0.9, 4.2, 1.5, '#c98d86', INK, 0.9);
+    ell(g, 2 + step, -0.9, 4.4, 1.6, M_SKIN, INK, 0.9);
+    for (let i = 0; i < 3; i++) circ(g, 5.6 + step, -1.6 + i * 0.75, 0.55, M_SKIN, INK, 0.5);
+  } else {
+    for (const s of [-1, 1]) {
+      const yy = -1 + s * step * 0.5;
+      g.save(); g.translate(s * 3.6, yy); g.rotate(s * 0.35);
+      ell(g, 0, view === 'back' ? -0.6 : 0.4, 2.1, view === 'back' ? 1.5 : 2.4, M_SKIN, INK, 0.9);
+      if (view !== 'back') for (let i = -1; i <= 1; i++) circ(g, i * 0.9, 2.5, 0.55, M_SKIN, INK, 0.5);
+      g.restore();
+    }
+  }
+}
+
+function drawMouseBody(g, o, view, fur, belly, furD) {
+  const BY = -8, RX = 7.4, RY = 7.8;
+  const sw = Math.sin(o.t * (o.moving ? 9 : 2.4)) * (o.moving ? 2.4 : 1.4);
+  const pouch = o.bag === 'cheek' ? clamp(o.cheek || 0, 0, 1) : -1;
+  const blink = Math.sin(o.t * 0.9 + (o.seed || 0)) > 0.985;
+
+  if (view === 'front') {
+    mouseTail(g, [3, -3, 13, -1, 19 + sw, -6, 17 + sw * 1.6, -15], 2.2);
+    drawBag(g, o.bag, 'front');
+    if (o.body === 'royal') poly(g, [-10, -14, 10, -14, 12, -1, -12, -1], GEAR.royal.col, INK, 1.2);
+    /* 胴 */
+    ell(g, 0, BY, RX, RY, furGrad(g, 0, BY, RX, fur, furD), INK, 1.3);
+    ell(g, 0, BY + 1.5, 4.6, 5.4, belly);
+    drawClothes(g, o.body, view, RX, RY, BY);
+    if (o.apron) { g.save(); g.beginPath(); g.ellipse(0, BY, RX, RY, 0, 0, TAU); g.clip(); rrect(g, -4.5, -8, 9, 8, 2, o.apron); g.restore(); }
+    if (pouch >= 0) mousePouch(g, 5.5, -3.2, pouch);
+    mouseHand(g, -6, -6.5); mouseHand(g, 6, -6.5);
+    /* 耳 (頭のうしろ) */
+    mouseEar(g, -6.9, -22.6, 5.2, fur, furD, true);
+    mouseEar(g, 6.9, -22.6, 5.2, fur, furD, true);
+    /* 頭: 上は丸く、下の鼻先へ すぼまる */
+    g.beginPath();
+    g.moveTo(0, -11.2);
+    g.bezierCurveTo(-3.4, -11.2, -7.2, -14.4, -7, -17.6);
+    g.bezierCurveTo(-6.8, -21.6, -3.6, -23.1, 0, -23.1);
+    g.bezierCurveTo(3.6, -23.1, 6.8, -21.6, 7, -17.6);
+    g.bezierCurveTo(7.2, -14.4, 3.4, -11.2, 0, -11.2);
+    g.closePath();
+    g.fillStyle = furGrad(g, 0, -18, 7, fur, furD); g.fill();
+    g.strokeStyle = INK; g.lineWidth = 1.3; g.stroke();
+    ell(g, 0, -13.4, 2.9, 2.1, belly);
+    /* 目 */
+    if (blink) { line(g, -4.3, -17.6, -2, -17.6, '#140c0a', 1.1); line(g, 2, -17.6, 4.3, -17.6, '#140c0a', 1.1); }
+    else {
+      ell(g, -3.1, -17.6, 1.45, 1.7, '#140c0a'); ell(g, 3.1, -17.6, 1.45, 1.7, '#140c0a');
+      circ(g, -2.6, -18.3, 0.55, '#fff'); circ(g, 3.6, -18.3, 0.55, '#fff');
+    }
+    if (o.glasses) { circ(g, -3.1, -17.6, 2.6, null, '#3a3a4a', 0.9); circ(g, 3.1, -17.6, 2.6, null, '#3a3a4a', 0.9); line(g, -0.5, -17.6, 0.5, -17.6, '#3a3a4a', 0.9); }
+    /* 鼻とひげ */
+    mouseWhiskers(g, -1.4, -12.6, -1, 10);
+    mouseWhiskers(g, 1.4, -12.6, 1, 10);
+    ell(g, 0, -12, 1.35, 1, M_NOSE, INK, 0.6);
+    circ(g, -0.4, -12.3, 0.35, 'rgba(255,255,255,.7)');
+  } else if (view === 'back') {
+    mouseEar(g, -6.9, -22.6, 5.2, fur, furD, false);
+    mouseEar(g, 6.9, -22.6, 5.2, fur, furD, false);
+    /* 胴と背すじ */
+    ell(g, 0, BY, RX, RY, furGrad(g, 0, BY, RX, fur, furD), INK, 1.3);
+    g.globalAlpha = 0.35; ell(g, 0, BY - 1, 2.6, 6, furD); g.globalAlpha = 1;
+    drawClothes(g, o.body, view, RX, RY, BY);
+    /* 頭のうしろ。ひげの先が左右にのぞく */
+    mouseWhiskers(g, -5.5, -14.5, -1, 6);
+    mouseWhiskers(g, 5.5, -14.5, 1, 6);
+    ell(g, 0, -17.4, 6.9, 5.9, furGrad(g, 0, -17.4, 6.9, fur, furD), INK, 1.3);
+    if (pouch >= 0) mousePouch(g, -5.8, -3.4, pouch);
+    drawBag(g, o.bag === 'cheek' ? null : o.bag, 'back');
+    /* しっぽは いちばん手前 */
+    mouseTail(g, [0, -2, 1 + sw * 0.4, 3, 11 + sw, 3, 16 + sw * 1.5, -5], 2.2);
+  } else {
+    /* 横向き (右むき。左は外で反転) */
+    mouseTail(g, [-5.5, -3.5, -13, -1.5 + sw * 0.3, -18, -8 + sw, -25, -6 + sw * 1.4], 2.2);
+    mouseEar(g, -1.8, -23.6, 4.6, shade(fur, -14), furD, false);
+    g.save(); g.translate(4.5, 0); drawBag(g, o.bag, 'side'); g.restore();
+    ell(g, 0, BY, RX - 0.4, RY, furGrad(g, 0, BY, RX, fur, furD), INK, 1.3);
+    ell(g, 2.6, BY + 1.6, 3.8, 5, belly);
+    drawClothes(g, o.body, view, RX - 0.4, RY, BY);
+    if (o.apron) { g.save(); g.beginPath(); g.ellipse(0, BY, RX - 0.4, RY, 0, 0, TAU); g.clip(); rrect(g, 0, -8, 7, 8, 2, o.apron); g.restore(); }
+    if (pouch >= 0) mousePouch(g, -3.6, -3.4, pouch);
+    /* 頭: 丸い後頭部から、とがった鼻先へ */
+    g.beginPath();
+    g.moveTo(-3, -16.5);
+    g.bezierCurveTo(-3, -21.5, 2, -23.2, 5, -22.6);
+    g.bezierCurveTo(8, -22, 10.5, -18, 12.8, -15);
+    g.bezierCurveTo(13.4, -14.1, 12.6, -13.2, 11.6, -13.2);
+    g.bezierCurveTo(8.5, -12.8, 6, -11.5, 3, -11.2);
+    g.bezierCurveTo(-0.5, -11, -3, -13, -3, -16.5);
+    g.closePath();
+    g.fillStyle = furGrad(g, 3, -17.5, 7.5, fur, furD); g.fill();
+    g.strokeStyle = INK; g.lineWidth = 1.3; g.stroke();
+    ell(g, 8.2, -13.1, 3.4, 1.5, belly);
+    mouseEar(g, 0.6, -22.8, 5.3, fur, furD, true);
+    if (blink) line(g, 5.2, -17.6, 7.6, -17.6, '#140c0a', 1.1);
+    else { ell(g, 6.5, -17.6, 1.35, 1.65, '#140c0a'); circ(g, 7, -18.3, 0.55, '#fff'); }
+    if (o.glasses) circ(g, 6.5, -17.6, 2.6, null, '#3a3a4a', 0.9);
+    mouseWhiskers(g, 11, -14, 1, 9);
+    mouseWhiskers(g, 10.4, -14.2, -1, 4);
+    ell(g, 12.7, -14.3, 1.25, 1.05, M_NOSE, INK, 0.6);
+    mouseHand(g, 5.6, -7.2);
+  }
+}
+
+/* ころがって よけるとき: しっぽを体にまいた 毛玉 */
+function drawMouseRoll(g, o, fur, belly, furD) {
+  g.translate(0, -9);
+  g.rotate(o.roll * TAU * 1.5 * (o.face === 'left' ? -1 : 1));
+  circ(g, 0, 0, 9, furGrad(g, 0, 0, 9, fur, furD), INK, 1.3);
+  g.beginPath(); g.arc(0, 0, 9, -0.5, 0.7); g.lineTo(0, 0); g.closePath(); g.fillStyle = belly; g.fill();
+  mouseEar(g, -4, -7.5, 3.6, fur, furD, true);
+  ell(g, 8, 2.5, 1.2, 1, M_NOSE, INK, 0.6);
+  g.beginPath(); g.arc(0, 0, 10.6, 1.0, 3.6); g.lineWidth = 2.6; g.strokeStyle = INK; g.lineCap = 'round'; g.stroke();
+  g.beginPath(); g.arc(0, 0, 10.6, 1.0, 3.6); g.lineWidth = 1.5; g.strokeStyle = M_SKIN; g.stroke();
 }
 function easeOut(p) { return 1 - (1 - p) * (1 - p); }
 

@@ -76,7 +76,7 @@ const GEAR = {
   helmet:   { slot: 'hat', name: '鉄のかぶと', icon: '⛑️', def: 3, price: 320, sell: 100 },
   crown:    { slot: 'hat', name: '王冠', icon: '👑', def: 4, mag: 4, mp: 10, sell: 999 },
 
-  cheek:    { slot: 'bag', name: 'ほおぶくろ', icon: '🐹', slots: 4 },
+  cheek:    { slot: 'bag', name: 'こぶくろ', icon: '👝', slots: 4 },
   leafbag:  { slot: 'bag', name: '葉っぱのカバン', icon: '🍃', slots: 8, col: '#5fae3e' },
   clothbag: { slot: 'bag', name: '布のリュック', icon: '🎒', slots: 14, col: '#d8b98a', price: 180 },
   advbag:   { slot: 'bag', name: '冒険リュック', icon: '🎒', slots: 22, col: '#8a5a32', price: 750 },
@@ -337,7 +337,7 @@ const BUILDS = {
     desc: '水べに建てると まわって力をつくる。軸やベルトで 機械に力をおくる。' },
   shaft:   { name: '木の軸', icon: '🥢', w: 1, h: 1, cost: { wood: 2 }, conduct: true, flat: true, desc: '水車の力を となりへ つたえる。上を歩ける。' },
   belt:    { name: 'ベルトコンベア', icon: '⏩', w: 1, h: 1, cost: { wood: 2, grass: 2 }, conduct: true, use: 0.25, dir: true, flat: true,
-    desc: '力が来ていると、のせた物を はこぶ。ハムスターも はこばれる。' },
+    desc: '力が来ていると、のせた物を はこぶ。ネズミも はこばれる。' },
   sawmill: { name: '製材機', icon: '🪚', w: 2, h: 2, cost: { wood: 10, stone: 4, rope: 2 }, use: 2, dir: true,
     recipes: [{ in: { wood: 1 }, out: ['plank', 2], t: 2.5 }], desc: '木を 板に する。' },
   spinner: { name: '糸車', icon: '🧵', w: 2, h: 2, cost: { wood: 8, rope: 3 }, use: 2, dir: true,
