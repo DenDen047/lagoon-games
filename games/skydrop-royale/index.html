@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>SKYDROP ROYALE ― 2D バトルロイヤル</title>
+<meta name="description" content="ひこうせんから広いしまにとびおり、125しゅるいの ぶきを ひろって さいごの ひとりを めざす 2D バトルロイヤル。かべを たてて まもり、36しゅるいの スキンや じぶんで つくった スキンで たたかう。スマホ対応。">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ================= ロビー ================= -->
+<div id="lobby">
+  <div class="lobbyTop">
+    <h1 class="logo"><span>SKYDROP</span> <span>ROYALE</span></h1>
+    <div class="pill">🪙 <b id="coins">0</b></div>
+  </div>
+  <div class="lobbyCard">
+    <p class="sub">2D バトルロイヤル ・ さいごの ひとりを めざせ！</p>
+    <p class="skinLine">いまの スキン: <b id="skinName"></b></p>
+    <button class="btn primary huge" id="btnPlay">▶ あそぶ</button>
+    <div class="opt"><span>にんずう</span>
+      <button class="btn small" data-players="25">25</button>
+      <button class="btn small" data-players="50">50</button>
+      <button class="btn small" data-players="100">100</button>
+    </div>
+    <div class="opt"><span>あいての つよさ</span>
+      <button class="btn small" data-diff="0">やさしい</button>
+      <button class="btn small" data-diff="1">ふつう</button>
+      <button class="btn small" data-diff="2">つよい</button>
+    </div>
+    <div class="menuBtns">
+      <button class="btn" id="btnLocker">👕 ロッカー</button>
+      <button class="btn" id="btnDex">🔫 ぶきずかん</button>
+      <button class="btn" id="btnHelp">❓ あそびかた</button>
+      <button class="btn" id="btnSound">🔊 おと ON</button>
+    </div>
+    <p class="dim small" id="stats"></p>
+    <p class="dim small">セーブは じどう。データは この たんまつの ブラウザにだけ のこります。</p>
+  </div>
+</div>
+
+<!-- ================= メニュー画面 ================= -->
+<div id="screen" class="hidden">
+  <header id="scrHead">
+    <button id="btnBack" class="btn ghost small">← もどる</button>
+    <h2 id="scrTitle"></h2>
+    <div class="pill">🪙 <b id="scrCoins">0</b></div>
+  </header>
+  <main id="scrBody"></main>
+</div>
+
+<!-- ================= しあい中の ボタン ================= -->
+<div id="hud" class="hidden">
+  <button id="btnPause" class="btn small">Ⅱ</button>
+  <div id="touchBtns">
+    <button id="tJump" class="tb big hidden">⬇ とびおりる</button>
+    <button id="tUse" class="tb wide hidden">✋</button>
+    <button id="tHeal" class="tb hidden">💊 つかう</button>
+    <button id="tReload" class="tb hidden">⟳</button>
+    <button id="tShape" class="tb hidden">▦</button>
+    <button id="tPlace" class="tb hidden">🧱 おく</button>
+    <button id="tBuild" class="tb hidden">🔨</button>
+  </div>
+</div>
+
+<!-- ================= 窓 ================= -->
+<div id="modal" class="hidden">
+  <div class="mcard">
+    <h2 id="mTitle"></h2>
+    <div id="mBody"></div>
+    <div id="mFoot"></div>
+  </div>
+</div>
+<div id="toast" class="hidden"></div>
+
+<script src="core.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="art.js"></script>
+<script src="game.js"></script>
+<script src="ai.js"></script>
+<script src="render.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'skydrop-royale', genre: 'shooter', players: '1P', date: '2026-11-16',
+    ja: {
+      title: 'SKYDROP ROYALE ― 2D バトルロイヤル',
+      desc: 'ひこうせんから広いしまにとびおり、125しゅるいの ぶきを ひろって さいごの ひとりを めざす 2D バトルロイヤル。かべを たてて まもり、36しゅるいの スキンや じぶんで つくった スキンで たたかう。スマホ対応。',
+    },
+    en: {
+      title: 'Skydrop Royale',
+      desc: 'A 2D battle royale: skydive from an airship onto a big island, loot 125 weapons, build walls for cover and be the last one standing in one of 36 skins or one you design yourself. Plays on phones.',
+    },
+  },
+  {
     slug: 'cube-saga', genre: 'sandbox', players: '1P', date: '2026-11-10',
     ja: {
       title: 'CUBE SAGA ― キューブおうこくの ゆうしゃ',
