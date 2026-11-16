@@ -85,17 +85,26 @@ function drawPart(ctx, p, r, shape, hex, col, sq = 0) {
     ctx.restore(); return;
   }
   ctx.rotate(p.a);
+  /* 左がわの パーツは 左右を うらがえして、まんなかから そとへ むくように する。
+     off は まうえで 0、まよこ より 下で 1 */
+  const side = Math.sin(p.a) < 0 ? -1 : 1;
+  const off = Math.min(1, Math.abs(angDiff(0, p.a)) / (Math.PI / 2));
+  if (t === 'horn' || t === 'tail' || t === 'claw') ctx.scale(side, 1);
   const lw = Math.max(1, r * 0.035);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (t === 'horn') {
+    /* まんなかの つのは まっすぐ。はしに いくほど そとへ たおれて、さきが つよく まがる */
+    ctx.rotate(off * 0.35);
     const w = r * 0.15, hgt = r * 0.5;
-    ctx.beginPath(); ctx.moveTo(-w, r * 0.08); ctx.quadraticCurveTo(-w * 0.6, -hgt * 0.6, w * 0.5, -hgt);
-    ctx.quadraticCurveTo(w * 0.3, -hgt * 0.4, w, r * 0.08); ctx.closePath();
+    const tip = lerp(0, 1.0, off) * w;
+    ctx.beginPath(); ctx.moveTo(-w, r * 0.08);
+    ctx.quadraticCurveTo(lerp(-0.5, -0.6, off) * w, -hgt * lerp(0.5, 0.6, off), tip, -hgt);
+    ctx.quadraticCurveTo(lerp(0.5, 0.3, off) * w, -hgt * lerp(0.5, 0.4, off), w, r * 0.08); ctx.closePath();
     const g = ctx.createLinearGradient(0, 0, 0, -hgt);
     g.addColorStop(0, '#e8d4a8'); g.addColorStop(1, '#fffaf0');
     ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = '#8a6a3a'; ctx.lineWidth = lw; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-w * 0.6, -hgt * 0.2); ctx.lineTo(w * 0.7, -hgt * 0.28);
-    ctx.moveTo(-w * 0.3, -hgt * 0.48); ctx.lineTo(w * 0.5, -hgt * 0.55); ctx.strokeStyle = 'rgba(138,106,58,0.5)'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-w * 0.6 + tip * 0.2, -hgt * 0.2); ctx.lineTo(w * 0.6 + tip * 0.2, -hgt * 0.28);
+    ctx.moveTo(-w * 0.35 + tip * 0.5, -hgt * 0.48); ctx.lineTo(w * 0.35 + tip * 0.5, -hgt * 0.55); ctx.strokeStyle = 'rgba(138,106,58,0.5)'; ctx.stroke();
   } else if (t === 'spike') {
     const w = r * 0.1, hgt = r * 0.26;
     ctx.beginPath(); ctx.moveTo(-w, r * 0.06); ctx.lineTo(0, -hgt); ctx.lineTo(w, r * 0.06); ctx.closePath();
