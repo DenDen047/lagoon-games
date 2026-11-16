@@ -12,7 +12,8 @@ const Battle = {
   fast: false,
   turbo: 1,        // テスト用。?debug で あげる
   mul() { return (this.fast ? 2.2 : 1) * this.turbo; },
-  units: [], fx: [], floats: [], shots: [],
+  units: [], fx: [], floats: [], shots: [], anims: [],
+  quakeT: 0, flashA: 0,
   phase: 'idle',
   log: '',
   turn: 0,
@@ -24,7 +25,7 @@ const Battle = {
     this.def = def;
     this.on = true;
     this.turn = 0;
-    this.fx = []; this.floats = []; this.shots = [];
+    this.fx = []; this.floats = []; this.shots = []; this.anims = []; this.quakeT = 0; this.flashA = 0;
     this.units = [];
     partySlimes().forEach((s, i) => this.units.push(this.makeUnit(s, 'ally', i)));
     def.enemies.forEach((s, i) => this.units.push(this.makeUnit(s, 'foe', i, def.bossIndex === i, def.dummy, def.hpMul)));
@@ -48,7 +49,7 @@ const Battle = {
       color: baseColor(s), colors: s.colors.length ? s.colors.slice() : ['plain'],
       sp: tr.includes('hoard') ? 3 : 1,
       slow: 0, flinch: false, guard: false, sturdyUsed: false, grit: false, spdUp: 0,
-      x: 0, y: 0, r: 40, ox: 0, oy: 0, flash: 0, shake: 0, mood: null, fade: 1, hop: Math.random() * 6,
+      x: 0, y: 0, r: 40, ox: 0, oy: 0, sq: 0, rot: 0, flash: 0, shake: 0, mood: null, fade: 1, hop: Math.random() * 6,
       name: s.nick ? `${s.nick}` : spName(s),
     };
   },
@@ -169,7 +170,7 @@ const Battle = {
       for (const a of this.live(u.side)) {
         const v = Math.round(a.max * m.heal);
         a.hp = Math.min(a.max, a.hp + v);
-        this.float(a, '+' + v, '#7aff9a'); this.burst(a.x, a.y, '#aaffcc', 10);
+        this.float(a, '+' + v, '#7aff9a'); this.burst(a.x, a.y, '#aaffcc', 10); this.notes(a);
       }
       await wait(700); return;
     }
@@ -177,23 +178,14 @@ const Battle = {
     let targets = m.all ? this.live(enemySide) : [c.target && c.target.alive ? c.target : pick(this.live(enemySide))];
     targets = targets.filter(Boolean);
     if (!targets.length) return;
-    const col = m.el === 'plain' ? '#ffffff' : COLORS[m.el].c;
-    if (m.contact) {
-      const t0 = targets[0];
-      await this.tween(u, (k) => { u.ox = (t0.x - u.x) * 0.7 * k; u.oy = (t0.y - u.y) * 0.7 * k - Math.sin(k * Math.PI) * 30; }, 220);
-      Sfx.hit(m.pow >= 70);
-    } else {
-      Sfx.swing(m.sig ? 'beam' : 'shoot');
-      u.oy = -12;
-      await Promise.all(targets.map((t) => this.shoot(u, t, col, m.sig || m.pow >= 80)));
-      u.oy = 0;
-    }
+    /* わざごとの うごき (motion.js) */
+    await this.motion(u, targets, m);
     for (const t of targets) {
       const hits = m.hits || 1;
       for (let h = 0; h < hits; h++) { if (t.alive) await this.hit(u, t, m, h); }
     }
-    if (m.contact) await this.tween(u, (k) => { u.ox *= 1 - k; u.oy *= 1 - k; }, 180);
-    u.ox = u.oy = 0;
+    if (u.ox || u.oy) await this.tween(u, (k) => { u.ox *= 1 - k; u.oy *= 1 - k; u.sq *= 1 - k; }, 180);
+    u.ox = u.oy = u.sq = u.rot = 0;
     if (m.selfSpd) { u.spdUp = Math.min(3, u.spdUp + 1); this.float(u, 'すばやさ↑', '#9ae0ff'); }
     if (m.healAll) for (const a of this.live(u.side)) { const v = Math.round(a.max * m.healAll); a.hp = Math.min(a.max, a.hp + v); this.float(a, '+' + v, '#7aff9a'); }
     await wait(380);
@@ -225,6 +217,8 @@ const Battle = {
     const col = m.el === 'plain' ? '#ffffff' : COLORS[m.el].c;
     this.burst(t.x, t.y, col, crit ? 22 : 12);
     Sfx.hit(crit || aff > 1);
+    if (m.id === 'claw') this.slash(t, h);
+    if (m.contact) this.knock(t, Math.sign(t.x - u.x) || 1);
     if (crit) this.float(t, 'きゅうしょ！', '#ffd23a', -26);
     if (h === 0 && aff > 1) { this.say('こうかは ばつぐんだ！'); this.float(t, 'ばつぐん！', '#ff7a3a', -44); }
     else if (h === 0 && aff < 1) { this.say('こうかは いまひとつ…'); this.float(t, 'いまひとつ', '#a0a0c0', -44); }
@@ -359,11 +353,20 @@ const Battle = {
       if (s.k >= 1 && !s.fin) { s.fin = true; s.done(); }
     }
     this.shots = this.shots.filter((s) => !s.fin);
+    for (const a of this.anims) {
+      a.t += dt;
+      if (a.t >= a.dur && !a.fin) { a.fin = true; a.done(); }
+    }
+    this.anims = this.anims.filter((a) => !a.fin);
+    this.quakeT = Math.max(0, this.quakeT - dt);
+    this.flashA = Math.max(0, this.flashA - dt * 1.5);
   },
 
   draw(ctx) {
     const W = G.W, H = G.H;
     this.layout();
+    ctx.save();
+    if (this.quakeT > 0) ctx.translate(rand(-1, 1) * 9 * Math.min(1, this.quakeT * 4), rand(-1, 1) * 6 * Math.min(1, this.quakeT * 4));
     drawArena(ctx, W, H, this.def.bg, G.time);
     const list = this.units.slice().sort((a, b) => a.y - b.y);
     for (const u of list) {
@@ -372,6 +375,7 @@ const Battle = {
       const sx = u.shake > 0 ? Math.sin(G.time * 70) * 6 : 0;
       ctx.save();
       ctx.translate(u.x + u.ox + sx, u.y + u.oy - hop);
+      if (u.rot) ctx.rotate(u.rot);
       if (u.side === 'foe') ctx.scale(-1, 1);
       const picked = this.pick === u && this.phase === 'command';
       if (picked) {
@@ -382,7 +386,7 @@ const Battle = {
         ctx.strokeStyle = `rgba(255,90,90,${0.5 + Math.sin(G.time * 8) * 0.4})`; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.ellipse(0, u.r * 0.8 + hop, u.r * 1.3, u.r * 0.35, 0, 0, TAU); ctx.stroke();
       }
-      drawSlime(ctx, u.s, { r: u.r, col: u.color, t: G.time + u.hop, sq: Math.sin(G.time * 6 + u.hop) * 0.03, look: 0.6, mood: u.alive ? u.mood : 'hurt', flash: u.flash, alpha: u.fade });
+      drawSlime(ctx, u.s, { r: u.r, col: u.color, t: G.time + u.hop, sq: Math.sin(G.time * 6 + u.hop) * 0.03 + u.sq, look: 0.6, mood: u.alive ? u.mood : 'hurt', flash: u.flash, alpha: u.fade });
       if (u.guard) {
         ctx.strokeStyle = 'rgba(140,220,255,0.8)'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(0, 0, u.r * 1.25, 0, TAU); ctx.stroke();
@@ -398,6 +402,7 @@ const Battle = {
       ctx.shadowBlur = 0;
       ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(x, y, s.big ? 7 : 4, 0, TAU); ctx.fill();
     }
+    for (const a of this.anims) { ctx.save(); a.draw(ctx, clamp(a.t / a.dur, 0, 1)); ctx.restore(); }
     for (const p of this.fx) {
       ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
       ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, TAU); ctx.fill();
@@ -411,6 +416,8 @@ const Battle = {
       ctx.fillStyle = f.col; ctx.fillText(f.text, f.x, f.y);
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
+    if (this.flashA > 0) { ctx.fillStyle = `rgba(255,255,230,${this.flashA})`; ctx.fillRect(0, 0, W, H); }
   },
 
   drawBar(ctx, u, picked) {
