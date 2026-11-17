@@ -194,6 +194,108 @@
   tile('lamp', (x, y, r) => (x < 2 || y < 2 || x > 13 || y > 13) ? [120, 80, 170] : nz([255, 238, 185], r, 0.95, 1.03));
   planks('darkPlanks', [104, 72, 46]);
 
+  // ---- マグマの ちてい ----
+  const TAU = Math.PI * 2;
+  tile('lava', (x, y, r) => {
+    const v = (Math.sin(x / 16 * TAU * 2 + Math.sin(y / 16 * TAU) * 1.6) + Math.sin(y / 16 * TAU * 3 + Math.cos(x / 16 * TAU) * 1.2)) * 0.25 + 0.5;
+    if (v < 0.18) return nz([120, 30, 12], r, 0.9, 1.1);
+    return [255, 120 + v * 120, 30 + v * 50];
+  });
+  const BAS = [62, 60, 68];
+  const basFn = (x, y, r) => (x % 5 === 0 ? mul(BAS, 0.66) : nz(BAS, r, 0.85, 1.12));
+  tile('basaltSide', basFn);
+  const bas = vor(41, 7);
+  tile('basaltTop', (x, y, r) => { const [e] = bas(x, y); return e < 0.9 ? mul(BAS, 0.6) : nz(BAS, r, 0.9, 1.15); });
+  const mrk = vor(43, 6);
+  tile('magmaRock', (x, y, r) => { const [e] = mrk(x, y); return e < 0.7 ? [255, 110 + r() * 60, 20] : e < 1.2 ? [150, 45, 20] : nz([58, 40, 40], r, 0.85, 1.15); });
+  tile('fireCrystal', (x, y) => {
+    const shard = (cx, w, top) => Math.abs(x + 0.5 - cx) < w * (y - top) / (16 - top) + 0.4 && y >= top;
+    if (shard(8, 2.6, 2) || shard(4, 1.6, 7) || shard(12, 1.8, 6)) return x < 8 ? [255, 190, 90] : [235, 80, 40];
+    return null;
+  });
+  ore('emberOre', basFn, [255, 80, 40], 51);
+  tile('ash', (x, y, r) => nz(r() < 0.1 ? [80, 76, 76] : [122, 116, 114], r, 0.9, 1.08));
+  tile('magmaBrick', (x, y, r) => (y % 4 === 3 || (x + ((y >> 2) % 2) * 4) % 8 === 7) ? [230, 100, 30] : nz([70, 30, 28], r, 0.85, 1.15));
+  // ---- うみの そこの みやこ ----
+  tile('seaWater', (x, y, r) => ((y + (x >> 2)) % 6 === 0 ? [90, 200, 220, 160] : nz([30, 120, 170, 150], r, 0.92, 1.06)));
+  tile('coralPink', (x, y) => {
+    const br = Math.abs(x - 7.5) < 1 && y > 6 || Math.abs(x - 4 - (y - 8) * 0.5) < 0.9 && y > 3 && y < 11 || Math.abs(x - 11 + (y - 8) * 0.5) < 0.9 && y > 2 && y < 11;
+    if (br) return [250, 120, 170];
+    if ((y === 3 || y === 2) && (x === 3 || x === 12) || y === 6 && x === 7) return [255, 200, 220];
+    return null;
+  });
+  tile('coralBlue', (x, y, r) => (((x * 5 + y * 3) % 7 === 0) ? [40, 50, 140] : nz([70, 110, 220], r, 0.85, 1.15)));
+  tile('kelp', (x, y) => {
+    const cx = 7.5 + Math.sin(y * 0.6) * 2;
+    if (Math.abs(x - cx) < 1.6) return Math.abs(x - cx) < 0.5 ? [60, 130, 50] : [40, 150, 70];
+    if (y % 5 === 2 && Math.abs(x - cx - 2.5) < 1.2) return [70, 170, 80];
+    return null;
+  });
+  tile('seaBrick', (x, y, r) => {
+    if (y % 8 === 7 || (x + ((y >> 3) % 2) * 8) % 16 === 15) return [30, 80, 90];
+    const wv = Math.sin((x + (y >> 3) * 4) * 0.8) > 0.6 && y % 8 === 3;
+    return wv ? [160, 230, 220] : nz([70, 150, 150], r, 0.88, 1.1);
+  });
+  const sandFn = (x, y, r) => nz([220, 207, 160], r, 0.92, 1.05);
+  tile('pearlOre', (x, y, r) => {
+    const sh = (cx, cy) => Math.hypot((x + 0.5 - cx) / 3.2, (y + 0.5 - cy) / 2.2) < 1;
+    if (Math.hypot(x - 5, y - 5) < 1.1 || Math.hypot(x - 11, y - 11) < 1.1) return [255, 250, 255];
+    if (sh(5, 6) || sh(11, 12)) return nz([150, 120, 160], r, 0.9, 1.1);
+    return sandFn(x, y, r);
+  });
+  tile('bubbleFlower', (x, y) => {
+    if ((x === 7 || x === 8) && y > 9) return [60, 160, 120];
+    if (Math.abs(Math.hypot(x - 7.5, y - 9) - 2.2) < 0.7) return [120, 240, 220];
+    for (const [cx, cy, rr] of [[6, 4, 1.6], [10, 2.5, 1.1], [9, 6, 0.9]]) { const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy); if (Math.abs(d - rr) < 0.55) return [220, 250, 255, 230]; }
+    return null;
+  });
+  tile('shellLamp', (x, y, r) => {
+    if (x < 2 || y < 2 || x > 13 || y > 13) return [70, 150, 150];
+    const a = Math.atan2(y - 7.5, x - 7.5), d = Math.hypot(x - 7.5, y - 7.5);
+    return Math.sin(a + d * 1.2) > 0.4 ? [255, 210, 190] : nz([255, 245, 225], r, 0.97, 1.02);
+  });
+  tile('treasureTop', (x, y, r) => (x < 1 || y < 1 || x > 14 || y > 14) ? [70, 45, 25] : (x === 7 || x === 8) ? [240, 200, 60] : nz([150, 95, 50], r, 0.88, 1.08));
+  tile('treasureSide', (x, y, r) => {
+    if (x < 1 || x > 14 || y > 14 || y === 5) return [70, 45, 25];
+    if (x > 5 && x < 10 && y > 3 && y < 9) return (x === 7 || x === 8) && y === 6 ? [40, 30, 10] : [245, 205, 60];
+    if (y < 1) return [240, 200, 60];
+    return nz([150, 95, 50], r, 0.88, 1.08);
+  });
+  // ---- ほしの せかい ----
+  const SR = [74, 66, 104];
+  const starRockFn = (x, y, r) => (r() < 0.035 ? [235, 235, 255] : nz(r() < 0.12 ? mul(SR, 0.8) : SR, r, 0.88, 1.1));
+  tile('starRock', starRockFn);
+  const MD = [196, 192, 214];
+  tile('moonDustTop', (x, y, r) => { const c = Math.hypot(x - 10.5, y - 5.5) < 2.4 || Math.hypot(x - 4, y - 11.5) < 1.6; return nz(c ? mul(MD, 0.8) : MD, r, 0.92, 1.06); });
+  grassSide('moonDustSide', MD, starRockFn);
+  tile('starOre', (x, y, r) => {
+    const st = (cx, cy) => { const dx = Math.abs(x + 0.5 - cx), dy = Math.abs(y + 0.5 - cy); return dx + dy < 1.6 || (dx < 0.6 && dy < 2.6) || (dy < 0.6 && dx < 2.6); };
+    return st(5, 5) || st(11, 10) || st(4, 12) ? [255, 230, 90] : starRockFn(x, y, r);
+  });
+  ore('meteorOre', starRockFn, [200, 120, 110], 61);
+  tile('starCrystal', (x, y, r) => {
+    if (x === 0 || y === 0 || x === 15 || y === 15) return [170, 240, 255, 230];
+    if (Math.abs(x - y) < 1 || Math.abs(x + y - 15) < 1) return [255, 255, 255, 220];
+    return nz([120, 160, 255, 150], r, 0.9, 1.1);
+  });
+  tile('starBrick', (x, y, r) => {
+    if (y % 8 === 7 || (x + ((y >> 3) % 2) * 8) % 16 === 15) return [20, 22, 50];
+    if ((x === 4 && y === 3) || (x === 12 && y === 11) || (x === 9 && y === 4)) return [255, 225, 110];
+    return nz([44, 48, 100], r, 0.88, 1.12);
+  });
+  swirl('magmaPortal', [255, 60, 20], [255, 220, 80]);
+  swirl('seaPortal', [20, 90, 200], [120, 255, 230]);
+  swirl('starPortal', [40, 20, 110], [255, 240, 150]);
+  // MOD が オフの ときの「？」ブロック
+  const QM = ['..####..', '.##..##.', '.....##.', '....##..', '...##...', '...##...', '........', '...##...'];
+  tile('modMissing', (x, y) => {
+    if (x === 0 || y === 0 || x === 15 || y === 15) return [60, 30, 80];
+    const qx = (x - 4) >> 0, qy = (y - 4) >> 0;
+    if (qx >= 0 && qx < 8 && qy >= 0 && qy < 8 && QM[qy][qx] === '#') return [255, 240, 120];
+    return ((x >> 2) + (y >> 2)) % 2 ? [150, 70, 170] : [110, 50, 130];
+  });
+  const CORE_TILES = tileN;
+
   // ================= ブロック =================
   const B = {};
   const BLOCKS = [];
@@ -261,18 +363,59 @@
   blk(50, 'roof', { name: 'やねがわら', tex: 'roof', hard: 3, tool: 'pick', tier: 1, hardSound: 1 });
   blk(51, 'lamp', { name: 'まほうのランプ', tex: 'lamp', hard: 1, light: 15, hardSound: 1 });
   blk(52, 'darkPlanks', { name: 'こげちゃのいたざい', tex: 'darkPlanks', hard: 3, tool: 'axe' });
-  const NB = 53;
+  // 53〜127: あたらしい せかいの ブロック (128〜255 は MOD 用に あけておく)
+  // マグマの ちてい
+  blk(53, 'lava', { name: 'ようがん', tex: 'lava', solid: false, opaque: false, render: 'lava', unbreak: true, light: 15, att: 1, liquid: 2 });
+  blk(54, 'basalt', { name: 'げんぶがん', tex: { top: 'basaltTop', side: 'basaltSide' }, hard: 2.5, tool: 'pick', tier: 1, hardSound: 1 });
+  blk(55, 'magmaRock', { name: 'マグマいわ', tex: 'magmaRock', hard: 3, tool: 'pick', tier: 1, light: 7, hardSound: 1 });
+  blk(56, 'fireCrystal', { name: 'ほのおのけっしょう', tex: 'fireCrystal', solid: false, opaque: false, render: 'cross', hard: 0.6, light: 13, drop: 'fireShard', hardSound: 1 });
+  blk(57, 'emberOre', { name: 'ひいろのこうせき', tex: { top: 'emberOre', side: 'emberOre' }, hard: 4.5, tool: 'pick', tier: 2, drop: 'emberGem', light: 5, hardSound: 1 });
+  blk(58, 'ash', { name: 'はい', tex: 'ash', hard: 0.6, tool: 'shovel' });
+  blk(59, 'magmaBrick', { name: 'ようがんレンガ', tex: 'magmaBrick', hard: 5, tool: 'pick', tier: 1, hardSound: 1 });
+  // うみの そこの みやこ
+  blk(60, 'seaWater', { name: 'うみのみず', tex: 'seaWater', solid: false, opaque: false, render: 'liquid', unbreak: true, att: 0, liquid: 1 });
+  blk(61, 'coralPink', { name: 'ピンクのサンゴ', tex: 'coralPink', solid: false, opaque: false, render: 'cross', hard: 0 });
+  blk(62, 'coralBlue', { name: 'あおいサンゴ', tex: 'coralBlue', hard: 1.2, tool: 'pick' });
+  blk(63, 'kelp', { name: 'こんぶ', tex: 'kelp', solid: false, opaque: false, render: 'cross', hard: 0, drop: null });
+  blk(64, 'seaBrick', { name: 'うみのいしレンガ', tex: 'seaBrick', hard: 5, tool: 'pick', tier: 1, hardSound: 1 });
+  blk(65, 'pearlOre', { name: 'しんじゅがい', tex: 'pearlOre', hard: 1.5, tool: 'shovel', drop: 'pearl' });
+  blk(66, 'bubbleFlower', { name: 'あわのはな', tex: 'bubbleFlower', solid: false, opaque: false, render: 'cross', hard: 0, light: 6 });
+  blk(67, 'shellLamp', { name: 'かいがらランプ', tex: 'shellLamp', hard: 1, light: 15, hardSound: 1 });
+  blk(68, 'treasure', { name: 'たからばこ', tex: { top: 'treasureTop', bottom: 'treasureTop', side: 'treasureSide' }, hard: 1.5, tool: 'axe', drop: null });
+  // ほしの せかい
+  blk(69, 'starRock', { name: 'ほしのいわ', tex: 'starRock', hard: 2.5, tool: 'pick', tier: 1, hardSound: 1 });
+  blk(70, 'moonDust', { name: 'つきのすな', tex: { top: 'moonDustTop', bottom: 'starRock', side: 'moonDustSide' }, hard: 0.8, tool: 'shovel' });
+  blk(71, 'starOre', { name: 'ほしのかけらのこうせき', tex: 'starOre', hard: 4.5, tool: 'pick', tier: 2, drop: 'starShard', light: 6, hardSound: 1 });
+  blk(72, 'meteorOre', { name: 'いんせきのこうせき', tex: 'meteorOre', hard: 5, tool: 'pick', tier: 3, drop: 'meteorIron', hardSound: 1 });
+  blk(73, 'starCrystal', { name: 'ほしのクリスタル', tex: 'starCrystal', opaque: false, render: 'glassy', hard: 1, light: 14, hardSound: 1 });
+  blk(74, 'starBrick', { name: 'ぎんがレンガ', tex: 'starBrick', hard: 5, tool: 'pick', tier: 1, hardSound: 1 });
+  // ゲート
+  blk(75, 'magmaPortal', { name: 'マグマのゲート', tex: 'magmaPortal', solid: false, opaque: false, render: 'portal', unbreak: true, light: 13, portal: 'magma' });
+  blk(76, 'seaPortal', { name: 'うみのゲート', tex: 'seaPortal', solid: false, opaque: false, render: 'portal', unbreak: true, light: 13, portal: 'sea' });
+  blk(77, 'starPortal', { name: 'ほしのゲート', tex: 'starPortal', solid: false, opaque: false, render: 'portal', unbreak: true, light: 13, portal: 'star' });
+  const NB = 78;
 
-  // 高速参照用の表
-  const SOLID = new Uint8Array(256), OPAQUE = new Uint8Array(256), ATT = new Uint8Array(256), EMIT = new Uint8Array(256), RENDER = [];
-  for (let i = 0; i < NB; i++) {
+  // 高速参照用の表 (LIQ: 1=みず 2=ようがん)
+  const SOLID = new Uint8Array(256), OPAQUE = new Uint8Array(256), ATT = new Uint8Array(256), EMIT = new Uint8Array(256), LIQ = new Uint8Array(256), RENDER = [];
+  BLOCKS[7].liquid = 1;
+  function setTables(i) {
     const b = BLOCKS[i];
     SOLID[i] = b.solid ? 1 : 0;
     OPAQUE[i] = b.opaque ? 1 : 0;
     ATT[i] = b.opaque ? 15 : (b.att || 0);
     EMIT[i] = b.light || 0;
+    LIQ[i] = b.liquid || 0;
     RENDER[i] = b.render;
   }
+  for (let i = 0; i < NB; i++) setTables(i);
+  // 128〜255 は MOD の ブロック。MOD が オフの ときは こわせない「？」ブロックに して、セーブの データは のこす
+  const MOD_B0 = 128;
+  function phBlock(id) {
+    const t = TILE.modMissing;
+    BLOCKS[id] = { id, key: 'mod' + id, name: 'オフの MOD の ブロック', tx: { top: t, bottom: t, side: t }, solid: true, opaque: true, render: 'cube', hard: 1, unbreak: true, ph: true };
+    setTables(id);
+  }
+  for (let i = MOD_B0; i < 256; i++) phBlock(i);
 
   // ================= アイテム =================
   const I = {};       // key -> id (ブロックも含む)
@@ -339,6 +482,18 @@
   ];
   for (const f of FOSSILS) f.item = item('fos_' + f.key, { name: f.name, fossil: f.key, price: f.price });
   item('scale', { name: 'てんくうりゅうのウロコ', sell: 200 });
+  // あたらしい せかいの アイテム (セーブの ばんごうが ずれないよう かならず うしろに たす)
+  item('fireShard', { name: 'ほのおのかけら', sell: 6 });
+  item('emberGem', { name: 'ひいろのいし', sell: 20 });
+  item('pearl', { name: 'しんじゅ', sell: 15 });
+  item('starShard', { name: 'ほしのかけら', sell: 18 });
+  item('meteorIron', { name: 'いんせきてつ', sell: 30 });
+  item('fireCharm', { name: 'ほのおのおまもり', stack: 1, sell: 40 });
+  item('bubbleHelm', { name: 'あわあわヘルメット', stack: 1, sell: 40 });
+  item('magmaHeart', { name: 'マグマのしんぞう', sell: 500 });
+  item('oceanOrb', { name: 'うみのたま', sell: 500 });
+  item('starCore', { name: 'ほしのコア', sell: 500 });
+  item('starSword', { name: 'ほしのつるぎ', stack: 1, tool: null, tier: 4, dmg: 10, mat: [200, 180, 255], kind: 'sword' });
   const NITEMS = nextItem;
 
   // ================= ドロップ =================
@@ -398,6 +553,13 @@
   rec('wand_blast', 1, [['stick', 1], ['crystal', 2], ['ironIngot', 3]], 'table');
   rec('wand_thunder', 1, [['stick', 1], ['crystal', 3], ['goldIngot', 2]], 'table');
   rec('wand_warp', 1, [['stick', 1], ['crystal', 3], ['diamond', 1]], 'table');
+  rec('torch', 4, [['stick', 1], ['fireShard', 1]]);
+  rec('magmaBrick', 4, [['basalt', 4], ['fireShard', 1]], 'table');
+  rec('fireCharm', 1, [['emberGem', 3], ['goldIngot', 1]], 'table');
+  rec('bubbleHelm', 1, [['glass', 5], ['pearl', 2]], 'table');
+  rec('shellLamp', 2, [['pearl', 1], ['glass', 1]], 'table');
+  rec('starBrick', 4, [['starRock', 4], ['starShard', 1]], 'table');
+  rec('starSword', 1, [['meteorIron', 2], ['starShard', 2], ['stick', 1]], 'table');
 
   // ================= アイコン (32px × 16×16 枚) =================
   const ICONS = document.createElement('canvas');
@@ -530,30 +692,63 @@
       } else if (k === 'scale') {
         P.each((x, y) => { const d = Math.hypot((x - 7.5) / 5, (y - 9) / 6); return d < 1 && y > 2 + Math.abs(x - 7.5) * 0.4 ? (x < 7 ? [150, 90, 220] : [90, 50, 160]) : null; });
         P.px(6, 6, [230, 210, 255]);
-      } else { P.disc(8, 8, 5, [200, 0, 200]); }
+      } else if (k === 'fireShard') { P.each((x, y) => (Math.abs(x - 7.5) < (y - 1) * 0.35 && y > 1 && y < 15 - Math.abs(x - 7.5)) ? (x < 8 ? [255, 190, 80] : [230, 70, 30]) : null); P.px(7, 5, [255, 240, 200]); }
+      else if (k === 'emberGem') gem([255, 90, 40]);
+      else if (k === 'pearl') { P.disc(8, 8.5, 5, [235, 230, 245]); P.disc(9, 9.5, 3, [205, 200, 225]); P.disc(6.5, 6.5, 1.6, [255, 255, 255]); }
+      else if (k === 'starShard' || k === 'starCore') {
+        const c = k === 'starCore' ? [255, 250, 210] : [255, 220, 70];
+        P.each((x, y) => { const dx = Math.abs(x + 0.5 - 8), dy = Math.abs(y + 0.5 - 8); return dx + dy < 4 || (dx < 1.3 && dy < 7) || (dy < 1.3 && dx < 7) ? (x + y < 16 ? c : mul(c, 0.8)) : null; });
+        if (k === 'starCore') { P.disc(8, 8, 2.2, [120, 200, 255]); P.px(7, 7, [255, 255, 255]); }
+      } else if (k === 'meteorIron') ingot([170, 120, 120]);
+      else if (k === 'fireCharm') { P.line(4, 1, 8, 6, [230, 200, 120]); P.line(12, 1, 8, 6, [230, 200, 120]); P.disc(8, 10, 4.2, [240, 200, 70]); P.disc(8, 10, 2.8, [235, 60, 30]); P.px(7, 9, [255, 200, 160]); }
+      else if (k === 'bubbleHelm') { P.each((x, y) => { const d = Math.hypot(x + 0.5 - 8, y + 0.5 - 8.5); return y < 13 && d < 6.5 ? (d > 5.4 ? [150, 230, 255] : [200, 240, 255, 130]) : (y >= 12 && y < 15 && Math.abs(x - 7.5) < 6 ? [200, 200, 210] : null); }); P.px(5, 5, [255, 255, 255]); P.px(6, 4, [255, 255, 255]); }
+      else if (k === 'magmaHeart') { P.disc(5.5, 6, 3.2, [235, 80, 30]); P.disc(10.5, 6, 3.2, [235, 80, 30]); P.each((x, y) => (y >= 6 && y < 14 && Math.abs(x - 7.5) < 14 - y) ? [235, 80, 30] : null); P.disc(6, 6, 1.4, [255, 220, 90]); P.line(9, 8, 11, 11, [255, 200, 60]); }
+      else if (k === 'oceanOrb') { P.disc(8, 8, 6, [30, 110, 210]); P.disc(8, 8, 4, [70, 190, 240]); P.disc(6, 6, 1.6, [230, 255, 255]); P.line(4, 10, 11, 10, [140, 240, 230]); }
+      else { P.disc(8, 8, 5, [200, 0, 200]); }
     }
     return P.c;
   }
   // 各アイテムのアイコン番号を決めて描く
   let iconN = 0;
-  for (let id = 0; id < NITEMS; id++) {
-    const def = ITEMS[id];
-    if (!def || id === 0) continue;
-    def.icon = iconN++;
+  function paintIcon(def) {
     const ox = (def.icon % 16) * 36 + 2, oy = (def.icon >> 4) * 36 + 2;
+    ig.clearRect(ox - 2, oy - 2, 36, 36);
     ig.save(); ig.translate(ox, oy);
     if (def.block !== undefined) {
       const b = BLOCKS[def.block];
-      if (b.render === 'cross' || b.render === 'torch') {
-        const [sx, sy] = tileXY(b.tx.side);
+      if (b.render === 'cross' || b.render === 'torch' || b.flatIcon) {
+        const [sx, sy] = tileXY(b.flatIcon !== undefined && b.flatIcon !== true ? b.flatIcon : b.tx.side);
         ig.drawImage(ATL_IMG, sx, sy, 16, 16, 0, 0, 32, 32);
       } else isoCube(ig, b);
+    } else if (def.iconFn) {
+      // MOD の アイテム: 16×16 の ドットを かく関数
+      const P = pix();
+      P.each((x, y) => { const c = def.iconFn(x, y); return c ? (c.length > 3 ? `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${c[3] / 255})` : c) : null; });
+      ig.drawImage(P.c, 0, 0, 16, 16, 0, 0, 32, 32);
     } else {
       ig.drawImage(drawItem(def), 0, 0, 16, 16, 0, 0, 32, 32);
     }
     ig.restore();
   }
-  const ICON_URL = ICONS.toDataURL();
+  for (let id = 0; id < NITEMS; id++) {
+    const def = ITEMS[id];
+    if (!def || id === 0) continue;
+    def.icon = iconN++;
+    paintIcon(def);
+  }
+  // MOD が オフの ときの「？」アイコン
+  const PH_ICON = iconN++;
+  {
+    const ox = (PH_ICON % 16) * 36 + 2, oy = (PH_ICON >> 4) * 36 + 2;
+    ig.save(); ig.translate(ox, oy);
+    const [sx, sy] = tileXY(TILE.modMissing);
+    ig.drawImage(ATL_IMG, sx, sy, 16, 16, 0, 0, 32, 32);
+    ig.restore();
+  }
+  const CORE_ICONS = iconN;
+  function phItem(id) { ITEMS[id] = { id, key: 'mod' + id, name: 'オフの MOD の もの', stack: 64, icon: PH_ICON, ph: true }; }
+  for (let i = MOD_B0; i < 256; i++) phItem(i);
+  let ICON_URL = ICONS.toDataURL();
   // HTML 要素にアイコンを貼る
   function iconCss(el, id, size) {
     const d = ITEMS[id];
@@ -564,9 +759,39 @@
     el.style.backgroundPosition = `${-((d.icon % 16) * 36 + 2) * k}px ${-((d.icon >> 4) * 36 + 2) * k}px`;
   }
 
+  // MOD の しくみ (mods.js) が つかう 道具。タイルと アイコンは あいている ところに あとから かく
+  const CORE_RECIPES = R.length;
+  const Reg = {
+    CORE_TILES, CORE_ICONS, CORE_RECIPES, PH_ICON, MOD_B0,
+    setTables, phBlock, phItem,
+    free: () => ({ tiles: 256 - tileN, icons: 255 - iconN }),
+    addTile(fn) {
+      if (tileN >= 256) return -1;
+      const t = tileN++, r = CS.rng(t * 7919 + 13), img = new ImageData(16, 16);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        const c = fn(x, y, r);
+        if (!c) continue;
+        const i = (y * 16 + x) * 4;
+        img.data[i] = CS.clamp(c[0], 0, 255); img.data[i + 1] = CS.clamp(c[1], 0, 255); img.data[i + 2] = CS.clamp(c[2], 0, 255); img.data[i + 3] = c.length > 3 ? c[3] : 255;
+      }
+      const [ox, oy] = tileXY(t);
+      ATL_IMG.getContext('2d').putImageData(img, ox, oy);
+      ATLAS.getContext('2d').putImageData(img, ox, oy);
+      return t;
+    },
+    addIcon(def) {
+      if (iconN >= 255) return -1;
+      def.icon = iconN++;
+      paintIcon(def);
+      return def.icon;
+    },
+    reset() { tileN = CORE_TILES; iconN = CORE_ICONS; },
+    refreshIcons() { ICON_URL = ICONS.toDataURL(); CS.ICON_URL = ICON_URL; },
+  };
+
   Object.assign(CS, {
-    ATLAS, TILE, ICONS, ICON_URL, iconCss,
-    B, BLOCKS, NB, SOLID, OPAQUE, ATT, EMIT, RENDER,
+    Reg, ATLAS, TILE, ICONS, ICON_URL, iconCss,
+    B, BLOCKS, NB, SOLID, OPAQUE, ATT, EMIT, LIQ, RENDER,
     I, ITEMS, NITEMS, WANDS, SPECIES, FOSSILS, RECIPES: R, rollDrop,
   });
 })();

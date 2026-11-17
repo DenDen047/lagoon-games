@@ -52,7 +52,7 @@
   };
 
   // ================= 画面の切りかえ =================
-  const SCREENS = ['title', 'worlds', 'skin', 'help', 'pause', 'panel', 'dead', 'loading', 'noGL'];
+  const SCREENS = ['title', 'worlds', 'skin', 'help', 'pause', 'panel', 'dead', 'loading', 'noGL', 'mods'];
   function show(id) { for (const s of SCREENS) $(s).classList.toggle('hidden', s !== id); }
   function hideAll() { for (const s of SCREENS) $(s).classList.add('hidden'); }
 
@@ -245,17 +245,20 @@
   }
 
   // ---------- クリエイティブ ----------
+  // MOD の もの (d.mod) は「MOD」の タブに まとめる。オフの MOD の もの (d.ph) と かくした もの (d.hidden) は ださない
+  const core = (d) => d && !d.mod && !d.ph;
   const CR_TABS = {
-    blocks: { name: 'ブロック', ids: () => ITEMS.filter((d) => d && d.block !== undefined && d.id !== 0 && d.key !== 'pedestal').map((d) => d.id) },
-    tools: { name: 'どうぐ・まほう', ids: () => ITEMS.filter((d) => d && (d.tool !== undefined || d.kind || d.wand || ['bow', 'arrow', 'net'].includes(d.key))).map((d) => d.id) },
-    other: { name: 'そのほか', ids: () => ITEMS.filter((d) => d && d.id >= 256 && !(d.tool !== undefined || d.kind || d.wand || ['bow', 'arrow', 'net'].includes(d.key))).map((d) => d.id) },
+    blocks: { name: 'ブロック', ids: () => ITEMS.filter((d) => core(d) && d.block !== undefined && d.id !== 0 && d.key !== 'pedestal').map((d) => d.id) },
+    tools: { name: 'どうぐ・まほう', ids: () => ITEMS.filter((d) => core(d) && (d.tool !== undefined || d.kind || d.wand || ['bow', 'arrow', 'net'].includes(d.key))).map((d) => d.id) },
+    other: { name: 'そのほか', ids: () => ITEMS.filter((d) => core(d) && d.id >= 256 && !(d.tool !== undefined || d.kind || d.wand || ['bow', 'arrow', 'net'].includes(d.key))).map((d) => d.id) },
+    mod: { name: 'MOD', ids: () => ITEMS.filter((d) => d && d.mod && !d.hidden && !d.ph).map((d) => d.id), onlyIf: () => ITEMS.some((d) => d && d.mod && !d.ph) },
   };
   function openCreative(G) {
     const p = G.player;
     let tab = 'blocks';
     openPanel(`
 <div class="cHead"><b>クリエイティブ</b><span class="sp"></span><button class="btn" data-x="close">とじる (E)</button></div>
-<div class="tabs" id="crTabs">${Object.entries(CR_TABS).map(([k, v]) => `<button class="tab ${k === tab ? 'on' : ''}" data-t="${k}">${v.name}</button>`).join('')}</div>
+<div class="tabs" id="crTabs">${Object.entries(CR_TABS).filter(([, v]) => !v.onlyIf || v.onlyIf()).map(([k, v]) => `<button class="tab ${k === tab ? 'on' : ''}" data-t="${k}">${v.name}</button>`).join('')}</div>
 <div class="pTitle">クリックすると えらんでいる わくに はいるよ</div>
 <div class="crGrid" id="crGrid"></div>
 <div class="invGrid hot" id="crHot"></div>
@@ -302,7 +305,7 @@
   const SHOPS = {
     shop: {
       name: 'どうぐや', hello: 'いらっしゃい！ ぼうけんの どうぐは ここで そろうよ。こうせきや にくも かいとるよ。',
-      buy: [['bread', 1, 5], ['apple', 2, 4], ['cookedMeat', 2, 12], ['torch', 8, 10], ['stone_pick', 1, 15], ['stone_sword', 1, 15], ['iron_pick', 1, 60], ['iron_sword', 1, 60], ['iron_axe', 1, 50], ['iron_shovel', 1, 30], ['bow', 1, 40], ['arrow', 16, 15], ['net', 1, 30], ['log', 16, 12], ['cobble', 32, 10], ['glass', 8, 12], ['table', 1, 5], ['furnace', 1, 10]],
+      buy: [['bread', 1, 5], ['apple', 2, 4], ['cookedMeat', 2, 12], ['torch', 8, 10], ['stone_pick', 1, 15], ['stone_sword', 1, 15], ['iron_pick', 1, 60], ['iron_sword', 1, 60], ['iron_axe', 1, 50], ['iron_shovel', 1, 30], ['bow', 1, 40], ['arrow', 16, 15], ['net', 1, 30], ['log', 16, 12], ['cobble', 32, 10], ['glass', 8, 12], ['table', 1, 5], ['furnace', 1, 10], ['fireCharm', 1, 150], ['bubbleHelm', 1, 200]],
       sells: true,
     },
     mage: {
@@ -402,7 +405,7 @@
   }
 
   // ================= ワールド一覧 =================
-  function renderWorlds(list, onPlay, onDelete) {
+  function renderWorlds(list, onPlay, onDelete, onMods) {
     const box = $('wList');
     if (!list.length) { box.innerHTML = '<div class="empty">まだ ワールドが ないよ。したで つくろう！</div>'; return; }
     box.innerHTML = '';
@@ -410,14 +413,16 @@
       const d = document.createElement('div');
       d.className = 'wItem';
       const date = new Date(m.played || m.created);
-      d.innerHTML = `<div class="wInfo"><b></b><small><span class="tag ${m.mode === 'creative' ? 'cr' : ''}">${m.mode === 'creative' ? 'クリエイティブ' : 'サバイバル'}</span>${date.getMonth() + 1}/${date.getDate()} にあそんだ</small></div><button class="btn small bad" data-del>けす</button><button class="btn ok" data-play>あそぶ</button>`;
+      d.innerHTML = `<div class="wInfo"><b></b><small><span class="tag ${m.mode === 'creative' ? 'cr' : ''}">${m.mode === 'creative' ? 'クリエイティブ' : 'サバイバル'}</span>${date.getMonth() + 1}/${date.getDate()} にあそんだ</small></div>${onMods ? '<button class="btn small" data-mods>MOD</button>' : ''}<button class="btn small bad" data-del>けす</button><button class="btn ok" data-play>あそぶ</button>`;
       d.querySelector('b').textContent = m.name;
+      if (m.mods && m.mods.length) { const t = document.createElement('span'); t.className = 'tag md'; t.textContent = 'MOD ' + m.mods.length; d.querySelector('small').prepend(t); }
+      if (onMods) d.querySelector('[data-mods]').onclick = () => onMods(m);
       d.querySelector('[data-play]').onclick = () => onPlay(m);
       d.querySelector('[data-del]').onclick = () => { if (confirm(`「${m.name}」を けしても いい？ もとに もどせないよ。`)) onDelete(m); };
       box.appendChild(d);
     }
   }
 
-  CS.UI = { $, show, hideAll, toast, banner, buildHud, updateHud, swingHand, openInventory, talk, openShop, openMuseum, closePanel, isPanelOpen, renderWorlds, paintCursor, resetHud() { lastHud = ''; } };
+  CS.UI = { SHOPS, $, show, hideAll, toast, banner, buildHud, updateHud, swingHand, openInventory, talk, openShop, openMuseum, closePanel, isPanelOpen, renderWorlds, paintCursor, resetHud() { lastHud = ''; } };
   CS.Inv = Inv;
 })();

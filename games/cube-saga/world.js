@@ -7,7 +7,10 @@
   const DIMS = {
     over: { name: 'ふつうの せかい', W: 256, D: 256, H: 72 },
     ancient: { name: 'こだいの せかい', W: 192, D: 192, H: 72 },
-    sky: { name: 'てんくうの せかい', W: 160, D: 160, H: 80 },
+    sky: { name: 'てんくうの せかい', W: 160, D: 160, H: 80, void: true },
+    magma: { name: 'マグマの ちてい', W: 160, D: 160, H: 64 },
+    sea: { name: 'うみの そこの みやこ', W: 176, D: 176, H: 64 },
+    star: { name: 'ほしの せかい', W: 160, D: 160, H: 80, void: true },
   };
 
   class World {
@@ -25,6 +28,8 @@
       this.info = { npcs: [] };
       this.batch = null;
       this.recording = false;
+      this.st = new Map();     // MOD の ブロックの じょうたい (むき・でんき など)。idx → object
+      this.modIdx = new Map(); // MOD の ブロックが ある ばしょ。idx → id
     }
     idx(x, y, z) { return (y * this.D + z) * this.W + x; }
     inside(x, y, z) { return x >= 0 && z >= 0 && y >= 0 && x < this.W && z < this.D && y < this.H; }
@@ -37,13 +42,14 @@
     raw(x, y, z, id) { if (this.inside(x, y, z)) this.b[this.idx(x, y, z)] = id; }
     rawIf(x, y, z, id, onlyAir) { if (this.inside(x, y, z) && (!onlyAir || this.b[this.idx(x, y, z)] === 0)) this.b[this.idx(x, y, z)] = id; }
     topY(x, z) {
-      for (let y = this.H - 1; y >= 0; y--) { const id = this.get(x, y, z); if (CS.SOLID[id] || id === B.water) return y; }
+      for (let y = this.H - 1; y >= 0; y--) { const id = this.get(x, y, z); if (CS.SOLID[id] || CS.LIQ[id]) return y; }
       return -1;
     }
     set(x, y, z, id) {
       if (!this.inside(x, y, z)) return false;
       const i = this.idx(x, y, z);
-      if (this.b[i] === id) return false;
+      const old = this.b[i];
+      if (old === id) return false;
       this.b[i] = id;
       if (this.recording) this.diffs.set(i, id);
       if (this.batch) {
@@ -51,6 +57,7 @@
         bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], z); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], z);
       } else this.relight(x, z, x, z);
       this.markDirty(x - 1, z - 1, x + 1, z + 1);
+      if (this.recording && CS.onBlockSet) CS.onBlockSet(this, x, y, z, old, id);
       return true;
     }
     beginBatch() { this.batch = [1e9, 1e9, -1e9, -1e9]; }
@@ -436,6 +443,16 @@
     w.raw(kx - 8, G + 5, kz + 9, B.goldBlock); w.raw(kx - 5, G + 5, kz + 9, B.goldBlock);
     info.ancientGate = { x: kx + 7, y: G + 1, z: kz + 11.5 };
     info.skyGate = { x: kx - 6, y: G + 1, z: kz + 11.5 };
+    // あたらしい せかいへの ゲート (おしろの まえと ひがしがわ)
+    gate(w, kx + 3, G + 1, kz - 8, B.magmaBrick, B.magmaPortal, true);
+    gate(w, kx - 6, G + 1, kz - 8, B.seaBrick, B.seaPortal, true);
+    gate(w, kx + 10, G + 1, kz - 7, B.starBrick, B.starPortal, false);
+    w.raw(kx + 3, G + 6, kz - 8, B.fireCrystal); w.raw(kx + 6, G + 6, kz - 8, B.fireCrystal);
+    w.raw(kx - 6, G + 6, kz - 8, B.shellLamp); w.raw(kx - 3, G + 6, kz - 8, B.shellLamp);
+    w.raw(kx + 10, G + 6, kz - 7, B.starCrystal); w.raw(kx + 10, G + 6, kz - 4, B.starCrystal);
+    info.magmaGate = { x: kx + 5, y: G + 1, z: kz - 5.5, yaw: Math.PI };
+    info.seaGate = { x: kx - 4, y: G + 1, z: kz - 5.5, yaw: Math.PI };
+    info.starGate = { x: kx + 8.5, y: G + 1, z: kz - 5, yaw: -Math.PI / 2 };
     info.spawn = { x: kx + 0.5, y: G + 1, z: kz + 6.5 };
     for (const [vx, vz] of [[-6, -6], [6, -5], [-5, 5], [8, 2]]) info.npcs.push({ type: 'villager', x: kx + vx + 0.5, y: G + 1, z: kz + vz + 0.5, yaw: 0 });
   }
@@ -564,9 +581,242 @@
     w.info.center = { x: C + 0.5, y: 41, z: C + 0.5 };
   }
 
+  // ================= マグマの ちてい =================
+  // ようがんの みずうみと かわ、げんぶがんの はしら、ところどころ あいた てんじょう
+  function genMagma(w) {
+    const s = w.seed * 17 + 3, r = CS.rng(s);
+    const W = w.W, D = w.D, H = w.H, C = W >> 1, LAVA = 12, AR = 13;
+    const S = { x: C + 44, z: C };
+    const hm = heightMapLoop(w, (x, z) => {
+      const n = CS.fbm2(x / 40, z / 40, s), m = CS.fbm2(x / 22 + 9, z / 22, s + 4);
+      let h = 11 + n * 16 + Math.max(0, m - 0.6) * 30;
+      // ようがんの かわ
+      const rv = Math.abs(CS.fbm2(x / 70 + 3, z / 70, s + 8) - 0.5);
+      if (rv < 0.035) h = Math.min(h, LAVA - 2);
+      const dc = Math.hypot(x - C, z - C);
+      // まんなかの たたかいの しま と まわりの ようがんの ほり
+      if (dc < AR + 7) h = dc < AR ? 20 : CS.lerp(LAVA - 3, 20, CS.smooth((AR + 1 - dc) / 1.5));
+      if (dc >= AR + 7 && dc < AR + 13) h = CS.lerp(LAVA - 3, h, CS.smooth((dc - AR - 7) / 6));
+      const ds = Math.hypot(x - S.x, z - S.z);
+      if (ds < 12) h = CS.lerp(20, h, CS.smooth((ds - 7) / 5));
+      return Math.floor(CS.clamp(h, 3, 40));
+    });
+    for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
+      const h = hm[z * W + x];
+      const ashy = CS.fbm2(x / 30, z / 30, s + 2) > 0.58;
+      w.raw(x, 0, z, B.bedrock);
+      for (let y = 1; y <= h; y++) {
+        let id = B.basalt;
+        if (y === h) id = h <= LAVA + 1 ? B.magmaRock : ashy ? B.ash : B.basalt;
+        else if (CS.hash(x, y, z, s) < 0.05) id = B.magmaRock;
+        w.raw(x, y, z, id);
+      }
+      for (let y = h + 1; y <= LAVA; y++) w.raw(x, y, z, B.lava);
+      // てんじょう (あなが あいていて 空が すこし みえる)
+      const cn = CS.fbm2(x / 26 + 40, z / 26, s + 6);
+      if (cn > 0.52 && Math.hypot(x - C, z - C) > AR + 4 && Math.hypot(x - S.x, z - S.z) > 16 && Math.abs(z - C) > 4) {
+        const bot = H - 2 - Math.floor((cn - 0.52) * 40 + CS.noise2(x / 5, z / 5, s) * 3);
+        for (let y = Math.max(bot, h + 6); y < H; y++) w.raw(x, y, z, B.basalt);
+      }
+    }
+    // げんぶがんの はしら
+    for (let i = 0; i < 26; i++) {
+      const px = 6 + r() * (W - 12), pz = 6 + r() * (D - 12), rad = 1.2 + r() * 2;
+      if (Math.hypot(px - C, pz - C) < AR + 10 || Math.hypot(px - S.x, pz - S.z) < 12) continue;
+      for (let z = Math.floor(pz - rad); z <= pz + rad; z++) for (let x = Math.floor(px - rad); x <= px + rad; x++) {
+        if (Math.hypot(x - px, z - pz) > rad) continue;
+        for (let y = 1; y < H; y++) if (!CS.SOLID[w.get(x, y, z)]) w.raw(x, y, z, B.basalt);
+      }
+    }
+    veins(w, r, B.emberOre, 420, 30, B.basalt, 3);
+    veins(w, r, B.goldOre, 90, 20, B.basalt, 2);
+    veins(w, r, B.diamondOre, 40, 12, B.basalt, 2);
+    veins(w, r, B.crystalOre, 60, 20, B.basalt, 2);
+    // ほのおの けっしょう と こがねの こうせきの でっぱり
+    for (let z = 2; z < D - 2; z++) for (let x = 2; x < W - 2; x++) {
+      const h = hm[z * W + x];
+      if (h <= LAVA || Math.hypot(x - C, z - C) < AR + 2 || Math.hypot(x - S.x, z - S.z) < 6) continue;
+      const v = CS.hash(x, z, 5, s);
+      if (v < 0.012) w.rawIf(x, h + 1, z, B.fireCrystal, true);
+      else if (v < 0.014) { w.raw(x, h + 1, z, B.emberOre); w.raw(x, h + 2, z, B.emberOre); }
+    }
+    // たたかいの しま: ようがんレンガの ゆかと はしら
+    for (let z = C - AR; z <= C + AR; z++) for (let x = C - AR; x <= C + AR; x++) {
+      const d = Math.hypot(x - C, z - C);
+      if (d > AR - 0.5) continue;
+      w.raw(x, 20, z, (Math.floor(d) % 4 === 0) ? B.magmaRock : B.magmaBrick);
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3, x = Math.round(C + Math.cos(a) * (AR - 2)), z = Math.round(C + Math.sin(a) * (AR - 2));
+      box(w, x, 21, z, x, 24, z, B.magmaBrick); w.raw(x, 25, z, B.fireCrystal);
+    }
+    // スタートから しまへの はし
+    for (let x = C + AR - 1; x <= S.x - 6; x++) for (let z = C - 1; z <= C + 1; z++) {
+      w.raw(x, 20, z, B.magmaBrick);
+      for (let y = 21; y < 26; y++) w.raw(x, y, z, 0);
+      if (z !== C && x % 4 === 0) w.raw(x, 21, z, B.magmaBrick);
+    }
+    const sy = hm[S.z * W + S.x];
+    for (let z = S.z - 5; z <= S.z + 5; z++) for (let x = S.x - 5; x <= S.x + 5; x++) for (let y = sy + 1; y < sy + 8; y++) if (w.get(x, y, z) !== B.bedrock) w.raw(x, y, z, 0);
+    gate(w, S.x - 1, sy + 1, S.z + 4, B.goldBlock, B.homePortal, true);
+    w.info.spawn = { x: S.x + 0.5, y: sy + 1, z: S.z + 0.5 };
+    w.info.center = { x: C + 0.5, y: 21, z: C + 0.5 };
+    w.info.arenaR = AR;
+  }
+
+  // ================= うみの そこの みやこ =================
+  function genSea(w) {
+    const s = w.seed * 23 + 11, r = CS.rng(s);
+    const W = w.W, D = w.D, C = W >> 1, SURF = 54;
+    const S = { x: C + 52, z: C + 6 };
+    const hm = heightMapLoop(w, (x, z) => {
+      const n = CS.fbm2(x / 46, z / 46, s);
+      let h = 12 + n * 12;
+      const dc = Math.hypot(x - C, z - C);
+      if (dc < 40) h = CS.lerp(18, h, CS.smooth((dc - 32) / 8));
+      const ds = Math.hypot(x - S.x, z - S.z);
+      if (ds < 12) h = CS.lerp(19, h, CS.smooth((ds - 8) / 4));
+      // うみの みぞ
+      if (Math.abs(CS.fbm2(x / 60, z / 60, s + 5) - 0.5) < 0.03 && dc > 44 && ds > 14) h -= 6;
+      return Math.floor(CS.clamp(h, 3, 40));
+    });
+    for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
+      const h = hm[z * W + x];
+      w.raw(x, 0, z, B.bedrock);
+      for (let y = 1; y <= h; y++) w.raw(x, y, z, y < h - 3 ? B.stone : B.sand);
+      for (let y = h + 1; y <= SURF; y++) w.raw(x, y, z, B.seaWater);
+      const v = CS.hash(x, z, 7, s);
+      if (h < 30 && v < 0.004) w.raw(x, h, z, B.pearlOre);
+    }
+    veins(w, r, B.coalOre, 300, 14, B.stone, 3);
+    veins(w, r, B.ironOre, 260, 14, B.stone, 3);
+    veins(w, r, B.goldOre, 90, 10, B.stone, 2);
+    // サンゴしょう と こんぶ
+    for (let z = 2; z < D - 2; z++) for (let x = 2; x < W - 2; x++) {
+      const h = hm[z * W + x], dc = Math.hypot(x - C, z - C);
+      if (dc < 34 || Math.hypot(x - S.x, z - S.z) < 9) continue;
+      const v = CS.hash(x, z, 8, s), reef = CS.fbm2(x / 20, z / 20, s + 9);
+      if (reef > 0.56 && v < 0.25) {
+        const hh = 1 + Math.floor(CS.hash(x, z, 9, s) * 3);
+        for (let y = 1; y <= hh; y++) w.raw(x, h + y, z, B.coralBlue);
+        if (v < 0.08) w.raw(x, h + hh + 1, z, B.coralPink);
+      } else if (v < 0.03) {
+        const kh = 2 + Math.floor(CS.hash(x, z, 10, s) * 8);
+        for (let y = 1; y <= kh; y++) w.raw(x, h + y, z, B.kelp);
+      } else if (v < 0.04) w.raw(x, h + 1, z, B.coralPink);
+      else if (v < 0.043) w.raw(x, h + 1, z, B.bubbleFlower);
+    }
+    // しずんだ まち: いえの あと (かべは ところどころ くずれている)
+    const G = 18, chests = [];
+    for (let z = C - 34; z <= C + 34; z++) for (let x = C - 34; x <= C + 34; x++) {
+      const d = Math.hypot(x - C, z - C);
+      if (d > 34) continue;
+      for (let y = G + 1; y <= SURF; y++) w.raw(x, y, z, B.seaWater);
+      for (let y = G - 3; y < G; y++) w.raw(x, y, z, B.sand);
+      w.raw(x, G, z, (Math.abs(x - C) <= 1 || Math.abs(z - C) <= 1 || (d > 15 && d < 17)) ? B.seaBrick : B.sand);
+    }
+    const ruin = (hx, hz, hw, hd, hh) => {
+      for (let y = G + 1; y <= G + hh; y++) for (let z = hz - hd; z <= hz + hd; z++) for (let x = hx - hw; x <= hx + hw; x++) {
+        const edge = x === hx - hw || x === hx + hw || z === hz - hd || z === hz + hd;
+        if (!edge) continue;
+        const broke = CS.hash(x, y, z, s + 3) < (y - G) * 0.09;
+        if (broke) continue;
+        if (y === G + 2 && (x === hx || z === hz)) continue; // まど
+        w.raw(x, y, z, B.seaBrick);
+      }
+      box(w, hx, G + 1, hz + hd, hx, G + 2, hz + hd, B.seaWater);
+      w.raw(hx - hw + 1, G + 1, hz - hd + 1, B.shellLamp);
+      if (CS.hash(hx, 0, hz, s) < 0.75) { w.raw(hx + hw - 1, G + 1, hz - hd + 1, B.treasure); chests.push([hx + hw - 1, hz - hd + 1]); }
+    };
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI / 6 + 0.26, d = 25 + (i % 2) * 4;
+      ruin(Math.round(C + Math.cos(a) * d), Math.round(C + Math.sin(a) * d), 2 + (i % 3 === 0 ? 1 : 0), 2, 4 + (i % 3));
+    }
+    // まんなかの ひろばと はしら (ぬしの すみか)
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4, x = Math.round(C + Math.cos(a) * 12), z = Math.round(C + Math.sin(a) * 12);
+      const hh = 5 + Math.floor(CS.hash(i, 0, 0, s) * 6);
+      box(w, x, G + 1, z, x, G + hh, z, B.seaBrick);
+      w.raw(x, G + hh + 1, z, B.shellLamp);
+    }
+    for (let z = C - 3; z <= C + 3; z++) for (let x = C - 3; x <= C + 3; x++) if (Math.hypot(x - C, z - C) < 3.4) w.raw(x, G, z, B.shellLamp);
+    // くうきの ドーム (かえりの ゲートが ある あんぜんな ばしょ)
+    const sy = hm[S.z * W + S.x], RD = 6.5;
+    for (let dz = -7; dz <= 7; dz++) for (let dx = -7; dx <= 7; dx++) for (let dy = 0; dy <= 7; dy++) {
+      const d = Math.hypot(dx, dy, dz), x = S.x + dx, y = sy + 1 + dy, z = S.z + dz;
+      if (d < RD - 1) w.raw(x, y, z, 0);
+      else if (d < RD) w.raw(x, y, z, B.glass);
+    }
+    box(w, S.x - 5, sy, S.z - 5, S.x + 5, sy, S.z + 5, B.seaBrick);
+    box(w, S.x - 6, sy + 1, S.z - 1, S.x - 5, sy + 2, S.z, 0); // でいりぐち (みずの カーテン)
+    w.raw(S.x - 7, sy + 1, S.z - 1, B.seaWater); w.raw(S.x - 7, sy + 2, S.z - 1, B.seaWater); w.raw(S.x - 7, sy + 1, S.z, B.seaWater); w.raw(S.x - 7, sy + 2, S.z, B.seaWater);
+    for (const [dx, dz] of [[3, -3], [3, 3], [-3, -3]]) w.raw(S.x + dx, sy + 1, S.z + dz, B.shellLamp);
+    gate(w, S.x + 4, sy + 1, S.z - 2, B.goldBlock, B.homePortal, false);
+    w.info.spawn = { x: S.x + 0.5, y: sy + 1, z: S.z + 0.5 };
+    w.info.center = { x: C + 0.5, y: G + 1, z: C + 0.5 };
+    w.info.surf = SURF;
+  }
+
+  // ================= ほしの せかい =================
+  function genStar(w) {
+    const s = w.seed * 29 + 17, r = CS.rng(s);
+    const W = w.W, D = w.D, C = W >> 1;
+    function rock(cx, cy, cz, rad, flat) {
+      for (let z = Math.floor(cz - rad - 2); z <= cz + rad + 2; z++) for (let x = Math.floor(cx - rad - 2); x <= cx + rad + 2; x++) {
+        const d = Math.hypot(x - cx, z - cz) / (rad * (0.88 + CS.noise2(x / 5, z / 5, s) * 0.25));
+        if (d >= 1) continue;
+        const top = cy + Math.floor(CS.noise2(x / 7, z / 7, s + 1) * (flat ? 1.5 : 3));
+        const bot = cy - Math.floor(Math.pow(1 - d, 0.6) * rad * 0.8) - 1;
+        for (let y = bot; y <= top; y++) {
+          const v = CS.hash(x, y, z, s);
+          w.raw(x, y, z, y === top ? B.moonDust : v < 0.03 ? B.starOre : v < 0.042 ? B.meteorOre : B.starRock);
+        }
+        if (!flat && CS.hash(x, z, 4, s) < 0.02 && d < 0.75) {
+          const hh = 1 + Math.floor(CS.hash(x, z, 6, s) * 3);
+          for (let k = 1; k <= hh; k++) w.raw(x, top + k, z, B.starCrystal);
+        }
+      }
+    }
+    rock(C, 36, C, 18, true);
+    const S = { x: C + 50, z: C };
+    rock(S.x, 36, S.z, 8, true);
+    // ちいさな ほしの しま
+    const isl = [];
+    for (let i = 0; i < 16; i++) {
+      const a = r() * Math.PI * 2, d = 28 + r() * 44;
+      const x = C + Math.cos(a) * d, z = C + Math.sin(a) * d;
+      if (Math.hypot(x - S.x, z - S.z) < 14 || x < 10 || z < 10 || x > W - 10 || z > D - 10) continue;
+      const rad = 3 + r() * 6, y = 22 + Math.floor(r() * 28);
+      rock(x, y, z, rad, false);
+      isl.push({ x, y, z });
+    }
+    // スタートから まんなかへの ほしの みち
+    for (let x = C + 17; x <= S.x - 7; x++) for (let z = C - 1; z <= C + 1; z++) {
+      w.raw(x, 36, z, z === C ? B.starBrick : B.starRock);
+      if (z !== C && x % 5 === 0) w.raw(x, 37, z, B.starCrystal);
+    }
+    // まんなかの しまの ぎんがレンガの わ と クリスタルの はしら
+    for (let z = C - 13; z <= C + 13; z++) for (let x = C - 13; x <= C + 13; x++) {
+      const d = Math.hypot(x - C, z - C);
+      if (d < 13 && d > 11.6) w.raw(x, 36, z, B.starBrick);
+      if (d < 2.5) w.raw(x, 36, z, B.starCrystal);
+    }
+    for (let z = C - 14; z <= C + 14; z++) for (let x = C - 14; x <= C + 14; x++) for (let y = 37; y < 46; y++) w.raw(x, y, z, Math.hypot(x - C, z - C) < 15 ? 0 : w.get(x, y, z));
+    for (let i = 0; i < 5; i++) {
+      const a = i * Math.PI * 2 / 5, x = Math.round(C + Math.cos(a) * 12), z = Math.round(C + Math.sin(a) * 12);
+      box(w, x, 37, z, x, 40, z, B.starBrick); w.raw(x, 41, z, B.starCrystal);
+    }
+    for (let z = S.z - 7; z <= S.z + 7; z++) for (let x = S.x - 7; x <= S.x + 7; x++) for (let y = 37; y < 44; y++) w.raw(x, y, z, 0);
+    gate(w, S.x + 3, 37, S.z - 2, B.goldBlock, B.homePortal, false);
+    w.info.spawn = { x: S.x + 0.5, y: 37, z: S.z + 0.5 };
+    w.info.center = { x: C + 0.5, y: 37, z: C + 0.5 };
+    w.info.isles = isl;
+  }
+
   function generate(dim, seed, diffs) {
     const w = new World(dim, seed);
-    if (dim === 'over') genOver(w); else if (dim === 'ancient') genAncient(w); else genSky(w);
+    const GEN = { over: genOver, ancient: genAncient, sky: genSky, magma: genMagma, sea: genSea, star: genStar };
+    GEN[dim](w);
     w.applyDiffs(diffs);
     w.lightAll();
     w.recording = true;

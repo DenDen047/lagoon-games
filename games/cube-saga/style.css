@@ -92,6 +92,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ic { width: 18px; height: 18px; background-size: contain; background-repeat: no-repeat; }
 #mpRow { display: flex; align-items: center; gap: 8px; width: 100%; }
 #mpRow .bar { flex: 1; height: 8px; }
+#airRow { display: flex; gap: 3px; justify-content: flex-end; width: 100%; }
+#airRow i { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff 0 18%, #9fe6ff 20% 55%, #3a9ad0 58%); border: 1px solid rgba(255, 255, 255, 0.7); }
+#airRow i.pop { opacity: 0.15; }
 #mpText { font-size: 11px; opacity: 0.85; min-width: 48px; }
 #hotbar { display: flex; gap: 3px; background: rgba(10, 14, 22, 0.65); padding: 4px; border-radius: 10px; pointer-events: auto; }
 .slot { position: relative; width: 44px; height: 44px; background: rgba(255, 255, 255, 0.08); border: 2px solid rgba(255, 255, 255, 0.15); border-radius: 7px; image-rendering: pixelated; background-repeat: no-repeat; }
@@ -201,3 +204,20 @@ body.touch #hand { display: none; }
   .tb { width: 64px; height: 64px; font-size: 12px; }
   .tb.big { width: 74px; height: 74px; }
 }
+
+/* ---------- MOD ---------- */
+.tag.md { background: #b06a2a; }
+.wMods { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.wMods .mPick { flex-direction: row; align-items: center; gap: 6px; }
+.wMods .mPick small { opacity: 0.7; }
+.mNote { margin: 0 0 10px; line-height: 1.6; font-size: 14px; }
+.mList { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.mRow { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 8px 12px; }
+.mChk input { width: 22px; height: 22px; }
+.mInfo { flex: 1; min-width: 0; }
+.mDesc { font-size: 13px; opacity: 0.8; margin-top: 2px; }
+.mErr { font-size: 13px; color: #ff8a8a; margin-top: 2px; }
+.mUser { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; border-top: 2px solid #3a4258; padding-top: 12px; }
+.mUser .warn { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(176, 70, 80, 0.25); border: 1px solid #b04650; font-size: 13px; line-height: 1.6; }
+.mHow { color: #cfe0ff; font-size: 14px; }
+.mMsg { font-size: 14px; color: #7aff9a; min-height: 1em; }

@@ -20,18 +20,21 @@
   };
   CS.G = G;
   ren.renderDist = CS.store.get('cubesaga.dist', G.touch ? 4 : 6);
+  ren.setGfx(CS.store.get('cubesaga.gfx', G.touch ? 'low' : 'high'));
 
   // ブロックのだいたいの色 (こわしたときの粒に使う)
   const BCOL = [];
-  (function () {
+  function calcBcol(from, to) {
     const d = CS.ATLAS.getContext('2d').getImageData(0, 0, 256, 256).data;
-    for (let id = 1; id < CS.NB; id++) {
+    for (let id = from; id < to; id++) {
       const t = BLOCKS[id].tx.side, ox = (t % 16) * 16, oy = (t >> 4) * 16;
       let r = 0, g = 0, b = 0, n = 0;
       for (let y = 2; y < 14; y += 2) for (let x = 2; x < 14; x += 2) { const i = ((oy + y) * 256 + ox + x) * 4; if (d[i + 3] > 100) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; } }
       BCOL[id] = n ? [r / n / 255, g / n / 255, b / n / 255] : [0.6, 0.6, 0.6];
     }
-  })();
+  }
+  calcBcol(1, CS.NB);
+  G.refreshBcol = () => calcBcol(128, 256); // MOD の ブロックを よみこんだあと
 
   // ================= 保存 =================
   const LIST_KEY = 'cubesaga.worlds';
@@ -61,6 +64,7 @@
     if (G.world) d.pets[G.world.dim] = G.ents.filter((e) => e.tame && !e.dead).map((e) => [e.type, e.x, e.y, e.z]);
     d.time = G.time;
     for (const dim in G.worlds) d.diffs[dim] = G.worlds[dim].diffArray();
+    CS.Mods.save(d, G.worlds);
     const ok = CS.store.set('cubesaga.w.' + G.meta.id, d);
     const list = listWorlds();
     const m = list.find((x) => x.id === G.meta.id);
@@ -78,6 +82,7 @@
     G.meta = meta;
     G.data = CS.store.get('cubesaga.w.' + meta.id, null) || { diffs: {} };
     if (!G.data.diffs) G.data.diffs = {};
+    await CS.Mods.activate(meta, G.data); // この ワールドで オンの MOD を よみこむ
     G.creative = meta.mode === 'creative';
     G.worlds = {};
     G.demo = null;
@@ -94,13 +99,14 @@
       else { p.inv[0] = { id: I.bread, n: 3 }; }
     }
     if (G.creative) { p.hp = 20; p.food = 20; }
+    CS.Mods.fixInv(p.inv);
     G.player = p;
     G.time = G.data.time || 0.08;
     G.state = 'play';
     await enterDim(p.dim, null, true);
   }
   function getWorld(dim) {
-    if (!G.worlds[dim]) G.worlds[dim] = CS.generate(dim, G.meta.seed, G.data.diffs[dim]);
+    if (!G.worlds[dim]) { G.worlds[dim] = CS.generate(dim, G.meta.seed, G.data.diffs[dim]); CS.Mods.attach(G.worlds[dim], G.data); }
     return G.worlds[dim];
   }
   async function enterDim(dim, from, keepPos) {
@@ -113,10 +119,9 @@
     p.dim = dim;
     if (!keepPos) {
       let sp = w.info.spawn;
-      if (dim === 'over' && from === 'ancient') sp = w.info.ancientGate;
-      if (dim === 'over' && from === 'sky') sp = w.info.skyGate;
+      if (dim === 'over' && from && w.info[from + 'Gate']) sp = w.info[from + 'Gate'];
       p.x = sp.x; p.y = sp.y; p.z = sp.z; p.vx = p.vy = p.vz = 0;
-      p.yaw = dim === 'over' && from ? 0 : p.yaw;
+      p.yaw = dim === 'over' && from ? (sp.yaw || 0) : p.yaw;
     }
     // 体がうまっていたら上へ
     for (let k = 0; k < 40 && CS.collides(w, p); k++) p.y += 1;
@@ -136,12 +141,27 @@
     UI.hideAll();
     $('hud').classList.remove('hidden');
     UI.resetHud();
-    UI.banner(CS.DIMS[dim].name, dim === 'over' ? (G.creative ? 'クリエイティブ' : 'サバイバル') : dim === 'ancient' ? 'むかしの いきものが くらす せかい' : 'りゅうの すむ 空の しま');
+    const SUB = { ancient: 'むかしの いきものが くらす せかい', sky: 'りゅうの すむ 空の しま', magma: 'ようがんに さわると あつい！ きをつけて', sea: 'あわあわヘルメットで みずの なかでも いきが できる', star: 'からだが かるい！ たかく とべるよ' };
+    UI.banner(CS.DIMS[dim].name, dim === 'over' ? (G.creative ? 'クリエイティブ' : 'サバイバル') : SUB[dim]);
+    p.air = 20;
     if (!G.touch) { G.uiOpen = true; UI.show('pause'); $('pause').querySelector('[data-act=resume]').textContent = 'クリックして はじめる'; }
     else G.uiOpen = false;
     $('touch').classList.toggle('hidden', !G.touch);
     $('hud').querySelector('[data-k=down]').classList.toggle('hidden', !G.creative);
   }
+  // あたらしい せかいの ボスと ほうび
+  const BOSS = {
+    magma: { type: 'golem', flag: 'golemDead', off: [0, 0.2, 0], item: 'magmaHeart', bonus: ['fireShard', 8], next: 'うみのゲートが ひらいた！ おうさまに ほうこくしよう' },
+    sea: { type: 'octo', flag: 'octoDead', off: [0, 7, 0], item: 'oceanOrb', bonus: ['pearl', 6], next: 'ほしのゲートが ひらいた！ おうさまに ほうこくしよう' },
+    star: { type: 'nova', flag: 'novaDead', off: [30, 16, 0], item: 'starCore', bonus: ['starShard', 8], next: 'おうさまに ほうこくしよう' },
+  };
+  // ゲートを とおる じょうけん
+  const GATE_LOCK = {
+    sky: (p) => p.q < 2 && 'この ゲートは ゆうしゃ しか とおれない！ まずは おうさまに あおう',
+    magma: (p) => p.q < 3 && 'マグマのゲートは まだ ひらかない… ゼフィロスを たおして おうさまに ほうこくしよう',
+    sea: (p) => !p.flags.golemDead && 'うみのゲートは マグマの ちていの ようがんまじんを たおすと ひらく',
+    star: (p) => !p.flags.octoDead && 'ほしのゲートは うみの そこの ぬしを たおすと ひらく',
+  };
   // NPC・展示・番人・竜を置く
   function populate() {
     const w = G.world, p = G.player;
@@ -167,6 +187,11 @@
       const e = new CS.Ent('dragon', c.x + 30, c.y + 16, c.z);
       G.ents.push(e);
       setTimeout(() => { if (G.world === w) { CS.sfx.roar(); UI.toast('てんくうりゅう ゼフィロスが あらわれた！'); } }, 1500);
+    } else if (BOSS[w.dim] && !p.flags[BOSS[w.dim].flag]) {
+      const c = w.info.center, b = BOSS[w.dim];
+      const e = new CS.Ent(b.type, c.x + b.off[0], c.y + b.off[1], c.z + b.off[2]);
+      G.ents.push(e);
+      setTimeout(() => { if (G.world === w) { CS.sfx.roar(); UI.toast(e.T.name + ' が まちうけている！'); } }, 1500);
     }
   }
   function restorePets() {
@@ -328,7 +353,8 @@
   // ================= 画面のボタン =================
   let helpBack = 'title';
   document.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-go],[data-act],[data-dist],[data-mode]');
+    const t = e.target.closest('[data-go],[data-act],[data-dist],[data-mode],[data-gfx]');
+    if (t && t.dataset.go === 'mods') { CS.Mods.openScreen(null, () => UI.show('title')); return; }
     if (!t) return;
     CS.unlockAudio();
     const go = t.dataset.go;
@@ -342,6 +368,10 @@
       ren.renderDist = +t.dataset.dist; CS.store.set('cubesaga.dist', ren.renderDist);
       document.querySelectorAll('[data-dist]').forEach((b) => b.classList.toggle('on', +b.dataset.dist === ren.renderDist));
     }
+    if (t.dataset.gfx) {
+      CS.store.set('cubesaga.gfx', ren.setGfx(t.dataset.gfx));
+      document.querySelectorAll('[data-gfx]').forEach((b) => b.classList.toggle('on', b.dataset.gfx === ren.gfx));
+    }
     const act = t.dataset.act;
     if (act === 'resume') { G.closeUi(); }
     if (act === 'help') { helpBack = 'pause'; UI.show('help'); }
@@ -351,13 +381,15 @@
   $('sens').value = G.sens;
   $('sens').addEventListener('input', () => { G.sens = +$('sens').value; CS.store.set('cubesaga.sens', G.sens); });
   document.querySelectorAll('[data-dist]').forEach((b) => b.classList.toggle('on', +b.dataset.dist === ren.renderDist));
+  document.querySelectorAll('[data-gfx]').forEach((b) => b.classList.toggle('on', b.dataset.gfx === ren.gfx));
   function showWorlds() {
     UI.show('worlds');
     UI.renderWorlds(listWorlds().sort((a, b) => (b.played || 0) - (a.played || 0)), (m) => startWorld(m), (m) => {
       CS.store.set(LIST_KEY, listWorlds().filter((x) => x.id !== m.id));
       CS.store.del('cubesaga.w.' + m.id);
       showWorlds();
-    });
+    }, (m) => CS.Mods.openScreen(m, showWorlds));
+    CS.Mods.fillNewWorld($('wMods'));
   }
   $('wCreate').addEventListener('click', () => {
     const name = $('wName').value.trim() || 'わたしの せかい';
@@ -367,7 +399,7 @@
     if (!st) seed = Math.floor(Math.random() * 1e9);
     else if (/^-?\d+$/.test(st)) seed = parseInt(st, 10) | 0;
     else { seed = 0; for (const ch of st) seed = (Math.imul(seed, 31) + ch.charCodeAt(0)) | 0; }
-    const m = { id: Date.now().toString(36), name, mode, seed, created: Date.now(), played: Date.now() };
+    const m = { id: Date.now().toString(36), name, mode, seed, created: Date.now(), played: Date.now(), mods: CS.Mods.newWorldMods($('wMods')) };
     const list = listWorlds(); list.push(m);
     CS.store.set(LIST_KEY, list);
     $('wName').value = ''; $('wSeed').value = '';
@@ -384,6 +416,7 @@
     if (locked()) document.exitPointerLock();
     G.worlds = {}; G.world = null; G.meta = null; G.player = null;
     ren.setWorld(null);
+    CS.Mods.deactivate();
     UI.show('title');
     setupDemo();
   }
@@ -401,7 +434,7 @@
     let face = [0, 0, 0], t = 0;
     for (let i = 0; i < 200 && t <= maxD; i++) {
       const id = w.get(x, y, z);
-      if (id && id !== B.water) return { x, y, z, id, face, t };
+      if (id && !CS.LIQ[id]) return { x, y, z, id, face, t };
       if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; face = [-sx, 0, 0]; }
       else if (ty < tz) { y += sy; t = ty; ty += tdy; face = [0, -sy, 0]; }
       else { z += sz; t = tz; tz += tdz; face = [0, 0, -sz]; }
@@ -460,6 +493,9 @@
     G.drops.push({ id, n, x, y, z, vx, vy, vz, w: 0.25, h: 0.25, age: 0, autoStep: false });
   }
   G.dropItem = dropItem;
+  G.burst = (x, y, z, col, n, spd, life, size) => burst(x, y, z, col, n, spd, life, size);
+  G.breakAt = (x, y, z, drop) => breakBlock(x, y, z, drop);
+  G.keys = keys;
   function dropHeld() {
     const p = G.player, s = Inv.held(p);
     if (!s) return;
@@ -486,7 +522,9 @@
   function breakBlock(x, y, z, drop) {
     const w = G.world, id = w.get(x, y, z);
     if (!id || BLOCKS[id].unbreak) return false;
-    w.set(x, y, z, 0);
+    if (id === B.treasure) return openTreasure(x, y, z);
+    if (BLOCKS[id].onBreak) CS.Mods.call(BLOCKS[id], 'onBreak', w, x, y, z, G.player);
+    w.set(x, y, z, fillAfter(x, y, z));
     burst(x + 0.5, y + 0.5, z + 0.5, BCOL[id], 12, 4, 0.7, 0.13);
     if (drop) { const d = CS.rollDrop(id, Math.random()); if (d) dropItem(d[0], d[1], x + 0.5, y + 0.4, z + 0.5); }
     const up = w.get(x, y + 1, z);
@@ -494,7 +532,28 @@
     CS.sfx.brk(BLOCKS[id].hardSound);
     return true;
   }
-  const REPLACEABLE = new Set([0, B.water, B.tallGrass, B.fern]);
+  // うみの なかで こわした ところは みずで うまる (くうきの へやは そのまま)
+  function fillAfter(x, y, z) {
+    const w = G.world;
+    if (w.dim !== 'sea' || y > w.info.surf) return 0;
+    for (const [dx, dy, dz] of [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) if (w.get(x + dx, y + dy, z + dz) === B.seaWater) return B.seaWater;
+    return 0;
+  }
+  // たからばこ: あけると コインと たからものが でる
+  function openTreasure(x, y, z) {
+    const p = G.player, w = G.world;
+    w.set(x, y, z, fillAfter(x, y, z));
+    const coins = 20 + Math.floor(Math.random() * 60);
+    p.coins += coins;
+    const loot = [['pearl', 1, 3], ['goldIngot', 1, 3], ['diamond', 1, 1], ['crystal', 1, 2], ['ironIngot', 2, 4]];
+    const [k, a, b] = loot[Math.floor(Math.random() * loot.length)], n = a + Math.floor(Math.random() * (b - a + 1));
+    const left = Inv.add(p, I[k], n); if (left) dropItem(I[k], left, x + 0.5, y + 0.5, z + 0.5);
+    burst(x + 0.5, y + 0.7, z + 0.5, [1, 0.9, 0.4], 30, 5, 1, 0.16);
+    CS.sfx.coin(); CS.sfx.fanfare();
+    UI.toast(`たからばこ だ！ ${coins}コイン と ${ITEMS[I[k]].name} ×${n} を てにいれた！`, 4000);
+    return true;
+  }
+  const REPLACEABLE = new Set([0, B.water, B.tallGrass, B.fern, B.seaWater, B.lava, B.kelp]);
   function placeBlock(hit, id) {
     const w = G.world, p = G.player;
     let x = hit.x + hit.face[0], y = hit.y + hit.face[1], z = hit.z + hit.face[2];
@@ -507,6 +566,7 @@
       for (const e of G.ents) if (hitsBox(entBox(e))) return false;
     }
     w.set(x, y, z, id);
+    if (BLOCKS[id].onPlace) CS.Mods.call(BLOCKS[id], 'onPlace', w, x, y, z, p);
     CS.sfx.place();
     return true;
   }
@@ -576,6 +636,18 @@
     if (e.T.species) { const n = 1 + Math.floor(Math.random() * 2); dropItem(I.rawMeat, n, e.x, e.y + 0.5, e.z); }
     if (e.type === 'guardian') UI.toast('もりのばんにんを たおした！');
     if (e.type === 'dragon') dragonDefeated(e);
+    const bd = BOSS[G.world.dim];
+    if (bd && e.type === bd.type) bossDefeated(e, bd);
+  }
+  function bossDefeated(e, bd) {
+    const p = G.player;
+    p.flags[bd.flag] = 1;
+    for (const [k, n] of [[bd.item, 1], bd.bonus]) { const left = Inv.add(p, I[k], n); if (left) dropItem(I[k], left); }
+    UI.toast(ITEMS[I[bd.item]].name + ' と ' + ITEMS[I[bd.bonus[0]]].name + ' を てにいれた！', 4500);
+    CS.sfx.fanfare();
+    $('flashFx').style.opacity = 1; setTimeout(() => { $('flashFx').style.opacity = 0; }, 300);
+    UI.banner(e.T.short + 'を たおした！', G.creative ? 'すごい！' : bd.next);
+    saveGame(true);
   }
   function dragonDefeated(e) {
     const p = G.player;
@@ -600,7 +672,10 @@
     if (tg && tg.block) {
       const id = tg.block.id;
       if (id === B.pedestal) { takeSword(); return true; }
+      if (id === B.treasure) { openTreasure(tg.block.x, tg.block.y, tg.block.z); UI.swingHand(); return true; }
       if ((id === B.table || id === B.furnace) && !G.creative) { openUi(() => UI.openInventory(G)); return true; }
+      // MOD の ブロック・アイテムの「つかう」 (シフトを おしていると つかわずに おける)
+      if (!keys.ShiftLeft && !keys.ShiftRight && CS.Mods.use(w, tg.block, held, p)) { UI.swingHand(); return true; }
     }
     if (d && d.food && !G.creative) {
       if (p.food >= 20) { UI.toast('おなかが いっぱい！'); return true; }
@@ -708,7 +783,7 @@
         w.beginBatch();
         for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
           const x = hb.x + dx, y = hb.y + dy, z = hb.z + dz, id = w.get(x, y, z);
-          if (!id || BLOCKS[id].unbreak || id === B.water) continue;
+          if (!id || BLOCKS[id].unbreak || CS.LIQ[id]) continue;
           if (!G.creative) { const dr = CS.rollDrop(id, Math.random()); if (dr) { const left = Inv.add(p, dr[0], dr[1]); if (left) dropItem(dr[0], left, x + 0.5, y + 0.5, z + 0.5); } }
           w.set(x, y, z, 0);
           if (Math.random() < 0.4) burst(x + 0.5, y + 0.5, z + 0.5, BCOL[id], 3, 6, 0.7, 0.15);
@@ -732,12 +807,13 @@
 
   // ================= 飛ぶもの =================
   G.shoot = (o) => { o.life = 5; G.projs.push(o); };
-  const PCOL = { arrow: [0.6, 0.45, 0.3], fire: [1, 0.5, 0.1], ice: [0.6, 0.9, 1], beam: [0.6, 0.9, 1], dfire: [0.8, 0.3, 1] };
+  const PCOL = { arrow: [0.6, 0.45, 0.3], fire: [1, 0.5, 0.1], ice: [0.6, 0.9, 1], beam: [0.6, 0.9, 1], dfire: [0.8, 0.3, 1], lavaball: [1, 0.45, 0.1], ink: [0.15, 0.1, 0.25], star: [1, 0.9, 0.4], zap: [0.4, 1, 0.6] };
+  const BIGP = { dfire: 0.5, lavaball: 0.6, ink: 0.45, star: 0.5 };
   function updateProjs(dt) {
     const w = G.world, p = G.player;
     for (const pr of G.projs) {
       pr.life -= dt;
-      if (pr.kind === 'arrow') pr.vy -= 18 * dt;
+      if (pr.kind === 'arrow' || pr.kind === 'lavaball') pr.vy -= 18 * dt;
       const spd = Math.hypot(pr.vx, pr.vy, pr.vz), n = Math.max(1, Math.ceil(spd * dt / 0.35));
       for (let s = 0; s < n && pr.life > 0; s++) {
         pr.x += pr.vx * dt / n; pr.y += pr.vy * dt / n; pr.z += pr.vz * dt / n;
@@ -752,7 +828,7 @@
           G.hurtPlayer(pr.dmg, pr.x - pr.vx, pr.z - pr.vz, 6); impact(pr, null);
         }
       }
-      if (Math.random() < 0.7 && pr.kind !== 'arrow') G.parts.push({ x: pr.x, y: pr.y, z: pr.z, vx: 0, vy: 0.5, vz: 0, life: 0.3, col: PCOL[pr.kind], size: pr.kind === 'dfire' ? 0.5 : 0.18, grav: 0 });
+      if (Math.random() < 0.7 && pr.kind !== 'arrow') G.parts.push({ x: pr.x, y: pr.y, z: pr.z, vx: 0, vy: 0.5, vz: 0, life: 0.3, col: PCOL[pr.kind], size: BIGP[pr.kind] || 0.18, grav: 0 });
     }
     G.projs = G.projs.filter((pr) => pr.life > 0);
   }
@@ -770,8 +846,8 @@
         if (w.get(x, y, z) === B.water && w.get(x, y + 1, z) !== B.water) w.set(x, y, z, B.ice);
       }
       w.endBatch();
-    } else if (pr.kind === 'dfire') {
-      burst(pr.x, pr.y, pr.z, [0.8, 0.3, 1], 24, 7, 0.6, 0.25);
+    } else if (pr.kind === 'dfire' || pr.kind === 'lavaball' || pr.kind === 'star') {
+      burst(pr.x, pr.y, pr.z, PCOL[pr.kind], 24, 7, 0.6, 0.25);
       if (Math.hypot(p.x - pr.x, p.y + 1 - pr.y, p.z - pr.z) < 2.6) G.hurtPlayer(pr.dmg, pr.x, pr.z, 8);
       CS.sfx.fire();
     } else burst(pr.x, pr.y, pr.z, PCOL[pr.kind], 6, 2, 0.3, 0.1);
@@ -871,6 +947,39 @@
           'ゼフィロスは ときどき しまに おりてくる。その ときが チャンスじゃ。ゆみや まほうのつえ、ゆうしゃのつるぎの ひかり (みぎクリック) も きくぞ。',
         ]);
       }
+    } else if (p.q === 3) {
+      const give = (flag, key) => { if (p.flags[flag]) return; p.flags[flag] = 1; const l = Inv.add(p, I[key], 1); if (l) dropItem(I[key], l); CS.sfx.pop(); UI.toast(ITEMS[I[key]].name + ' を もらった！'); };
+      if (!p.flags.golemDead) {
+        UI.talk(G, who, [
+          'ゆうしゃどの、ゼフィロスの おかげで 空は へいわに なった。…だが こんどは じめんの したから ゴゴゴ… と ゆれが つづいて おるのじゃ。',
+          'おしろの まえに あらわれた <b>マグマのゲート</b> の むこう、<b>マグマの ちてい</b> で <b>ようがんまじん ボルガ</b> が あばれて おるらしい。',
+          '<b>ようがん</b> に はいると とても あつい。この <b>ほのおのおまもり</b> を もっていけば すこしは ましじゃ。',
+        ], [{ label: 'いってくる！', ok: true, fn: () => { give('gotCharm', 'fireCharm'); UI.closePanel(); } }]);
+      } else if (!p.flags.octoDead) {
+        UI.talk(G, who, [
+          'ボルガを しずめて くれたか！ ありがとう。',
+          'じつは こんどは <b>うみの そこ</b> から「たすけて…」と いう こえが きこえるのじゃ。しずんだ むかしの みやこに <b>しんかいの ぬし</b> が すみついた らしい。',
+          'おしろの まえの <b>うみのゲート</b> から いける。みずの なかでは いきが つづかぬ。この <b>あわあわヘルメット</b> を もっていれば ずっと いきが できるぞ。',
+        ], [{ label: 'まかせて！', ok: true, fn: () => { give('gotHelm', 'bubbleHelm'); UI.closePanel(); } }]);
+      } else if (!p.flags.novaDead) {
+        p.flags.kingStar = 1;
+        UI.talk(G, who, [
+          'うみの みやこも すくって くれたのか！ さすがじゃ。',
+          'さいごの たのみじゃ。よぞらの ほしが ひとつずつ きえて おる。<b>ぎんがの まおう ノヴァ</b> の しわざじゃ。',
+          'ひろばの ひがしの <b>ほしのゲート</b> から <b>ほしの せかい</b> へ いける。からだが かるくて たかく とべるが、ほしから おちないよう きをつけるのじゃぞ。',
+        ]);
+      } else {
+        UI.talk(G, who, [
+          'なんと！ ちてい・うみ・ほし… みっつの せかいを すべて すくったと いうのか！',
+          'そなたは キューブおうこく いちばんの <b>だいゆうしゃ</b> じゃ！ おれいに 3000コインを さずけよう！',
+        ], [{
+          label: 'やったー！', ok: true, fn: () => {
+            p.q = 4; p.coins += 3000;
+            CS.sfx.fanfare(); UI.closePanel();
+            UI.banner('みっつの せかいを すくった！', 'だいゆうしゃ ばんざい！ これからも じゆうに ぼうけんしよう');
+          },
+        }]);
+      }
     } else {
       const ex = p.exhibits, n = Object.keys(ex.species).length + Object.keys(ex.fossils).length;
       UI.talk(G, who, [
@@ -932,7 +1041,52 @@
         for (const [k, wt] of table) { r -= wt; if (r < 0) { t = k; break; } }
         add(t, { x: pos.x, y: pos.y + (TYPES[t].fly ? 3 : 0.1), z: pos.z });
       }
+    } else if (MOBS[w.dim] && passive + hostile < 11 && Math.random() < 0.5) {
+      // てんじょうや みずが ある せかいは、プレイヤーの たかさから したの じめんを さがす (うまく いくまで なんどか ためす)
+      for (let tries = 0; tries < 6; tries++) {
+        const a = Math.random() * Math.PI * 2, d = 16 + Math.random() * 24;
+        const x = Math.floor(p.x + Math.cos(a) * d), z = Math.floor(p.z + Math.sin(a) * d);
+        if (x < 2 || z < 2 || x >= w.W - 2 || z >= w.D - 2) continue;
+        const c = w.info.center;
+        if (Math.hypot(x - c.x, z - c.z) < 12 || Math.hypot(x - w.info.spawn.x, z - w.info.spawn.z) < 8) continue;
+        const y = CS.floorBelow(w, x, p.y + 10, z), g = w.get(x, y - 1, z);
+        if (y < 2 || CS.LIQ[g] === 2 || !CS.SOLID[g] || CS.SOLID[w.get(x, y, z)] || CS.SOLID[w.get(x, y + 1, z)]) continue;
+        if (w.dim === 'sea' && y > w.info.surf - 3) continue;
+        const t = pick(MOBS[w.dim]), T = TYPES[t];
+        add(t, { x: x + 0.5, y: y + (T.fly ? 3 : T.swim ? 2 + Math.random() * 5 : 0.1), z: z + 0.5 });
+        break;
+      }
     }
+  }
+  const MOBS = { magma: [['lavaCrab', 3], ['emberMoth', 2]], sea: [['puffer', 3], ['jelly', 2]], star: [['starBunny', 3], ['ufo', 1.5]] };
+  function pick(table) {
+    let r = Math.random() * table.reduce((s, x) => s + x[1], 0);
+    for (const [k, wt] of table) { r -= wt; if (r < 0) return k; }
+    return table[0][0];
+  }
+
+  // ボスが よぶ てした
+  function spawnMinion(type, x, y, z) {
+    if (G.ents.filter((e) => e.type === type).length > 8) return;
+    const e = new CS.Ent(type, x, y, z); e.home = { x, z }; G.ents.push(e);
+  }
+  // いきの のこり (うみの そこで へっていく あわ)
+  let airShown = -1;
+  function airHud(air) {
+    const el = $('airRow'), n = Math.ceil(air / 2);
+    if (n === airShown) return;
+    airShown = n;
+    el.classList.toggle('hidden', air >= 20);
+    if (!el.children.length) for (let i = 0; i < 10; i++) el.appendChild(document.createElement('i'));
+    for (let i = 0; i < 10; i++) el.children[i].classList.toggle('pop', i >= n);
+  }
+  // せかいごとの ふんいきの つぶ (ひのこ・あわ・ほしくず)
+  function ambient(w, p, dt) {
+    if (G.parts.length > 500) return;
+    const r = (k) => (Math.random() - 0.5) * k;
+    if (w.dim === 'magma' && Math.random() < dt * 10) G.parts.push({ x: p.x + r(24), y: p.y + r(6) - 2, z: p.z + r(24), vx: r(0.6), vy: 0.8 + Math.random(), vz: r(0.6), life: 3, col: Math.random() < 0.5 ? [1, 0.55, 0.15] : [1, 0.8, 0.3], size: 0.08, grav: -0.1 });
+    if (w.dim === 'sea' && p.y < w.info.surf && Math.random() < dt * 6) G.parts.push({ x: p.x + r(20), y: p.y + r(6), z: p.z + r(20), vx: 0, vy: 1, vz: 0, life: 3, col: [0.8, 0.95, 1], size: 0.07, grav: -0.2 });
+    if (w.dim === 'star' && Math.random() < dt * 6) G.parts.push({ x: p.x + r(26), y: p.y + r(10), z: p.z + r(26), vx: r(0.3), vy: r(0.3), vz: r(0.3), life: 2.5, col: [1, 0.95, 0.6], size: 0.07, grav: 0 });
   }
 
   // ================= 毎フレームの更新 =================
@@ -959,19 +1113,21 @@
       fx += stick.x; fz -= stick.y;
     }
     const fl = Math.hypot(fx, fz); if (fl > 1) { fx /= fl; fz /= fl; }
-    const swim = CS.inWater(w, p);
+    const lava = CS.inLava(w, p), swim = CS.inWater(w, p) || lava;
+    const grav = w.dim === 'star' ? 0.3 : 1; // ほしの せかいは からだが かるい
+    const helm = w.dim === 'sea' && Inv.count(p, I.bubbleHelm) > 0;
     const sprint = active && (keys.ShiftLeft || keys.ShiftRight) && !p.flying;
     let speed = p.flying ? (keys.ControlLeft ? 16 : 10) : sprint ? 5.8 : 4.3;
-    if (swim && !p.flying) speed *= 0.6;
+    if (swim && !p.flying) speed *= lava ? 0.45 : helm ? 0.9 : 0.6;
     const sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);
     const wx = (sy * fz + cy * fx) * speed, wz = (-cy * fz + sy * fx) * speed;
     const acc = Math.min(1, dt * (p.onGround || p.flying || swim ? 12 : 2.5));
     p.vx += (wx - p.vx) * acc; p.vz += (wz - p.vz) * acc;
     const up = active && keys.Space, down = active && (keys.ShiftLeft || keys.ShiftRight);
     if (p.flying) { p.vy += (((up ? 8 : 0) - (down ? 8 : 0)) - p.vy) * Math.min(1, dt * 10); }
-    else if (swim) { p.vy = up ? Math.min(p.vy + 30 * dt, 4) : Math.max(p.vy - 12 * dt, -3); }
+    else if (swim) { p.vy = up ? Math.min(p.vy + 30 * dt, 4) : down && !lava ? Math.max(p.vy - 30 * dt, -5) : Math.max(p.vy - 12 * dt, -3); }
     else {
-      p.vy -= 28 * dt;
+      p.vy -= 28 * dt * grav;
       if (up && p.onGround) p.vy = 8.6;
       if (G.touch && p.onGround && p.hitH && fl > 0.3) p.vy = 8.6; // スマホは かってに 1だん のぼる
     }
@@ -981,7 +1137,7 @@
     if (p.flying && p.onGround) p.flying = false;
     // おちた ときの ダメージ
     if (p.onGround || swim || p.flying) {
-      if (!wasGround && !G.creative && !swim && !p.flying) { const fall = p.airTop - p.y; if (fall > 3.6) G.hurtPlayer(Math.floor(fall - 3), p.x, p.z, 0); }
+      if (!wasGround && !G.creative && !swim && !p.flying) { const fall = (p.airTop - p.y) * grav; if (fall > 3.6) G.hurtPlayer(Math.floor(fall - 3), p.x, p.z, 0); }
       p.airTop = p.y;
     } else p.airTop = Math.max(p.airTop, p.y);
     if (p.y < -12) {
@@ -989,6 +1145,30 @@
       if (!G.creative) { p.hp -= 4; if (p.hp <= 0) die(); }
       UI.toast('しまから おちてしまった！');
     }
+
+    // ---- ようがん・いき ----
+    p.lavaT = Math.max(0, (p.lavaT || 0) - dt);
+    if (lava && !G.creative && !p.dead && p.lavaT <= 0) {
+      const charm = Inv.count(p, I.fireCharm) > 0;
+      p.lavaT = charm ? 0.8 : 0.6;
+      if (!p.flags.tipLava) { p.flags.tipLava = 1; UI.toast('あちち！ ようがんは あつい！ ほのおのおまもりが あると すこし ましだよ', 4500); }
+      burst(p.x, p.y + 0.5, p.z, [1, 0.5, 0.1], 10, 3, 0.5, 0.15);
+      G.hurtPlayer(charm ? 1 : 2, p.x, p.z, 0.01);
+    }
+    if (p.air === undefined) p.air = 20;
+    if (w.dim === 'sea' && !G.creative && !p.dead) {
+      const head = w.get(p.x, p.y + 1.62, p.z);
+      const wet = CS.LIQ[head] === 1 || (CS.RENDER[head] === 'cross' && p.y + 1.62 < w.info.surf);
+      let flower = false;
+      for (let dy = -1; dy <= 2 && !flower; dy++) for (let dz = -2; dz <= 2 && !flower; dz++) for (let dx = -2; dx <= 2; dx++) if (w.get(p.x + dx, p.y + dy, p.z + dz) === B.bubbleFlower) { flower = true; break; }
+      if (wet && !helm && !flower) {
+        p.air = Math.max(0, p.air - dt * 1.4);
+        if (p.air <= 0) { p.drownT = (p.drownT || 0) - dt; if (p.drownT <= 0) { p.drownT = 1; UI.toast('いきが くるしい！ うえへ およごう'); G.hurtPlayer(2, p.x, p.z, 0.01); } }
+      } else p.air = Math.min(20, p.air + dt * (flower ? 12 : 8));
+      if (wet && Math.random() < dt * 3) G.parts.push({ x: p.x + (Math.random() - 0.5) * 0.4, y: p.y + 1.6, z: p.z + (Math.random() - 0.5) * 0.4, vx: 0, vy: 1.5, vz: 0, life: 1.2, col: [0.85, 0.95, 1], size: 0.09, grav: -0.5 });
+    } else p.air = 20;
+    airHud(p.air);
+    ambient(w, p, dt);
 
     // ---- おなか・HP・MP ----
     if (!G.creative && !p.dead) {
@@ -1050,7 +1230,7 @@
     } else ring.style.display = 'none';
 
     // ---- 生きもの ----
-    const g = { world: w, player: p, creative: G.creative, shoot: G.shoot, hurtPlayer: G.hurtPlayer, toast: UI.toast };
+    const g = { world: w, player: p, creative: G.creative, shoot: G.shoot, hurtPlayer: G.hurtPlayer, toast: UI.toast, grav, burst, spawn: spawnMinion };
     for (const e of G.ents) {
       if (e.dead) continue;
       const far = Math.hypot(e.x - p.x, e.z - p.z);
@@ -1066,6 +1246,7 @@
           if (e.hp <= 0) killEnt(e);
         }
       }
+      if (!e.T.fireproof && e.T.ai !== 'boss' && !e.exhibit && CS.inLava(w, e)) { e.hp -= dt * 8; e.hurt = 0.2; if (e.hp <= 0) killEnt(e); }
       if (e.y < -20) e.dead = true;
     }
     G.ents = G.ents.filter((e) => !e.dead);
@@ -1077,7 +1258,8 @@
     // ---- 落ちている物 ----
     for (const d of G.drops) {
       d.age += dt;
-      d.vy -= 20 * dt;
+      d.vy -= 20 * dt * grav;
+      if (CS.LIQ[w.get(d.x, d.y + 0.1, d.z)] === 2) { d.n = 0; burst(d.x, d.y + 0.3, d.z, [1, 0.5, 0.1], 6, 2, 0.4, 0.1); continue; }
       d.vx *= Math.pow(0.1, dt); d.vz *= Math.pow(0.1, dt);
       CS.move(w, d, d.vx * dt, d.vy * dt, d.vz * dt);
       if (d.onGround) { d.vx *= 0.8; d.vz *= 0.8; }
@@ -1089,6 +1271,7 @@
         d.x += (p.x - d.x) * dt * 4; d.z += (p.z - d.z) * dt * 4;
       }
     }
+    CS.Mods.tick(dt); // MOD の きかい (1びょうに 20かい) と まいフレームの うごき
     G.drops = G.drops.filter((d) => d.n > 0 && d.age < 300 && d.y > -20);
 
     // ---- 粒 ----
@@ -1106,10 +1289,12 @@
     const feet = w.get(p.x, p.y + 0.2, p.z), body = w.get(p.x, p.y + 1.2, p.z);
     const pdef = BLOCKS[feet].portal ? BLOCKS[feet] : BLOCKS[body].portal ? BLOCKS[body] : null;
     portalWarn = Math.max(0, portalWarn - dt);
+    const lockMsg = pdef && !G.creative && GATE_LOCK[pdef.portal] && GATE_LOCK[pdef.portal](p);
     if (pdef && !p.portalLock) {
-      if (pdef.portal === 'sky' && !G.creative && p.q < 2) {
-        if (portalWarn <= 0) { UI.toast('この ゲートは ゆうしゃ しか とおれない！ まずは おうさまに あおう'); portalWarn = 3; }
-        p.vz += 8; p.portalLock = true;
+      if (lockMsg) {
+        if (portalWarn <= 0) { UI.toast(lockMsg, 4000); portalWarn = 3; }
+        if (pdef.portal === 'sky') p.vz += 8; else { p.vx -= Math.sin(p.yaw) * 8; p.vz += Math.cos(p.yaw) * 8; }
+        p.portalLock = true;
       } else {
         p.portalT = (p.portalT || 0) + dt;
         $('portalFx').style.opacity = Math.min(1, p.portalT);
@@ -1147,6 +1332,15 @@
     let text = '', tgt = null;
     if (w.dim === 'ancient') { text = 'かせきを ほったり、つかまえアミで いきものを つかまえよう。かえりは きんの ゲート'; tgt = { x: w.W / 2, z: w.D / 2 - 5 }; }
     else if (w.dim === 'sky') { text = p.flags.dragonDead ? 'きんの ゲートから おうこくへ かえろう' : 'てんくうりゅう ゼフィロスを たおそう！'; tgt = p.flags.dragonDead ? { x: info.spawn.x, z: info.spawn.z + 4 } : null; }
+    else if (BOSS[w.dim]) {
+      const b = BOSS[w.dim], home = { x: info.spawn.x, z: info.spawn.z };
+      if (p.flags[b.flag]) { text = 'きんの ゲートから おうこくへ かえろう'; tgt = home; }
+      else {
+        text = { magma: 'はしを わたって まんなかの しまへ。ようがんまじん ボルガを たおそう！ (ようがんに きをつけて)', sea: 'しずんだ みやこの まんなかに いる オクトーラを たおそう！ たからばこも さがしてみよう', star: 'ほしの みちを とおって まんなかの しまへ。ノヴァを たおそう！' }[w.dim];
+        tgt = info.center;
+      }
+      if (w.dim === 'sea' && !G.creative && !Inv.count(p, I.bubbleHelm) && p.air < 20) text = 'いきが くるしい！ あわのはなや ドームで いきつぎしよう';
+    }
     else if (G.creative) { text = 'クリエイティブ: スペース 2かいで 空を とべる。E で ブロックを えらぼう'; }
     else if (p.q === 0) { text = 'おしろの おうさまに あいに いこう (' + (G.touch ? 'つかうボタン' : 'みぎクリック') + 'で はなす)'; tgt = info.castle; }
     else if (p.q === 1) {
@@ -1156,7 +1350,15 @@
     } else if (p.q === 2) {
       if (p.flags.dragonDead) { text = 'おうさまに ゼフィロスを たおしたことを ほうこくしよう'; tgt = info.castle; }
       else { text = 'ひろばの てんくうのゲートから 空へ。ゼフィロスを たおそう'; tgt = info.skyGate; }
-    } else {
+    } else if (p.q === 3 && !p.flags.novaDead) {
+      if (!p.flags.gotCharm) { text = 'おうさまが また よんでいる。おしろへ いこう'; tgt = info.castle; }
+      else if (!p.flags.golemDead) { text = 'おしろの まえの マグマのゲートから ちていへ。ようがんまじんを たおそう'; tgt = info.magmaGate; }
+      else if (!p.flags.gotHelm) { text = 'おうさまに ボルガを たおしたことを ほうこくしよう'; tgt = info.castle; }
+      else if (!p.flags.octoDead) { text = 'うみのゲートから うみの そこの みやこへ。しんかいの ぬしを たおそう'; tgt = info.seaGate; }
+      else if (!p.flags.kingStar) { text = 'おうさまに うみの みやこの ことを ほうこくしよう'; tgt = info.castle; }
+      else { text = 'ひろばの ひがしの ほしのゲートから ほしの せかいへ。ノヴァを たおそう'; tgt = info.starGate; }
+    } else if (p.q === 3) { text = 'おうさまに みっつの せかいを すくったことを ほうこくしよう'; tgt = info.castle; }
+    else {
       const n = Object.keys(p.exhibits.species).length + Object.keys(p.exhibits.fossils).length;
       text = `はくぶつかんの てんじを あつめよう (${n}/${CS.SPECIES.length + CS.FOSSILS.length})`;
       tgt = null;
@@ -1173,10 +1375,26 @@
   }
 
   // ================= 空の色・明るさ =================
+  // きれい がしつ で つかう せかいごとの 光 (L: 光の むき, lcol: 光の いろ, hor/zen: 空の したと うえ)
+  const MOOD = {
+    magma: { L: [0.3, 1, 0.2], lcol: [0.42, 0.22, 0.12], hor: [0.5, 0.16, 0.07], zen: [0.12, 0.03, 0.03], glow: [0.5, 0.15, 0.05], glowD: [0, -1, 0] },
+    star: { L: [-0.5, 0.65, -0.55], lcol: [0.5, 0.55, 0.75], hor: [0.09, 0.07, 0.22], zen: [0.01, 0.01, 0.04], glow: [0.35, 0.2, 0.55], stars: 1 },
+  };
+  const STARS = [];
+  for (let i = 0; i < 260; i++) {
+    const r = CS.rng(i * 977 + 5), a = r() * Math.PI * 2, y = r() * 2 - 1, k = Math.sqrt(1 - y * y);
+    STARS.push([Math.cos(a) * k, y, Math.sin(a) * k, 0.06 + r() * 0.1, r()]);
+  }
   function environment() {
     const w = G.world, dim = w ? w.dim : 'over', R = ren.renderDist * 16;
     let fog = [R * 0.55, R * 0.95];
     if (dim === 'sky') return { day: 1, sky: [0.6, 0.78, 1], fog, sun: null };
+    const p0 = G.player, head = p0 && w ? w.get(p0.x, p0.y + 1.62, p0.z) : 0;
+    if (CS.LIQ[head] === 2) return { day: 1, sky: [1, 0.4, 0.05], fog: [0.2, 2.5], sun: null, mood: MOOD.magma, flat: true };
+    // マグマの ちてい: くらい あかい 空、したから てらす ようがんの ひかり
+    if (dim === 'magma') return { day: 0.82, sky: [0.3, 0.09, 0.05], fog: [R * 0.3, R * 0.85], sun: null, mood: MOOD.magma, amb: [0.4, 0.27, 0.24] };
+    // ほしの せかい: いつも よる。ほしと おおきな わくせい
+    if (dim === 'star') return { day: 0.7, sky: [0.03, 0.03, 0.1], fog: [R * 0.6, R * 1.1], sun: null, mood: MOOD.star, stars: true, amb: [0.32, 0.32, 0.44] };
     const a = G.time * Math.PI * 2, sunH = Math.sin(a);
     const day = CS.clamp(0.26 + (sunH + 0.15) * 1.2, 0.24, 1);
     const k = (day - 0.24) / 0.76;
@@ -1188,8 +1406,15 @@
     if (p && w && w.info.forest && Math.hypot(p.x - w.info.forest.x, p.z - w.info.forest.z) < w.info.forest.r + 3) {
       fog = [6, 44]; sky = [sky[0] * 0.55, sky[1] * 0.85, sky[2] * 0.8];
     }
-    if (p && w && w.get(p.x, p.y + 1.62, p.z) === B.water) { fog = [1, 14]; sky = [0.08 * day + 0.02, 0.22 * day + 0.03, 0.5 * day + 0.06]; }
-    return { day, sky, fog, sun: [Math.cos(a), sunH, 0.3] };
+    let flat = false;
+    if (p && w && w.get(p.x, p.y + 1.62, p.z) === B.water) { fog = [1, 14]; sky = [0.08 * day + 0.02, 0.22 * day + 0.03, 0.5 * day + 0.06]; flat = true; }
+    // うみの そこ: とおくまで すこし みえる あおみどりの みず
+    let amb = null;
+    if (dim === 'sea' && p && (head === B.seaWater || (CS.RENDER[head] === 'cross' && p.y + 1.62 < w.info.surf))) {
+      fog = [3, Math.min(R, 56)]; sky = [0.05 + 0.08 * day, 0.16 + 0.24 * day, 0.24 + 0.3 * day]; flat = true;
+      const k = Math.max(day, 0.35); amb = [0.5 * k, 0.66 * k, 0.7 * k];
+    }
+    return { day, sky, fog, sun: [Math.cos(a), sunH, 0.3], flat, amb };
   }
 
   // ================= 描く =================
@@ -1225,6 +1450,14 @@
       ren.skyQuad(dir, 30, 4, [1, 0.95, 0.7]);
       ren.skyQuad([-dir[0], -dir[1], -dir[2]], 30, 2.6, [0.85, 0.88, 1]);
     }
+    if (env.stars) {
+      // おおきな わくせい と (ふつう がしつ では) ほし
+      if (ren.gfx !== 'high') for (const s of STARS) ren.skyQuad(s, 30, s[3], [0.9, 0.9, 0.8 + s[4] * 0.2]);
+      const pd = [-0.55, 0.22, -0.7], pl = Math.hypot(...pd), pn = [pd[0] / pl, pd[1] / pl, pd[2] / pl];
+      ren.skyQuad(pn, 30, 7, [0.45, 0.32, 0.75]);
+      ren.skyQuad(pn, 29.8, 5.4, [0.6, 0.45, 0.88]);
+      ren.skyQuad(pn, 29.6, 2.6, [0.75, 0.62, 0.95]);
+    }
     const near = (x, z, r) => Math.abs(x - cam.x) < r && Math.abs(z - cam.z) < r;
     const R = ren.renderDist * 16;
     for (const e of G.ents) {
@@ -1251,6 +1484,7 @@
       }
     }
     for (const q of G.parts) ren.billboard(q.x, q.y, q.z, q.size, -1, q.col, 1);
+    if (playing) CS.Mods.draw(ren, w, now);
     ren.finish();
   }
 

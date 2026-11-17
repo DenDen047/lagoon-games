@@ -21,6 +21,7 @@
   <div id="bottom">
     <div id="stats"><div id="hearts"></div><div id="food"></div></div>
     <div id="mpRow"><div class="bar mp"><i id="mpBar"></i></div><small id="mpText"></small></div>
+    <div id="airRow" class="hidden"></div>
     <div id="hotbar"></div>
     <div id="selName"></div>
   </div>
@@ -50,6 +51,7 @@
       <button class="btn big ok" data-go="worlds">あそぶ</button>
       <button class="btn big" data-go="skin">スキンを つくる</button>
       <button class="btn big" data-go="help">あそびかた</button>
+      <button class="btn" data-go="mods">MOD (ゲームを ふやす)</button>
     </div>
     <p class="foot"><a href="../../">← ゲームいちらんへ</a></p>
   </div>
@@ -68,6 +70,7 @@
         <button class="mode" data-mode="creative"><b>クリエイティブ</b><small>ブロック とりほうだい。空も とべる</small></button>
       </div>
       <label>シード (かかなくても いい) <input id="wSeed" maxlength="12" placeholder="おまかせ" /></label>
+      <div id="wMods" class="wMods"></div>
       <button class="btn ok big" id="wCreate">つくって はいる</button>
     </div>
   </div>
@@ -84,6 +87,13 @@
       <h3>おはなし</h3>
       <p>キューブおうこくの おうさまが、ゆうしゃを さがしています。「ゆうしゃの森」の どこかに ねむる <b>ゆうしゃのつるぎ</b> を みつけて、おうさまに みせよう。ゆうしゃに なったら、てんくうの せかいに すむ りゅう <b>ゼフィロス</b> に いどもう。</p>
       <p>おうこくの <b>こだいのゲート</b> を くぐると、むかしの いきものが くらす <b>こだいの せかい</b> へ いける。<b>かせき</b> を ほったり、<b>つかまえアミ</b> で マンモスや きょうりゅうを つかまえて、<b>はくぶつかん</b> で うると おかねに なるよ。</p>
+      <p>ゼフィロスを たおすと、おしろの まえに あたらしい ゲートが ひらく。おうさまの たのみで、みっつの せかいを すくいに いこう。</p>
+      <ul>
+        <li><b>マグマの ちてい</b> (マグマのゲート): <b>ようがん</b> に はいると あつい！ <b>ほのおのおまもり</b> を もつと すこし ましに なる。ひかる <b>ほのおのけっしょう</b> や <b>ひいろのこうせき</b> が とれる。ボスは <b>ようがんまじん ボルガ</b>。</li>
+        <li><b>うみの そこの みやこ</b> (うみのゲート): みずの なかでは いきが へる。<b>あわあわヘルメット</b> を もつと ずっと いきが できるよ。<b>あわのはな</b> の そばや ガラスの ドームでも いきつぎ できる。しずんだ まちの <b>たからばこ</b> を さがそう。ボスは <b>しんかいの ぬし オクトーラ</b>。</li>
+        <li><b>ほしの せかい</b> (ほしのゲート): からだが かるくて、たかく とべる。ほしから おちないように きをつけて。<b>いんせきてつ</b> と <b>ほしのかけら</b> で <b>ほしのつるぎ</b> が つくれる。ボスは <b>ぎんがの まおう ノヴァ</b>。</li>
+      </ul>
+      <p>ボスを たおすと つぎの ゲートが ひらくよ。みずの なかでは シフトで もぐれる。</p>
       <h3>パソコン</h3>
       <table>
         <tr><td>W A S D</td><td>あるく</td></tr>
@@ -107,9 +117,13 @@
         <li>ちかの ふかい ところに ひかる <b>まほうのこうせき</b> がある。まほうのつえの ざいりょうだよ。</li>
         <li>よるは モンスターが でる。たいまつで あかるくしよう。</li>
       </ul>
+      <div id="modHelp"></div>
     </div>
   </div>
 </div>
+
+<!-- ============ MOD ============ -->
+<div id="mods" class="screen hidden"></div>
 
 <!-- ============ ひとやすみ ============ -->
 <div id="pause" class="screen hidden">
@@ -119,6 +133,7 @@
       <button class="btn big ok" data-act="resume">つづける</button>
       <button class="btn" data-act="help">あそびかた</button>
       <div class="setRow">みえる きょり <button class="btn small" data-dist="4">ちかい</button><button class="btn small" data-dist="6">ふつう</button><button class="btn small" data-dist="8">とおい</button></div>
+      <div class="setRow">がめんの きれいさ <button class="btn small" data-gfx="high">きれい</button><button class="btn small" data-gfx="low">ふつう</button></div>
       <div class="setRow">マウスの はやさ <input type="range" id="sens" min="1" max="10" value="5" /></div>
       <button class="btn" data-act="quit">セーブして タイトルへ</button>
     </div>
@@ -150,6 +165,8 @@
 <script src="skin.js"></script>
 <script src="entities.js"></script>
 <script src="ui.js"></script>
+<script src="mods/list.js"></script>
+<script src="mods.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

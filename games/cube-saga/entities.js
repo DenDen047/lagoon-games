@@ -8,7 +8,7 @@
   // ---------- 動きと当たり判定 ----------
   function solidAt(w, x, y, z) {
     x = Math.floor(x); y = Math.floor(y); z = Math.floor(z);
-    if (y < 0) return w.dim !== 'sky';
+    if (y < 0) return !CS.DIMS[w.dim].void;
     if (x < 0 || z < 0 || x >= w.W || z >= w.D) return true; // 世界のはしは見えないかべ
     if (y >= w.H) return false;
     return CS.SOLID[w.b[(y * w.D + z) * w.W + x]] === 1;
@@ -53,7 +53,13 @@
       e.y -= 0.01; if (collides(w, e)) e.onGround = true; e.y += 0.01;
     }
   }
-  function inWater(w, e) { return w.get(e.x, e.y + 0.4, e.z) === CS.B.water; }
+  function inWater(w, e) { return CS.LIQ[w.get(e.x, e.y + 0.4, e.z)] === 1; }
+  function inLava(w, e) { return CS.LIQ[w.get(e.x, e.y + 0.2, e.z)] === 2 || CS.LIQ[w.get(e.x, e.y + Math.min(1.2, e.h * 0.7), e.z)] === 2; }
+  // あしもとの じめん (てんじょうの ある せかいでも つかえるよう、いまの たかさから したを さがす)
+  function floorBelow(w, x, y, z) {
+    for (let yy = Math.min(w.H - 1, Math.floor(y) + 1); yy >= 0; yy--) { const id = w.get(x, yy, z); if (CS.SOLID[id] || CS.LIQ[id] === 2) return yy + 1; }
+    return 0;
+  }
 
   // ---------- 形 ----------
   // 1/16 ブロック単位の箱。p: 回転の中心, rx/rz: 回転
@@ -142,6 +148,82 @@
       for (let i = -2; i <= 2; i++) parts.push(L(-1, 20, i * 8 - 2, 1, 25, i * 8 + 2, gold));
       return parts;
     },
+    // ---- マグマの ちてい ----
+    lavaCrab(e) {
+      const a = Math.sin(e.anim * 2) * 0.4 * e.walkAmt, pinch = e.attackT > 0 ? 0.6 : 0.1;
+      const sh = '#c8401e', dk = '#7a2210', glow = '#ffb030';
+      const legs = [];
+      for (let i = -1; i <= 1; i++) for (const sd of [-1, 1]) legs.push(L(sd > 0 ? 7 : -11, 0, i * 3 - 1, sd > 0 ? 11 : -7, 4, i * 3 + 1, dk, { p: [sd * 7, 4, 0], rz: sd * (0.3 + (i % 2 ? a : -a)) }));
+      return [L(-7, 3, -6, 7, 9, 5, sh), L(-5, 9, -4, 5, 10, 3, glow), L(-2, 9.1, -5, 2, 10.2, 4, dk),
+        L(-4, 8, 5, -3, 13, 6, dk), L(3, 8, 5, 4, 13, 6, dk), L(-4.5, 13, 4.5, -2.5, 15, 6.5, '#111'), L(2.5, 13, 4.5, 4.5, 15, 6.5, '#111'),
+        L(-11, 4, 5, -6, 9, 11, sh, { p: [-7, 6, 5], ry: 0, rx: -pinch }), L(6, 4, 5, 11, 9, 11, sh, { p: [7, 6, 5], rx: -pinch }), ...legs];
+    },
+    emberMoth(e) {
+      const f = Math.sin(e.age * 18) * 0.7;
+      return [L(-1.5, 4, -4, 1.5, 7, 4, '#ffcf60'), L(-1, 5, 4, 1, 7, 6, '#ff9030'), L(-1, 7, 5, -0.5, 10, 5.5, '#552'), L(0.5, 7, 5, 1, 10, 5.5, '#552'),
+        L(-9, 6, -3, -1.5, 6.5, 4, '#ff7020', { p: [-1.5, 6, 0], rz: f }), L(1.5, 6, -3, 9, 6.5, 4, '#ff7020', { p: [1.5, 6, 0], rz: -f }),
+        L(-7, 6.6, -2, -3, 6.9, 2, '#ffe080', { p: [-1.5, 6, 0], rz: f }), L(3, 6.6, -2, 7, 6.9, 2, '#ffe080', { p: [1.5, 6, 0], rz: -f })];
+    },
+    golem(e) {
+      const a = Math.sin(e.anim) * 0.45 * e.walkAmt, up = e.attackT > 0 ? -1.6 : 0;
+      const rock = '#4e4448', dk = '#38302f', hot = '#ff9a30', eye = '#ffe060';
+      return [L(-9, 16, -6, 9, 34, 6, rock), L(-6, 22, 6, 6, 30, 6.4, hot), L(-2, 18, 6, 2, 22, 6.4, hot),
+        L(-6, 34, -5, 6, 44, 5, rock, { p: [0, 34, 0], rx: e.headRx }), L(-4, 38, 5, -1, 40, 5.4, eye, { p: [0, 34, 0], rx: e.headRx }), L(1, 38, 5, 4, 40, 5.4, eye, { p: [0, 34, 0], rx: e.headRx }),
+        L(-6, 44, -5, 6, 45, 5, hot, { p: [0, 34, 0], rx: e.headRx }),
+        L(-16, 10, -4, -9, 34, 4, dk, { p: [-12, 32, 0], rx: -a + up }), L(9, 10, -4, 16, 34, 4, dk, { p: [12, 32, 0], rx: a + up }),
+        L(-16.2, 10, -4.2, -8.8, 13, 4.2, hot, { p: [-12, 32, 0], rx: -a + up }), L(8.8, 10, -4.2, 16.2, 13, 4.2, hot, { p: [12, 32, 0], rx: a + up }),
+        L(-8, 0, -4, -1, 16, 4, dk, { p: [0, 16, 0], rx: a }), L(1, 0, -4, 8, 16, 4, dk, { p: [0, 16, 0], rx: -a })];
+    },
+    // ---- うみの そこの みやこ ----
+    puffer(e) {
+      const k = e.hurt > 0 || e.flee > 0 ? 1.5 : 1;
+      const parts = [L(-4 * k, 2, -4 * k, 4 * k, 2 + 8 * k, 4 * k, '#f0d050'), L(-3 * k, 2, -3 * k, 3 * k, 3, 3 * k, '#fff4c0'),
+        L(-3 * k, 4 + 3 * k, 4 * k, -1 * k, 4 + 5 * k, 4 * k + 0.3, '#222'), L(1 * k, 4 + 3 * k, 4 * k, 3 * k, 4 + 5 * k, 4 * k + 0.3, '#222'),
+        L(-2, 5, -4 * k - 3, 2, 8, -4 * k, '#e0b030', { p: [0, 6, -4 * k], ry: 0, rx: Math.sin(e.age * 8) * 0.4 })];
+      if (k > 1) for (const [x, y, z] of [[0, 2 + 12, 0], [6, 8, 0], [-6, 8, 0], [0, 8, 6], [0, 8, -6]]) parts.push(L(x - 0.6, y - 0.6, z - 0.6, x + 0.6, y + 0.6, z + 0.6, '#c09020'));
+      return parts;
+    },
+    jelly(e) {
+      const parts = [L(-5, 8, -5, 5, 14, 5, '#e890e0'), L(-4, 14, -4, 4, 16, 4, '#f4b8f0'), L(-3, 7, -3, 3, 8, 3, '#ffe0ff')];
+      for (let i = 0; i < 4; i++) {
+        const x = i % 2 ? 3 : -3, z = i < 2 ? 3 : -3, sw = Math.sin(e.age * 3 + i) * 0.3;
+        parts.push(L(x - 0.5, 0, z - 0.5, x + 0.5, 8, z + 0.5, '#ffd0f8', { p: [x, 8, z], rx: sw, rz: -sw }));
+      }
+      return parts;
+    },
+    octo(e) {
+      const parts = [L(-10, 28, -10, 10, 48, 10, '#c03a60'), L(-8, 48, -8, 8, 52, 8, '#d85a80'),
+        L(-8, 36, 10, -3, 42, 10.5, '#fff'), L(3, 36, 10, 8, 42, 10.5, '#fff'), L(-6, 37, 10.6, -4, 40, 10.8, '#111'), L(4, 37, 10.6, 6, 40, 10.8, '#111'),
+        L(-10.2, 30, -10.2, 10.2, 32, 10.2, '#f08aa8')];
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4, x = Math.sin(a) * 7, z = Math.cos(a) * 7, sw = Math.sin(e.anim * 2 + i * 0.8) * 0.5;
+        parts.push(L(x - 1.8, 0, z - 1.8, x + 1.8, 29, z + 1.8, i % 2 ? '#b03050' : '#c84068', { p: [x, 29, z], rx: Math.cos(a) * (0.35 + sw), rz: -Math.sin(a) * (0.35 + sw) }));
+      }
+      return parts;
+    },
+    // ---- ほしの せかい ----
+    starBunny(e) {
+      return [L(-3.5, 2, -4, 3.5, 8, 4, '#ece8ff'), L(-3, 6, 3, 3, 12, 8, '#ece8ff', { p: [0, 8, 3], rx: e.headRx }),
+        L(-2.5, 12, 4, -1, 19, 5.5, '#ece8ff', { p: [0, 12, 5], rx: -0.2 + Math.sin(e.age * 2) * 0.15 }), L(1, 12, 4, 2.5, 19, 5.5, '#ece8ff', { p: [0, 12, 5], rx: -0.2 - Math.sin(e.age * 2) * 0.15 }),
+        L(-2, 13, 4.4, -1.5, 18, 5.6, '#f8b0d0'), L(1.5, 13, 4.4, 2, 18, 5.6, '#f8b0d0'),
+        L(-2, 9, 8, -1, 10, 8.3, '#334'), L(1, 9, 8, 2, 10, 8.3, '#334'), L(-1, 10.5, 7.9, 1, 11.5, 8.4, '#ffd84a'),
+        L(-1.5, 4, -6, 1.5, 7, -4, '#fff'), ...legs4(e, 2, 3, 1, 2, '#d8d0f0', 0.6)];
+    },
+    ufo(e) {
+      const spin = e.age * 3, lights = [];
+      for (let i = 0; i < 6; i++) { const a = spin + i * Math.PI / 3; lights.push(L(Math.cos(a) * 9 - 0.8, 3, Math.sin(a) * 9 - 0.8, Math.cos(a) * 9 + 0.8, 4.5, Math.sin(a) * 9 + 0.8, i % 2 ? '#ff5050' : '#60ff90')); }
+      return [L(-10, 2, -10, 10, 5, 10, '#b8bcc8'), L(-6, 0, -6, 6, 2, 6, '#8a8e9a'), L(-5, 5, -5, 5, 10, 5, '#90e0ff'), L(-1.5, 6, 4.5, 1.5, 8, 5.2, '#204'), ...lights];
+    },
+    nova(e) {
+      const spin = e.age * 0.8, open = e.attackT > 0 ? 1.4 : 1;
+      const c = 13, parts = [L(-10, c - 10, -10, 10, c + 10, 10, '#3a2a8a'), L(-11, c - 6, -6, 11, c + 6, 6, '#6a4ad0'), L(-6, c - 11, -6, 6, c + 11, 6, '#6a4ad0'), L(-6, c - 6, -11, 6, c + 6, 11, '#6a4ad0'),
+        L(-5 * open, c - 5 * open, 11, 5 * open, c + 5 * open, 12, '#fff8d0'), L(-2.5, c - 2.5, 12, 2.5, c + 2.5, 12.6, '#ff3070'), L(-1, c - 1, 12.6, 1, c + 1, 13, '#200')];
+      for (let i = 0; i < 5; i++) {
+        const a = spin + i * Math.PI * 2 / 5, x = Math.cos(a) * 22, z = Math.sin(a) * 22, y = c + Math.sin(spin * 2 + i) * 3;
+        parts.push(L(x - 2.5, y - 2.5, z - 2.5, x + 2.5, y + 2.5, z + 2.5, '#ffe070'));
+      }
+      return parts;
+    },
   };
   function humanoidBoxes(e, skin, shirt, pants, armRx, thin) {
     const a = Math.sin(e.anim) * 0.7 * e.walkAmt, t = thin || 4, o = (4 - t) / 2;
@@ -176,6 +258,15 @@
     ptera: { w: 0.8, h: 0.9, hp: 12, speed: 3.0, ai: 'passive', fly: true, species: 'ptera' },
     trex: { w: 1.8, h: 3.0, hp: 60, speed: 3.0, ai: 'hostile', dmg: 7, species: 'trex' },
     dragon: { w: 6, h: 3.5, hp: 300, speed: 12, ai: 'boss', scale: 3, name: 'てんくうりゅう ゼフィロス' },
+    lavaCrab: { w: 1.1, h: 0.9, hp: 18, speed: 2.4, ai: 'hostile', dmg: 3, fireproof: true, drops: [['fireShard', 0, 2], ['emberGem', 0, 1]] },
+    emberMoth: { w: 0.6, h: 0.6, hp: 6, speed: 2.2, ai: 'passive', fly: true, fireproof: true, glow: 1, drops: [['fireShard', 1, 1]] },
+    golem: { w: 2.6, h: 4.4, hp: 320, speed: 2.4, ai: 'boss', scale: 1.6, think: 'golemThink', fireproof: true, glow: 1, name: 'ようがんまじん ボルガ', short: 'ボルガ' },
+    puffer: { w: 0.7, h: 0.7, hp: 8, speed: 1.6, ai: 'passive', swim: true, drops: [['pearl', 0, 1], ['rawMeat', 1, 1]] },
+    jelly: { w: 0.8, h: 1.0, hp: 12, speed: 1.4, ai: 'hostile', swim: true, dmg: 2, glow: 0.9, drops: [['pearl', 0, 2]] },
+    octo: { w: 3.6, h: 5, hp: 340, speed: 3, ai: 'boss', scale: 1.7, think: 'octoThink', name: 'しんかいの ぬし オクトーラ', short: 'オクトーラ' },
+    starBunny: { w: 0.6, h: 0.8, hp: 8, speed: 2.2, ai: 'passive', hop: true, drops: [['starShard', 0, 1]] },
+    ufo: { w: 1.3, h: 0.7, hp: 16, speed: 3.2, ai: 'hostile', fly: true, ranged: true, proj: 'zap', dmg: 3, drops: [['meteorIron', 1, 2], ['starShard', 0, 1]] },
+    nova: { w: 4.5, h: 4.5, hp: 380, speed: 12, ai: 'boss', scale: 2.4, proj: 'star', glow: 1, name: 'ぎんがの まおう ノヴァ', short: 'ノヴァ' },
     king: { w: 0.6, h: 1.8, hp: 999, ai: 'npc', skin: 'king', name: 'おうさま' },
     guard: { w: 0.6, h: 1.8, hp: 999, ai: 'npc', skin: 'guard', name: 'へいたい' },
     shop: { w: 0.6, h: 1.8, hp: 999, ai: 'npc', skin: 'shop', name: 'どうぐや' },
@@ -212,7 +303,7 @@
     if (e.slow > 0) e.slow -= dt;
     if (e.flee > 0) e.flee -= dt;
     if (e.angry > 0) e.angry -= dt;
-    if (T.ai === 'boss') return CS.dragonThink(e, g, dt);
+    if (T.ai === 'boss') return CS[T.think || 'dragonThink'](e, g, dt);
     if (e.exhibit) { e.walkAmt = 0; e.anim += dt; e.headRx = Math.sin(e.age) * 0.2; return; }
     const dx = p.x - e.x, dz = p.z - e.z, dist = Math.hypot(dx, dz), dy = p.y - e.y;
     let want = 0, wantYaw = e.yaw;
@@ -227,7 +318,8 @@
         if (e.attackCd <= 0 && dist < 16) {
           e.attackCd = 2.4;
           const tx = p.x - e.x, ty = p.y + 1.4 - (e.y + 1.5), tz = p.z - e.z, l = Math.hypot(tx, ty, tz);
-          g.shoot({ kind: 'arrow', owner: 'mob', x: e.x, y: e.y + 1.5, z: e.z, vx: tx / l * 22, vy: ty / l * 22 + l * 0.12, vz: tz / l * 22, dmg: T.dmg });
+          const pk = T.proj || 'arrow';
+          g.shoot({ kind: pk, owner: 'mob', x: e.x, y: e.y + 1.5, z: e.z, vx: tx / l * 22, vy: ty / l * 22 + (pk === 'arrow' ? l * 0.12 : 0), vz: tz / l * 22, dmg: T.dmg });
         }
       } else {
         want = sp;
@@ -265,12 +357,20 @@
     // ノックバックは速度にのせて、だんだん弱める
     e.vx = e.vx * Math.pow(0.02, dt) + mvx * (1 - Math.pow(0.02, dt));
     e.vz = e.vz * Math.pow(0.02, dt) + mvz * (1 - Math.pow(0.02, dt));
-    if (T.fly) {
-      const gy = groundY(w, e.x, e.z);
-      const target = gy + 3 + Math.sin(e.age * 0.7) * 1.5;
+    const grav = g.grav || 1;
+    if (T.swim && CS.LIQ[w.get(e.x, e.y + e.h / 2, e.z)] === 1) {
+      // およぐ いきもの: みずの なかを ふわふわ
+      if (e.swimH === undefined) e.swimH = 2 + Math.random() * 7;
+      const ty = chase ? p.y + 0.8 : floorBelow(w, e.x, e.y, e.z) + e.swimH + Math.sin(e.age * 0.6 + e.id) * 0.8;
+      e.vy += ((ty - e.y) * 1.5 - e.vy) * Math.min(1, dt * 2);
+    } else if (T.fly) {
+      const local = w.dim !== 'over' && w.dim !== 'ancient';
+      const gy = local ? floorBelow(w, e.x, e.y + 1, e.z) : groundY(w, e.x, e.z);
+      if (e.flyY === undefined) e.flyY = e.y;
+      const target = (gy > 0 ? gy + 3 : e.flyY) + Math.sin(e.age * 0.7) * 1.5 + (chase && local ? Math.max(0, p.y + 2 - gy - 3) : 0);
       e.vy += (target - e.y) * dt * 2 - e.vy * dt;
     } else if (inWater(w, e)) { e.vy = Math.min(e.vy + 20 * dt, 2.5); }
-    else e.vy -= 28 * dt;
+    else e.vy -= 28 * dt * grav;
     if (e.hitH && e.onGround && want && !T.hop) e.vy = 7.6;
     move(w, e, e.vx * dt, e.vy * dt, e.vz * dt);
     const spd = Math.hypot(e.vx, e.vz);
@@ -279,7 +379,7 @@
     e.headRx = chase ? -0.1 : Math.sin(e.age * 0.8 + e.id) * 0.15;
   }
   function groundY(w, x, z) {
-    for (let y = Math.min(w.H - 1, 60); y >= 0; y--) if (CS.SOLID[w.get(x, y, z)] || w.get(x, y, z) === CS.B.water) return y + 1;
+    for (let y = Math.min(w.H - 1, 60); y >= 0; y--) if (CS.SOLID[w.get(x, y, z)] || CS.LIQ[w.get(x, y, z)]) return y + 1;
     return 0;
   }
 
@@ -287,7 +387,7 @@
   CS.dragonThink = function (e, g, dt) {
     const p = g.player, C = g.world.info.center;
     e.timer -= dt; e.anim += dt * 3;
-    const enraged = e.hp < e.maxHp / 2;
+    const enraged = e.hp < e.maxHp / 2, nm = e.T.short || 'ゼフィロス', pk = e.T.proj || 'dfire';
     if (!e.state || e.state === 'idle') { e.state = 'circle'; e.timer = 10; e.ang = 0; }
     let tx, ty, tz, spd = enraged ? 14 : 11;
     if (e.state === 'circle') {
@@ -299,17 +399,17 @@
         const n = enraged ? 3 : 1;
         for (let i = 0; i < n; i++) {
           const ax = p.x + (i - 1) * 2.5 - e.x, ay = p.y + 1 - (e.y + 2), az = p.z - e.z, l = Math.hypot(ax, ay, az);
-          g.shoot({ kind: 'dfire', owner: 'mob', x: e.x, y: e.y + 2, z: e.z, vx: ax / l * 16, vy: ay / l * 16, vz: az / l * 16, dmg: 5 });
+          g.shoot({ kind: pk, owner: 'mob', x: e.x, y: e.y + 2, z: e.z, vx: ax / l * 16, vy: ay / l * 16, vz: az / l * 16, dmg: 5 });
         }
         e.attackT = 0.5;
       }
-      if (e.timer <= 0) { e.state = 'dive'; e.timer = 5; e.target = { x: p.x, y: p.y + 1, z: p.z }; CS.sfx.roar(); g.toast('ゼフィロスが つっこんでくる！'); }
+      if (e.timer <= 0) { e.state = 'dive'; e.timer = 5; e.target = { x: p.x, y: p.y + 1, z: p.z }; CS.sfx.roar(); g.toast(nm + 'が つっこんでくる！'); }
     } else if (e.state === 'dive') {
       tx = e.target.x; ty = e.target.y; tz = e.target.z; spd = enraged ? 20 : 16;
       const d = Math.hypot(e.x - p.x, e.y + 1.5 - p.y - 1, e.z - p.z);
       if (d < 4.5 && e.attackCd <= 0) { e.attackCd = 1.5; e.attackT = 0.4; g.hurtPlayer(6, e.x, e.z, 14); }
       if (Math.hypot(e.x - tx, e.y - ty, e.z - tz) < 3 || e.timer <= 0) {
-        if (Math.random() < 0.6) { e.state = 'perch'; e.timer = 7; g.toast('ゼフィロスが 島に おりた！ いまが チャンス！'); }
+        if (Math.random() < 0.6) { e.state = 'perch'; e.timer = 7; g.toast(nm + 'が 島に おりた！ いまが チャンス！'); }
         else { e.state = 'circle'; e.timer = 8 + Math.random() * 4; }
       }
     } else if (e.state === 'perch') {
@@ -322,7 +422,7 @@
           e.fireCd = 2.2; e.attackT = 0.6;
           const hx = e.x + Math.sin(e.yaw) * 9, hz = e.z - Math.cos(e.yaw) * 9;
           const ax = p.x - hx, ay = p.y + 1 - (e.y + 2), az = p.z - hz, l = Math.hypot(ax, ay, az);
-          g.shoot({ kind: 'dfire', owner: 'mob', x: hx, y: e.y + 2, z: hz, vx: ax / l * 14, vy: ay / l * 14, vz: az / l * 14, dmg: 5 });
+          g.shoot({ kind: pk, owner: 'mob', x: hx, y: e.y + 2, z: hz, vx: ax / l * 14, vy: ay / l * 14, vz: az / l * 14, dmg: 5 });
         }
       }
       if (e.timer <= 0) { e.state = 'circle'; e.timer = 9; }
@@ -337,6 +437,86 @@
       e.yaw += Math.atan2(Math.sin(want - e.yaw), Math.cos(want - e.yaw)) * Math.min(1, dt * 3);
     }
     e.headRx = Math.sin(e.anim * 0.5) * 0.1;
+  };
+
+  // ---------- ようがんまじん: あるいて ちかづき、じめんを たたく・ようがんだまを なげる ----------
+  CS.golemThink = function (e, g, dt) {
+    const w = g.world, p = g.player, C = w.info.center, R = (w.info.arenaR || 13) - 2;
+    const enr = e.hp < e.maxHp / 2;
+    const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx, dz);
+    const near = !p.dead && Math.hypot(p.x - C.x, p.z - C.z) < R + 14 && Math.abs(p.y - C.y) < 12;
+    let want = 0, wy = e.yaw;
+    if (near) { wy = Math.atan2(dx, -dz); want = d > 3.5 ? (enr ? 3.2 : 2.4) : 0; }
+    else if (Math.hypot(C.x - e.x, C.z - e.z) > 2) { wy = Math.atan2(C.x - e.x, -(C.z - e.z)); want = 2; }
+    let dyaw = wy - e.yaw;
+    while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+    while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    e.yaw += dyaw * Math.min(1, dt * 3);
+    let mx = Math.sin(e.yaw) * want, mz = -Math.cos(e.yaw) * want;
+    // しまの そとへは でない
+    if (Math.hypot(e.x + mx * 0.5 - C.x, e.z + mz * 0.5 - C.z) > R) { mx = 0; mz = 0; }
+    e.vx += (mx - e.vx) * Math.min(1, dt * 4); e.vz += (mz - e.vz) * Math.min(1, dt * 4);
+    e.vy -= 28 * dt;
+    move(w, e, e.vx * dt, e.vy * dt, e.vz * dt);
+    const spd = Math.hypot(e.vx, e.vz);
+    e.walkAmt = Math.min(1, spd / 1.5); e.anim += spd * dt * 2;
+    e.headRx = Math.sin(e.age) * 0.08;
+    e.stompCd = (e.stompCd === undefined ? 2 : e.stompCd) - dt;
+    e.fireCd = (e.fireCd === undefined ? 3 : e.fireCd) - dt;
+    if (!near) return;
+    if (d < 5.5 && e.stompCd <= 0) {
+      e.stompCd = enr ? 1.6 : 2.3; e.attackT = 0.5;
+      if (g.burst) g.burst(e.x, e.y + 0.2, e.z, [1, 0.5, 0.15], 40, 9, 0.6, 0.22);
+      CS.sfx.thunder();
+      if (d < 6 && Math.abs(p.y - e.y) < 2.5) g.hurtPlayer(enr ? 6 : 5, e.x, e.z, 13);
+    } else if (d > 6 && e.fireCd <= 0) {
+      e.fireCd = enr ? 1.6 : 2.8; e.attackT = 0.4;
+      const n = enr ? 3 : 1;
+      for (let i = 0; i < n; i++) {
+        const tx = p.x + (i - (n - 1) / 2) * 3 - e.x, tz = p.z - e.z, td = Math.hypot(tx, tz), T = Math.max(0.6, td / 13);
+        const ty = p.y + 0.8 - (e.y + 4.2);
+        g.shoot({ kind: 'lavaball', owner: 'mob', x: e.x, y: e.y + 4.2, z: e.z, vx: tx / T, vy: ty / T + 9 * T, vz: tz / T, dmg: 4 });
+      }
+      CS.sfx.fire();
+    }
+  };
+  // ---------- しんかいの ぬし: ひろばの うえを ただよい、すみを はく・クラゲを よぶ ----------
+  CS.octoThink = function (e, g, dt) {
+    const w = g.world, p = g.player, C = w.info.center;
+    const enr = e.hp < e.maxHp / 2;
+    e.anim += dt * (enr ? 3 : 2);
+    const near = !p.dead && Math.hypot(p.x - C.x, p.z - C.z) < 22;
+    let tx = C.x, tz = C.z, ty = C.y + 7 + Math.sin(e.age * 0.7) * 1.5;
+    if (near) {
+      const k = Math.min(1, 16 / (Math.hypot(p.x - C.x, p.z - C.z) || 1));
+      tx = C.x + (p.x - C.x) * k; tz = C.z + (p.z - C.z) * k; ty = Math.max(C.y + 1, Math.min(C.y + 12, p.y + 1.5)) + Math.sin(e.age) * 0.8;
+    }
+    const ddx = tx - e.x, ddy = ty - e.y, ddz = tz - e.z, l = Math.hypot(ddx, ddy, ddz) || 1, spd = Math.min(l, enr ? 4.5 : 3.2);
+    const k = Math.min(1, dt * 1.5);
+    e.vx += (ddx / l * spd - e.vx) * k; e.vy += (ddy / l * spd - e.vy) * k; e.vz += (ddz / l * spd - e.vz) * k;
+    e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
+    const want = Math.atan2(p.x - e.x, -(p.z - e.z));
+    e.yaw += Math.atan2(Math.sin(want - e.yaw), Math.cos(want - e.yaw)) * Math.min(1, dt * 2);
+    e.headRx = 0;
+    if (!near) return;
+    e.fireCd = (e.fireCd === undefined ? 2.5 : e.fireCd) - dt;
+    e.callCd = (e.callCd === undefined ? 10 : e.callCd) - dt;
+    e.attackCd = Math.max(0, e.attackCd);
+    const d = Math.hypot(p.x - e.x, p.y + 1 - e.y - 2.5, p.z - e.z);
+    if (d < 4.5 && e.attackCd <= 0) { e.attackCd = 1.4; e.attackT = 0.4; g.hurtPlayer(4, e.x, e.z, 11); }
+    if (e.fireCd <= 0) {
+      e.fireCd = enr ? 1.6 : 2.6; e.attackT = 0.5;
+      const n = enr ? 3 : 1;
+      for (let i = 0; i < n; i++) {
+        const ax = p.x + (i - (n - 1) / 2) * 2.5 - e.x, ay = p.y + 1 - (e.y + 3), az = p.z - e.z, al = Math.hypot(ax, ay, az) || 1;
+        g.shoot({ kind: 'ink', owner: 'mob', x: e.x, y: e.y + 3, z: e.z, vx: ax / al * 11, vy: ay / al * 11, vz: az / al * 11, dmg: 2 });
+      }
+    }
+    if (e.callCd <= 0 && g.spawn) {
+      e.callCd = enr ? 12 : 18;
+      g.toast(e.T.short + 'が クラゲを よんだ！');
+      for (let i = 0; i < 2; i++) g.spawn('jelly', e.x + (i ? 3 : -3), e.y + 2, e.z);
+    }
   };
 
   // ---------- 描く ----------
@@ -397,7 +577,7 @@
       return;
     }
     const parts = MODELS[e.type](e);
-    drawParts(ren, e, parts, e.T.ai === 'boss' ? Math.max(light, 0.75) : light, e.hurt > 0);
+    drawParts(ren, e, parts, e.T.ai === 'boss' || e.T.glow ? Math.max(light, e.T.glow || 0.75) : light, e.hurt > 0);
   }
 
   CS.TYPES = TYPES;
@@ -407,6 +587,8 @@
   CS.collides = collides;
   CS.solidAt = solidAt;
   CS.inWater = inWater;
+  CS.inLava = inLava;
+  CS.floorBelow = floorBelow;
   CS.drawEnt = draw;
   CS.drawHumanoid = drawHumanoid;
   CS.groundY = groundY;
