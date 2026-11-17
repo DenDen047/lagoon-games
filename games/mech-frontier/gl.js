@@ -158,7 +158,8 @@ float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 ${GROUND}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
 float cEm = 0., cGl = 0.;
-if (vMat > 2.5) { diffuseColor.rgb = pow(ground(vWp.xz), vec3(2.2)); cGl = max(gWet, uRain * .75); diffuseColor.rgb *= 1. - uRain * .35; }
+if (vMat > 2.5) { diffuseColor.rgb = pow(ground(vWp.xz), vec3(2.2)); cGl = max(gWet, uRain * .75); diffuseColor.rgb *= 1. - uRain * .35;
+  float slp = clamp((1. - normalize(vOn).y) * 5. - .25, 0., 1.); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.19, .17, .15), slp * .85); }
 else if (vMat > 1.5) { cEm = .5 + 1.5 * uNight; }
 else if (vMat > .5) {
   vec3 n = normalize(vOn);

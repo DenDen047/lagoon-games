@@ -92,6 +92,7 @@ const UI = (() => {
     $('wanted').classList.toggle('hidden', !G.wanted);
     if (G.wanted && $('wanted').dataset.n !== String(G.wanted)) { $('wanted').dataset.n = G.wanted; $('wanted').innerHTML = ic('police') + ic('star').repeat(G.wanted); }
     $('sus').classList.toggle('hidden', G.sus < .03); bar('susBar', G.sus, 1);
+    const rp = G.report; $('rep').classList.toggle('hidden', !rp); if (rp) { bar('repBar', rp.t, rp.max); $('repT').textContent = '通報まで ' + Math.ceil(rp.t) + ' 秒'; }
     const L = G.lock; $('lock').classList.toggle('hidden', !L);
     if (L) { $('lockName').textContent = L.name || ''; bar('lockBar', L.hp, L.maxhp); }
     const pr = G.prompt; $('prompt').classList.toggle('hidden', !pr || G.menu);
@@ -163,7 +164,7 @@ const UI = (() => {
     mechshop: ['[mech] メカショップ', [['shop', '購入']]], weapons: ['[gun] 武器屋', [['wshop', '購入'], ['equip', '装備']]],
     jobs: ['[jobs] 仕事案内', [['jobs', '仕事']]], factory: ['[factory] 工場', [['factory', '働く']]], food: ['[food] 食堂', [['food', 'メニュー']]],
     mats: ['[mats] 買取・素材', [['mats', '売買']]], clothes: ['[shirt] 服屋', [['clothes', '服']]], wardrobe: ['[shirt] クローゼット', [['wardrobe', '着替え']]],
-    fence: ['[bag] 裏の買取屋', [['fence', '盗品']]], pier: ['[fish] 釣り場', [['fish', '釣る']]], airport: ['[plane] 空港', [['airport', '飛行機']]],
+    fence: ['[bag] 裏の買取屋', [['fence', '盗品']]], police: ['[police] 警察署', [['police', '窓口']]], pier: ['[fish] 釣り場', [['fish', '釣る']]], airport: ['[plane] 空港', [['airport', '飛行機']]],
     bag: ['[bag] 持ち物', [['bag', '持ち物']]], pause: ['メニュー', [['help', '操作'], ['bag', '持ち物'], ['set', '設定']]],
   };
   let cs = { head: 0, body: 0, arms: 0, legs: 0, size: 1, c1: 7, c2: 1 }, shopSel = 0, game = null;
@@ -179,7 +180,7 @@ const UI = (() => {
     spawnPlayerMech(x, z, inIt ? b.y : P.human.y); if (inIt && P.mech) { P.state = 'mech'; P.human.hidden = true; P.mech.parked = false; }
   }
   const chips = (a) => '<p class="chips">' + a.filter(Boolean).map(t => '<span>' + t + '</span>').join('') + '</p>';
-  const statLine = (s) => { const st = mechStats(s); return chips(['体力 ' + st.hp, '速さ ' + Math.round(st.spd * 3.6), PARTS.legs[s.legs].name, st.kind === 'ball' ? '<b>R: 回転・砲台・コマ</b>' : st.kind === 'titan' ? '<b>R: 盾モード</b>' : '']); };
+  const statLine = (s) => { const st = mechStats(s); return chips(['体力 ' + st.hp, '速さ ' + Math.round(st.spd * 3.6), PARTS.legs[s.legs].name, s.armor ? '<b>パンチ専用</b>' : '', st.kind === 'ball' ? '<b>R: 回転・砲台・コマ</b>' : st.kind === 'titan' ? '<b>R: 盾モード</b>' : '']); };
   const swatches = (cols, cur, on) => { const d = el('div', 'sw'); cols.forEach((c, i) => { const b = el('button', (typeof cur === 'number' && cur === (cols === PAL ? i : c)) ? 'sel' : '', '', () => on(cols === PAL ? i : c)); b.style.background = hex(c); d.appendChild(b); }); return d; };
   function buy(price, fn) { if (SV.money < price) { ui.toast('お金が足りない'); sfx('hit'); return; } SV.money -= price; fn(); sfx('coin'); save(); draw(); }
   function craft(cost, fn) { if (!canPay(cost)) { ui.toast('素材が足りない'); sfx('hit'); return; } pay(cost); fn(); sfx('build'); save(); draw(); }
@@ -244,7 +245,7 @@ const UI = (() => {
     } else if (T === 'wshop' || T === 'craft') {
       for (const [kind, label] of [['gun', '銃'], ['melee', '近接武器'], ['shield', '盾']]) {
         add('h4', label);
-        for (const w of WLIST.filter(w => w.kind === kind)) {
+        for (const w of WLIST.filter(w => w.kind === kind && !w.hidden)) {
           const info = kind === 'gun' ? chips(['威力 ' + w.dmg + (w.n ? '×' + w.n : ''), '連射 ' + (1 / w.rate).toFixed(1), '射程 ' + w.range + 'm']) : kind === 'melee' ? chips(['威力 ' + w.dmg, 'リーチ ' + w.reach + 'm']) : chips(['防御 ' + Math.round(w.block * 100) + '%']);
           const c = add('card row', `<div><h3>${w.name}</h3>${info}</div>`);
           if (SV.own[w.id]) c.appendChild(el('span', 'tag', '所持'));
@@ -302,6 +303,13 @@ const UI = (() => {
       const c = add('card row', `<div><h3>[bag] 盗品</h3>${chips(['[money]' + yen(SV.loot)])}</div>`);
       c.appendChild(el('button', 'btn' + (SV.loot ? '' : ' off'), '売る', () => { if (!SV.loot) return; SV.money += SV.loot; ui.toast('[money]+' + yen(SV.loot)); SV.loot = 0; sfx('coin'); save(); draw(); }));
       add('note', '住宅街の家に入って物を盗める。住人に見つかると手配される。');
+    } else if (T === 'police') {
+      const caps = ents.filter(e => e.captive).length, fine = 600 * G.wanted;
+      const c = add('card row', `<div><h3>[police] 捕まえた相手</h3>${chips([caps + ' 人', '報酬は倒すより多い'])}</div>`);
+      c.appendChild(el('button', 'btn' + (caps ? '' : ' off'), '引き渡す', () => { handover(); draw(); }));
+      const c2 = add('card row', `<div><h3>[star] 手配度 ${G.wanted}</h3>${chips([G.wanted ? '罰金 [money]' + yen(fine) : '手配されていない'])}</div>`);
+      c2.appendChild(el('button', 'btn' + (G.wanted && SV.money >= fine ? '' : ' off'), '罰金を払う', () => { if (!G.wanted) return; buy(fine, () => { clearPolice('罰金を払って手配が解けた'); }); }));
+      add('note', '弱った闇商人や用心棒は降参する。近づいて捕まえ、ここへ連れて来ると逮捕になる。');
     } else if (T === 'bag') {
       const food = (icon, name, key, v) => { const c = add('card row', `<div><h3>${icon} ${name}　× ${SV.bag[key]}</h3>${chips(['満腹度 +' + v])}</div>`); c.appendChild(el('button', 'btn' + (SV.bag[key] ? '' : ' off'), '食べる', () => { if (!SV.bag[key]) return; SV.bag[key]--; eat(v); save(); draw(); })); };
       food('[veg]', '野菜', 'veg', 15); food('[fish]', '魚', 'fish', 25);
@@ -315,12 +323,13 @@ const UI = (() => {
     } else if (T === 'help') {
       const K = [['W A S D', '移動'], ['マウス', '視点'], ['スペース', 'ジャンプ / 噴射'], ['左クリック', '射撃'], ['右クリック', 'サブ・盾'], ['F', '近接 / 採掘 / 収穫'], ['Shift', '回転ダッシュ'], ['Q', '回転斬り'], ['R', '変形'], ['E', '乗る・話す・使う'], ['C', 'メカを呼ぶ'], ['H', 'リペアキット'], ['B', '建築'], ['Esc', 'メニュー']];
       add('keys', K.map(k => `<div><kbd>${k[0]}</kbd><span>${k[1]}</span></div>`).join(''));
-      add('note', '[scrap] 素材を集めてメカを作り、[jobs] 仕事で稼ぎ、[house] 家を買い、[shirt] 服を着替える。<br>[bag] 泥棒や住人への攻撃は [police] 手配の対象。逃げ切るか、捕まるか。');
+      add('note', '[scrap] 素材を集めてメカを作り、[jobs] 仕事で稼ぎ、[house] 家を買い、[shirt] 服を着替える。<br>[bag] 泥棒や住人への攻撃は、目撃されると通報される。[police] 警察署からパトカーが来る。');
     } else if (T === 'set') {
       const q = SV.q, rowS = (label, val, on) => { const c = add('card row', `<div><h3>${label}</h3></div>`); c.appendChild(el('button', 'btn', val, on)); };
       rowS('影', ['なし', '標準', '高品質'][q.shadow], () => { q.shadow = (q.shadow + 1) % 3; R.shadowQ = q.shadow; save(); draw(); });
       rowS('解像度', q.auto ? '自動' : '最高', () => { q.auto = q.auto ? 0 : 1; if (!q.auto) R.res = 1; save(); draw(); });
       rowS('音', soundOn ? 'ON' : 'OFF', () => { soundOn = !soundOn; draw(); });
+      rowS('流血の表現', q.blood ? 'あり' : 'なし', () => { q.blood = q.blood ? 0 : 1; save(); draw(); });
       const c = add('card row', '<div><h3>セーブデータを消す</h3></div>');
       c.appendChild(el('button', 'btn danger', '消す', function () { if (this.dataset.sure) { localStorage.removeItem(SAVE_KEY); location.reload(); } else { this.dataset.sure = 1; this.textContent = '本当に消す'; } }));
     }

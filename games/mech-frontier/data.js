@@ -6,6 +6,9 @@ const rnd = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random(
 const rndi = (a, b) => Math.floor(rnd(a, b + 1));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const angDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
+const hash2 = (x, z) => { let h = (Math.imul(x, 374761393) + Math.imul(z, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const vnoise = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi, u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf); return lerp(lerp(hash2(xi, zi), hash2(xi + 1, zi), u), lerp(hash2(xi, zi + 1), hash2(xi + 1, zi + 1), u), v); };
 const seeded = (a) => () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 
 // ざいりょう
@@ -100,6 +103,8 @@ const FRAMES = [
   ['ギガタイタン', 6, 4, 2, 1, 2.05, 13, 3, 55000], ['タイタンゼロ', 6, 4, 5, 3, 2.3, 14, 15, 80000],
 ].map((r, i) => ({ id: i, name: r[0], legs: r[1], body: r[2], head: r[3], arms: r[4], size: r[5], c1: r[6], c2: r[7], price: r[8] }));
 
+/* 最初から 持っている 弱い アーマー。銃は 使えず、パンチだけ。 */
+const ARMOR = { name: 'パンチアーマー', legs: 0, body: 1, head: 5, arms: 2, size: .62, c1: 3, c2: 1, armor: 1 };
 const mechKind = (s) => s.body === 4 ? 'titan' : (s.body === 3 && s.legs === 2) ? 'ball' : '';
 const BALL_MODES = ['歩行', '回転', '砲台', 'コマ'];
 function mechStats(s) {
@@ -133,8 +138,17 @@ const WLIST = [
   { id: 'laser', name: 'レーザー', kind: 'gun', dmg: 13, rate: .1, spd: 0, spread: 0, range: 150, proj: 'laser', price: 9500, cost: { scrap: 20, iron: 14, core: 10 } },
   { id: 'plasma', name: 'プラズマ砲', kind: 'gun', dmg: 130, rate: 1.6, spd: 75, spread: .004, range: 160, proj: 'plasma', aoe: 10, price: 16000, cost: { iron: 30, core: 14, rare: 2 } },
   { id: 'rail', name: 'レールガン', kind: 'gun', dmg: 240, rate: 2.4, spd: 0, spread: 0, range: 300, proj: 'laser', big: 1, price: 24000, cost: { iron: 40, core: 18, rare: 4 } },
+  { id: 'revolver', name: 'リボルバー', kind: 'gun', dmg: 38, rate: .55, spd: 130, spread: .008, range: 100, proj: 'bullet', price: 700, cost: { scrap: 10, iron: 6 } },
+  { id: 'smg', name: 'サブマシンガン', kind: 'gun', dmg: 6, rate: .06, spd: 110, spread: .04, range: 70, proj: 'bullet', price: 900, cost: { scrap: 14, iron: 5 } },
+  { id: 'ar', name: 'アサルトライフル', kind: 'gun', dmg: 13, rate: .11, spd: 150, spread: .018, range: 140, proj: 'bullet', price: 1800, cost: { scrap: 18, iron: 10 } },
+  { id: 'dbl', name: '二連ショットガン', kind: 'gun', dmg: 9, rate: 1.1, spd: 95, spread: .12, n: 14, range: 35, proj: 'bullet', price: 2600, cost: { scrap: 20, iron: 14 } },
+  { id: 'lmg', name: 'ライトマシンガン', kind: 'gun', dmg: 11, rate: .075, spd: 130, spread: .035, range: 130, proj: 'bullet', price: 5200, cost: { scrap: 30, iron: 22, core: 2 } },
+  { id: 'sniper', name: 'スナイパーライフル', kind: 'gun', dmg: 120, rate: 1.6, spd: 300, spread: .0005, range: 320, proj: 'bullet', price: 6000, cost: { scrap: 16, iron: 18, core: 3 } },
+  { id: 'fist', name: 'アーマーパンチ', kind: 'melee', dmg: 42, reach: 1.9, cd: .38, shape: 'fist', col: 0xf28c28, hidden: 1, price: 0, cost: {} },
+  { id: 'knife', name: 'ナイフ', kind: 'melee', dmg: 34, reach: 1.7, cd: .25, shape: 'sword', col: 0xd0d6e0, cut: 1, price: 300, cost: { scrap: 6, iron: 2 } },
+  { id: 'katana', name: '刀', kind: 'melee', dmg: 85, reach: 3.2, cd: .45, shape: 'sword', col: 0xe8ecf2, cut: 1, price: 5200, cost: { iron: 20, core: 3 } },
   { id: 'pipe', name: '鉄パイプ', kind: 'melee', dmg: 26, reach: 2.4, cd: .5, shape: 'pipe', col: 0x8a8f98, price: 0, cost: {} },
-  { id: 'sword', name: 'メカソード', kind: 'melee', dmg: 55, reach: 3.0, cd: .55, shape: 'sword', col: 0xd0d6e0, price: 900, cost: { scrap: 12, iron: 8 } },
+  { id: 'sword', name: 'メカソード', kind: 'melee', dmg: 55, reach: 3.0, cd: .55, shape: 'sword', col: 0xd0d6e0, cut: 1, price: 900, cost: { scrap: 12, iron: 8 } },
   { id: 'hammer', name: 'ハンマー', kind: 'melee', dmg: 110, reach: 2.8, cd: 1.1, shape: 'hammer', col: 0x6c7078, price: 2400, cost: { scrap: 20, iron: 18 } },
   { id: 'lance', name: 'ランス', kind: 'melee', dmg: 80, reach: 4.6, cd: .8, shape: 'lance', col: 0xc8b070, price: 3200, cost: { scrap: 16, iron: 14, core: 1 } },
   { id: 'saber', name: 'ビームセイバー', kind: 'melee', dmg: 95, reach: 3.6, cd: .4, shape: 'saber', col: 0x5ff0ff, glow: 1, price: 9000, cost: { iron: 16, core: 10 } },

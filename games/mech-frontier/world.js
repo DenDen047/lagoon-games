@@ -41,7 +41,7 @@ const W = (() => {
     while (t < max) {
       const st = t < 60 ? .8 : 1.6; t += st;
       const y = oy + dy * t;
-      if (y <= 0) return dy < 0 ? -oy / dy : t;
+      if (y <= w.h(ox + dx * t, oz + dz * t)) return t - st * .5;
       if (w.pointIn(ox + dx * t, y, oz + dz * t)) return t - st * .5;
     }
     return max;
@@ -52,6 +52,15 @@ const W = (() => {
   w.inFarm = (x, z) => x > -604 && x < -256 && z > -624 && z < -296;
   w.region = (x, z) => w.inCity(x, z) ? 'city' : w.inAirport(x, z) ? 'airport' : w.inTown(x, z) ? 'town' : w.inFarm(x, z) ? 'farm' : x > 690 ? 'sea'
     : z > 232 ? 'waste' : (z < -232 && Math.abs(x) < 150) ? 'junk' : x < -232 ? 'rock' : 'grass';
+  /* 地面の高さ。街・住宅街・空港・農場・海辺は 平ら。そのほかは 丘になり、西の岩山ほど 高い。 */
+  w.h = (x, z) => {
+    const rect = (x0, x1, z0, z1) => Math.max(x0 - x, x - x1, z0 - z, z - z1);
+    const d = Math.min(Math.max(Math.abs(x), Math.abs(z)) - 216, rect(226, 630, -570, -118), rect(216, 670, -92, 92), rect(-614, -246, -634, -286), 650 - x, Math.hypot(x + 940, z - 940) - 50);
+    if (d <= 0) return 0;
+    const rock = smooth(-250, -430, x), amp = 4.5 + 30 * rock + 7 * smooth(250, 420, z) * (1 - rock);
+    const n = vnoise(x / 95 + 11.3, z / 95 + 4.7) * .65 + vnoise(x / 41 + 3.1, z / 41 + 9.2) * .35;
+    return Math.max(0, n - .38) * amp * 2.2 * smooth(0, 80, d);
+  };
   w.houseAt = (x, z) => { for (const h of w.houses) if (x > h.x - 6 && x < h.x + 6 && z > h.z - 5 && z < h.z + 5) return h; return null; };
 
   // ---------- 動かない形を 区画ごとに ためる ----------
@@ -76,6 +85,22 @@ const W = (() => {
     if (solid) w.addBox({ x0: x - sx / 2, x1: x + sx / 2, z0: z - sz / 2, z1: z + sz / 2, y0: y, y1: y + sy });
   }
 
+  /* 起伏のある 区画の 地面。8m きざみの 格子で 高さを つける。 */
+  function terrain(x0, z0) {
+    const N = 16, st = CH / N, k = Math.floor(x0 / CH) + ',' + Math.floor(z0 / CH);
+    let c = chunkMap.get(k); if (!c) chunkMap.set(k, c = { v: [], box: [1e9, 1e9, 1e9, -1e9, -1e9, -1e9] });
+    const P = [];
+    for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+      const x = x0 + i * st, z = z0 + j * st, y = w.h(x, z); let nx = w.h(x - 2, z) - w.h(x + 2, z), nz = w.h(x, z - 2) - w.h(x, z + 2); const l = Math.hypot(nx, 4, nz);
+      P.push([x, y, z, nx / l, 4 / l, nz / l]);
+    }
+    const v = c.v, put = (p) => v.push(p[0], p[1], p[2], p[3], p[4], p[5], 1, 1, 1, 3); let top = 0;
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const a = P[i * (N + 1) + j], b = P[(i + 1) * (N + 1) + j], cc = P[(i + 1) * (N + 1) + j + 1], dd = P[i * (N + 1) + j + 1];
+      put(a); put(dd); put(cc); put(a); put(cc); put(b); top = Math.max(top, a[1], b[1], cc[1], dd[1]);
+    }
+    const bx = c.box; bx[0] = Math.min(bx[0], x0); bx[1] = Math.min(bx[1], -1); bx[2] = Math.min(bx[2], z0); bx[3] = Math.max(bx[3], x0 + CH); bx[4] = Math.max(bx[4], top); bx[5] = Math.max(bx[5], z0 + CH);
+  }
   const WALLS = [0x8fa3b8, 0xa9b4c2, 0x6f8196, 0xc9d1da, 0x5d7a8c, 0x9a8f86, 0x7890a8, 0xb8a898];
   const NEON = [0x40e0ff, 0xff50c0, 0x80ff60, 0xffb030, 0xa070ff];
   function roofStuff(r, x, z, bw, bd, h) {
@@ -157,7 +182,10 @@ const W = (() => {
 
   w.build = () => {
     const r = seeded(20261117);
-    for (let gx = -9; gx < 9; gx++) for (let gz = -9; gz < 9; gz++) sbox(gx * CH + CH / 2, -1, gz * CH + CH / 2, CH, 1, CH, 0xffffff, 3, false);
+    for (let gx = -9; gx < 9; gx++) for (let gz = -9; gz < 9; gz++) {
+      let hi = 0; for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) hi = Math.max(hi, w.h(gx * CH + i * 16, gz * CH + j * 16));
+      if (hi < .02) sbox(gx * CH + CH / 2, -1, gz * CH + CH / 2, CH, 1, CH, 0xffffff, 3, false); else terrain(gx * CH, gz * CH);
+    }
 
     // --- 街: 7×7 の 区画 ---
     for (let i = 0; i < 7; i++) for (let j = 0; j < 7; j++) {
@@ -167,6 +195,14 @@ const W = (() => {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) w.corners.push({ x: cx + sx * 20.5, z: cz + sz * 20.5, i, j, sx, sz });
       if (plaza) { for (let k = 0; k < 8; k++) { const a = k * .785 + .39; sbox(Math.sin(a) * 20, .2, Math.cos(a) * 20, 2.4, .5, .8, 0x7a5a40, 0, false); } continue; }
       for (const [tx, tz] of [[-19.5, -8], [-19.5, 8], [19.5, -8], [19.5, 8], [-8, 19.5], [8, -19.5]]) if (r() < .7) { sbox(cx + tx, .2, cz + tz, 1.6, .12, 1.6, 0x5a4a3a, 0, false); tree(r, cx + tx, cz + tz, .2); }
+      if (i === 5 && j === 3) {              // 警察署
+        sbox(cx, .2, cz - 7, 32, 9, 20, 0xe4e8ee, 1); sbox(cx, 9.2, cz - 7, 33, .7, 21, 0x1c3a8a, 0, false); sbox(cx, 3.4, cz + 4.4, 14, .4, 3, 0x1c3a8a, 0, false);
+        for (const s of [-1, 1]) sbox(cx + s * 6.4, .2, cz + 5.6, .4, 3.2, .4, 0xc8ccd2, 0, false);
+        sbox(cx, 6.2, cz + 3.2, 9, 1.6, .3, 0x40a0ff, 2, false); sbox(cx + 12, 9.9, cz - 7, .3, 7, .3, 0x30343c, 0, false); sbox(cx + 12, 16.5, cz - 7, 1, 1, 1, 0xff4040, 2, false);
+        for (let k = 0; k < 4; k++) sbox(cx - 15 + k * 4, .2, cz + 16, .15, .02, 5, 0xf0f0f0, 0, false);
+        w.station = { x: cx, z: cz + 9, carX: cx + 28, carZ: cz + 6 };
+        continue;
+      }
       const hb = () => 12 + r() * 26 + (3 - dc) * 14 * r();
       const t = r();
       if (t < .14) {                       // 公園
@@ -223,6 +259,7 @@ const W = (() => {
       sbox(Math.sin(a) * 13.4, .9, Math.cos(a) * 13.4, Math.abs(Math.cos(a)) * 3.4 + .4, 1.9, Math.abs(Math.sin(a)) * 3.4 + .4, 0x9fd0e8, 2, false);
       w.facilities.push({ id: f[0], icon: f[1], name: f[2], col: f[3], x: Math.sin(a) * 9.5, z: Math.cos(a) * 9.5, y: .2, r: 3.2 });
     });
+    w.facilities.push({ id: 'police', icon: '[police]', name: '警察署', col: 0x4080ff, x: w.station.x, z: w.station.z, y: .2, r: 2.6 });
     const al = w.alleys[2]; w.facilities.push({ id: 'fence', icon: '[bag]', name: '裏の買取屋', col: 0xa060ff, x: al.x - 1, z: al.z + 1, y: .2, r: 1.8 });
 
     // --- 空港 (東) ---
@@ -258,9 +295,9 @@ const W = (() => {
     // --- スクラップ置き場 (北) ---
     const RUST = [0x8a5a3a, 0x6a5a50, 0x9a6a40, 0x5a5f66, 0x7a4a30];
     for (let k = 0; k < 70; k++) {
-      const x = (r() - .5) * 260, z = -250 - r() * 450, s = 2 + r() * 5, hh = 1 + r() * 4;
-      sbox(x, 0, z, s, hh, s * (.6 + r() * .8), RUST[Math.floor(r() * 5)], 0, s > 3.5);
-      if (r() < .5) sbox(x + s * .2, hh, z, s * .5, .6 + r(), s * .4, RUST[Math.floor(r() * 5)], 0, false);
+      const x = (r() - .5) * 260, z = -250 - r() * 450, s = 2 + r() * 5, hh = 1 + r() * 4, gy = w.h(x, z) - .5;
+      sbox(x, gy, z, s, hh, s * (.6 + r() * .8), RUST[Math.floor(r() * 5)], 0, s > 3.5);
+      if (r() < .5) sbox(x + s * .2, gy + hh, z, s * .5, .6 + r(), s * .4, RUST[Math.floor(r() * 5)], 0, false);
     }
     sbox(-60, 0, -330, 3, 30, 3, 0xd0a030, 0); sbox(-48, 28, -330, 30, 2, 2, 0xd0a030, 0, false); sbox(-36, 20, -330, .3, 8, .3, 0x303030, 0, false); sbox(-36, 18.6, -330, 2, 1.4, 2, 0x50545c, 0, false);
     for (let k = 0; k < 50; k++) w.nodes.push({ type: 'scrap', x: (r() - .5) * 230, z: -248 - r() * 430, hp: 6, seed: k });
@@ -270,8 +307,8 @@ const W = (() => {
     for (let k = 0; k < 130; k++) {
       const x = -250 - r() * 830, z = (r() - .5) * 1700, s = 3 + r() * 11;
       if (w.inFarm(x, z)) continue;
-      const hh = 2 + r() * s; sbox(x, 0, z, s, hh, s * (.7 + r() * .6), r() < .5 ? 0x7a7f84 : 0x8a8a80, 0, s > 5);
-      sbox(x + s * .15, hh, z - s * .1, s * .6, hh * .5, s * .5, 0x6e7378, 0, false);
+      const hh = 2 + r() * s, gy = w.h(x, z) - 1; sbox(x, gy, z, s, hh, s * (.7 + r() * .6), r() < .5 ? 0x7a7f84 : 0x8a8a80, 0, s > 5);
+      sbox(x + s * .15, gy + hh, z - s * .1, s * .6, hh * .5, s * .5, 0x6e7378, 0, false);
     }
     for (let k = 0; k < 60; k++) { const x = -246 - r() * 800, z = (r() - .5) * 1600; if (!w.inFarm(x, z)) w.nodes.push({ type: 'iron', x, z, hp: 8, seed: k }); }
 
@@ -279,10 +316,10 @@ const W = (() => {
     for (let k = 0; k < 110; k++) {
       const x = (r() - .5) * 1800, z = 260 + r() * 820;
       if (x > 680) continue;
-      const l = 5 + r() * 12, rot = r() < .5, hh = 2 + r() * 6;
-      sbox(x, 0, z, rot ? l : 1, hh, rot ? 1 : l, 0xa09078, 0);
-      if (r() < .5) sbox(x + (rot ? l / 2 : 0), 0, z + (rot ? 0 : l / 2), 1.6, 6 + r() * 6, 1.6, 0x90806a, 0);
-      if (r() < .4) sbox(x + (rot ? 0 : 3), 0, z + (rot ? 3 : 0), 2.5, 1 + r() * 1.5, 2.5, 0x8a7a64, 0, false);
+      const l = 5 + r() * 12, rot = r() < .5, hh = 2 + r() * 6, gy = w.h(x, z) - 1.2;
+      sbox(x, gy, z, rot ? l : 1, hh + 1, rot ? 1 : l, 0xa09078, 0);
+      if (r() < .5) sbox(x + (rot ? l / 2 : 0), gy, z + (rot ? 0 : l / 2), 1.6, 7 + r() * 6, 1.6, 0x90806a, 0);
+      if (r() < .4) sbox(x + (rot ? 0 : 3), gy, z + (rot ? 3 : 0), 2.5, 2 + r() * 1.5, 2.5, 0x8a7a64, 0, false);
     }
     for (let k = 0; k < 50; k++) { const x = (r() - .5) * 1700; if (x < 680) w.nodes.push({ type: 'core', x, z: 270 + r() * 800, hp: 5, seed: k }); }
     for (let k = 0; k < 10; k++) w.nodes.push({ type: 'core', x: -300 - r() * 700, z: (r() - .5) * 600, hp: 5, seed: 60 + k });
@@ -290,7 +327,7 @@ const W = (() => {
     // --- 木 ---
     for (let k = 0; k < 1100; k++) {
       const x = (r() - .5) * 2200, z = (r() - .5) * 2200;
-      if (w.region(x, z) === 'grass' && !w.inCity(x, z, 8) && !w.inTown(x + 8, z + 8) && !w.inTown(x - 8, z - 8)) tree(r, x, z);
+      if (w.region(x, z) === 'grass' && !w.inCity(x, z, 8) && !w.inTown(x + 8, z + 8) && !w.inTown(x - 8, z - 8)) tree(r, x, z, w.h(x, z));
     }
     // --- 遠くの山なみ (行けない 背景) ---
     for (let k = 0; k < 46; k++) {
@@ -300,7 +337,7 @@ const W = (() => {
       scone(x, -2, z, rad, h, [0x5f7f5a, 0x6a8662, 0x7a8474, 0x556f60][k % 4], 7, tw);
       if (h > 320) scone(x, h * .62 - 2, z, rad * .39, h * .385, 0xf2f4f8, 7, tw);
     }
-    for (const n of w.nodes) { n.max = n.hp; n.t = 0; }
+    for (const n of w.nodes) { n.max = n.hp; n.t = 0; n.y = w.h(n.x, n.z); }
     for (const c of chunkMap.values()) R.addStatic(new Float32Array(c.v), c.box);
     chunkMap.clear();
   };

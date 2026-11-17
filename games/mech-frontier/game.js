@@ -9,20 +9,27 @@ const P = { human: null, mech: null, plane: null, car: null, state: 'foot' };
 const G = {
   t: 0, running: false, menu: false, preview: null, pvAng: 0, aim: { x: 0, y: 0, z: 0 }, lock: null, lockT: 0, prompt: null,
   job: null, groups: [], turrets: [], usePieces: [], build: { on: false, t: 0, rot: 0, lvl: 0, col: 0, ghost: null, ok: false },
-  beacons: [], hitT: 0, lastHurt: -99, deadT: 0, callCd: 0, spawnT: 0, raidT: 240, groupT: 5, planes: [], kills: 0, rain: 0, rainV: 0, rainT: 150, cars: [], wanted: 0, wantedT: 0, polT: 0, sus: 0, crimeT: -99, stoleT: -999, inHouse: null, dayN: 0,
+  beacons: [], hitT: 0, lastHurt: -99, deadT: 0, callCd: 0, spawnT: 0, raidT: 240, groupT: 5, planes: [], kills: 0, decals: [], report: null, rain: 0, rainV: 0, rainT: 150, cars: [], wanted: 0, wantedT: 0, polT: 0, sus: 0, crimeT: -99, stoleT: -999, inHouse: null, dayN: 0,
 };
 const body = () => P.state === 'mech' ? P.mech : P.state === 'plane' ? P.plane : P.state === 'car' ? P.car : P.human;
 
 // ---------- セーブ ----------
 function freshSave() {
-  return { money: 200, mats: { scrap: 0, iron: 0, core: 0, rare: 0 }, mechs: [], active: 0, own: { pistol: 1, pipe: 1 }, load: { main: 'pistol', sub: null, melee: 'pipe' },
-    pieces: [], rank: 1, xp: 0, quest: 0, kits: 1, time: .4, jet: 0, bed: null, jobs: 0, q: { shadow: 2, auto: 1 },
+  return { v: 2, money: 200, mats: { scrap: 0, iron: 0, core: 0, rare: 0 }, mechs: [Object.assign({}, ARMOR)], active: 0, own: { pistol: 1, pipe: 1 }, load: { main: 'pistol', sub: null, melee: 'pipe' },
+    pieces: [], rank: 1, xp: 0, quest: 0, kits: 1, time: .4, jet: 0, bed: null, jobs: 0, q: { shadow: 2, auto: 1, blood: 1 },
     hunger: 100, energy: 100, loot: 0, bag: { veg: 0, fish: 0 }, outfit: baseOutfit(), home: null, jobLv: {},
     closet: { top: { 0: 1 }, bottom: { 0: 1 }, hat: { 0: 1 }, hair: { 0: 1, 1: 1, 2: 1, 3: 1 }, face: { 0: 1 } } };
 }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SV)); } catch (e) { /* ほぞんできない たんまつ */ } }
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.mats) { SV = Object.assign(freshSave(), s); return true; } } catch (e) { /* こわれた データ */ }
+  try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.mats) {
+      SV = Object.assign(freshSave(), s);
+      if (!s.v) {      // 前の版の セーブ: アーマーを 配り、目標の 番号を 新しい 並びに 直す
+        SV.v = 2; if (!s.mechs.length) SV.mechs = [Object.assign({}, ARMOR)]; SV.quest = s.quest >= 2 ? Math.max(3, s.quest) : s.quest + 1;
+        if (SV.q.blood === undefined) SV.q.blood = 1;
+      }
+      return true;
+    } } catch (e) { /* こわれた データ */ }
   SV = freshSave(); return false;
 }
 const canPay = (c) => MAT_KEYS.every(k => (SV.mats[k] || 0) >= (c[k] || 0));
@@ -88,7 +95,7 @@ function mkPlane(spot, jet) {
 function spawnPlayerMech(x, z, y) {
   if (P.mech) { const i = ents.indexOf(P.mech); if (i >= 0) ents.splice(i, 1); }
   const s = SV.mechs[SV.active]; if (!s) { P.mech = null; return; }
-  const m = mkMech(s, 0, x, z); m.y = y || 0; m.parked = true; m.load = SV.load; m.mine = true; m.yaw = cam.yaw;
+  const m = mkMech(s, 0, x, z); m.y = y || 0; m.parked = true; m.load = s.armor ? { main: null, sub: null, melee: 'fist' } : SV.load; m.mine = true; m.yaw = cam.yaw;
   P.mech = m; ents.push(m);
 }
 
@@ -102,10 +109,18 @@ function boom(x, y, z, r) {
   spark(x, y, z, 10, 0xffd060, r * 2.5, .25); sfx('boom', Math.hypot(x - cam.ex, z - cam.ez));
 }
 
+function addDecal(x, y, z, s, col, flat) { const D = G.decals; if (D.length > 170) D.shift(); D.push({ x, y, z, s, col, flat, t: flat ? 50 : 30 }); }
+function blood(e, n) {       // 血しぶきと、足もとの 血のあと (設定で 切れる)
+  if (!SV.q.blood || e.kind !== 'human') return;
+  for (let i = 0; i < n && fx.length < 500; i++) fx.push({ x: e.x, y: e.y + 1.1, z: e.z, vx: rnd(-2.6, 2.6), vy: rnd(.5, 3.4), vz: rnd(-2.6, 2.6), life: rnd(.3, .6), max: .6, size: .13, col: 0x9a0616, type: 3 });
+  e.wounds = Math.min(7, (e.wounds || 0) + 1);
+  addDecal(e.x + rnd(-.7, .7), e.y + .03, e.z + rnd(-.7, .7), rnd(.3, .8), 0x7a0410, 1);
+}
+
 // ---------- あたり判定つきの 移動 ----------
 function collide(e) {
   const boxes = W.near(e.x, e.z, e.r + 1), step = e.kind === 'mech' ? .9 * e.spec.size : .6;
-  let ground = 0;
+  let ground = W.h(e.x, e.z);
   for (const b of boxes) {
     if (e.y + step >= b.y1) {
       const m = e.r * .35;
@@ -128,24 +143,28 @@ function physics(e, dt) {
   e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
   e.x = clamp(e.x, -W.size, W.maxX); e.z = clamp(e.z, -W.size, W.size);
   const g = collide(e);
-  if (e.y <= g) { e.y = g; if (e.vy < 0) e.vy = 0; e.onGround = true; e.chute = false; } else e.onGround = false;
+  // 下り坂で 浮かないよう、地面に いたものは 少しの 段差なら 地面に 吸いつく
+  if (e.y <= g + (e.onGround && e.vy <= 0 ? .7 : 0)) { e.y = g; if (e.vy < 0) e.vy = 0; e.onGround = true; e.chute = false; } else e.onGround = false;
 }
 
 // ---------- ダメージ ----------
 function hurt(e, dmg, src) {
   if (e.dead || e.parked) return;
-  if (e.citizen) { if (e.kind === 'human') citizenHurt(e, dmg, src); return; }
+  if (e.citizen) { if (e.kind === 'human') { blood(e, 4); citizenHurt(e, dmg, src); } return; }
   if (src && (e.blocking || (e.st.kind === 'titan' && e.mode === 1))) {
     const front = Math.sin(e.aimYaw) * (src.x - e.x) + Math.cos(e.aimYaw) * (src.z - e.z) > 0;
     if (e.st.kind === 'titan' && e.mode === 1) dmg *= front ? .1 : .6;
     else if (front) { dmg *= 1 - WEAPONS[e.load.sub].block; spark(e.x + Math.sin(e.aimYaw) * e.r, e.y + e.h * .6, e.z + Math.cos(e.aimYaw) * e.r, 2, 0x80e0ff, 4, .15); }
   }
   if (e.dashT > 0 || e.rollT > 0) dmg *= .4;
-  e.hp -= dmg; e.flash = .14;
+  e.hp -= dmg; e.flash = .14; blood(e, 4);
   if (e === body()) { G.hitT = .35; G.lastHurt = G.t; }
   else if (src === body() || (src && src.team === 0)) { G.lock = e; G.lockT = 3; }
   if (e.ai && !e.ai.aggro) { e.ai.aggro = true; if (e.group) for (const m of e.group.members) if (m.ai) m.ai.aggro = true; }
   if (e.hp <= 0) kill(e);
+  else if (e.kind === 'human' && e.team === 1 && !e.police && !e.surrender && e.hp < e.maxhp * .35) {     // 弱った 悪党は 降参する
+    e.surrender = true; e.ai.aggro = false; e.name = '降参した' + e.name; UI.toast('相手が降参した　近づいて捕まえられる');
+  }
 }
 function explode(x, y, z, r, dmg, team, src) {
   boom(x, y, z, r);
@@ -158,7 +177,8 @@ function explode(x, y, z, r, dmg, team, src) {
 }
 function kill(e) {
   e.dead = true;
-  boom(e.x, e.y + e.h * .5, e.z, e.kind === 'mech' ? 4 * e.spec.size : e.kind === 'human' ? 1 : 3);
+  if (e.kind === 'human') { if (!e.arrested && SV.q.blood) addDecal(e.x, e.y + .03, e.z, 1.6, 0x7a0410, 1); }
+  else boom(e.x, e.y + e.h * .5, e.z, e.kind === 'mech' ? 4 * e.spec.size : 3);
   if (e === P.human) { G.deadT = 3; P.human.hidden = true; UI.toast(G.wanted ? '[police] 逮捕された…' : '[boom] やられた…'); return; }
   if (e === P.mech) {
     if (P.state === 'mech') exitVehicle(true);
@@ -179,8 +199,8 @@ function kill(e) {
     if (e.boss || Math.random() < .04 + t * .01) gainMat('rare', e.boss ? 2 : 1);
     UI.gain('[money]+' + m);
   } else if (e.kind === 'drone') { SV.money += 25 + 10 * t; gainMat('scrap', 2); addXp(10); }
-  else if (e.boss) { const m = 500 + 150 * SV.rank; SV.money += m; gainMat('rare', 1); gainMat('core', 2); addXp(60); UI.toast('[dealer] 闇商人を倒した　[money]+' + m); }
-  else { SV.money += 60; addXp(15); UI.gain('[money]+60'); }
+  else if (e.boss) { const m = Math.round((500 + 150 * SV.rank) * (e.arrested ? 1.5 : 1)); SV.money += m; gainMat('rare', 1); gainMat('core', 2); addXp(60); UI.toast('[dealer] 闇商人を' + (e.arrested ? '逮捕' : '倒した') + '　[money]+' + m); }
+  else { const m = e.arrested ? 150 : 60; SV.money += m; addXp(15); UI.gain('[money]+' + m); }
   if (e.group) {
     e.group.members = e.group.members.filter(m => m !== e);
     if (!e.group.members.length) { G.groups = G.groups.filter(g => g !== e.group); G.groupT = 60; if (G.job && G.job.group === e.group) jobDone(G.job.pay, '闇商人退治'); }
@@ -195,7 +215,7 @@ function mine(n, amt) {
     return;
   }
   gainMat(n.type, n.type === 'scrap' ? amt * 2 : amt);
-  spark(n.x, 1.2, n.z, 4, n.type === 'core' ? 0x60e0ff : 0xc0a080, 5, .2); sfx('hit');
+  spark(n.x, n.y + 1.2, n.z, 4, n.type === 'core' ? 0x60e0ff : 0xc0a080, 5, .2); sfx('hit');
   if (n.hp <= 0) n.t = 75;
 }
 
@@ -252,7 +272,7 @@ function fireGun(e, w, side, inp) {
 }
 function nearestEnemy(x, z, max) {
   let best = null, bd = max;
-  for (const e of ents) { if (e.team !== 1 || e.dead || e.hidden) continue; const d = Math.hypot(e.x - x, e.z - z); if (d < bd) { bd = d; best = e; } }
+  for (const e of ents) { if (e.team !== 1 || e.dead || e.hidden || e.surrender) continue; const d = Math.hypot(e.x - x, e.z - z); if (d < bd) { bd = d; best = e; } }
   return best;
 }
 function melee(e, spin) {
@@ -267,7 +287,7 @@ function melee(e, spin) {
   for (const o of ents.slice()) {
     if (o.team === e.team || (o.team === 2 && (o.kind !== 'human' || o.down)) || o.dead || o.hidden) continue;
     if (Math.abs(o.y - e.y) > Math.max(e.h, o.h) || !hitOk(o.x, o.z, o.r)) continue;
-    hurt(o, dmg, e); spark(o.x, o.y + o.h * .5, o.z, 5, 0xffe0a0, 6, .2);
+    hurt(o, dmg, e); if (w.cut) { blood(o, 8); blood(o, 4); } else spark(o.x, o.y + o.h * .5, o.z, 5, 0xffe0a0, 6, .2);
     const d = Math.hypot(o.x - e.x, o.z - e.z) || 1; o.vx += (o.x - e.x) / d * 8; o.vz += (o.z - e.z) / d * 8;
   }
   if (e.team === 0) for (const n of W.nodes) if (n.hp > 0 && hitOk(n.x, n.z, 1.4)) mine(n, mech ? 3 : 1);
@@ -387,7 +407,7 @@ function updDrone(e, dt) {
   }
   e.vx += (mx * 9 - e.vx) * Math.min(1, 2 * dt); e.vz += (mz * 9 - e.vz) * Math.min(1, 2 * dt);
   e.x += e.vx * dt; e.z += e.vz * dt;
-  const want = Math.max(8, (a.aggro ? t.y : 0) + 8) + Math.sin(G.t * 1.3 + e.x) * 1.2; e.y += (want - e.y) * Math.min(1, dt);
+  const want = Math.max(W.h(e.x, e.z) + 8, (a.aggro ? t.y : 0) + 8) + Math.sin(G.t * 1.3 + e.x) * 1.2; e.y += (want - e.y) * Math.min(1, dt);
   if (W.pointIn(e.x, e.y, e.z)) e.y += 12 * dt;
 }
 // ---------- ひこうき ----------
@@ -405,7 +425,7 @@ function updPlane(p, dt) {
     cam.yaw = p.yaw; cam.pitch = p.pitch * .7 - .12;
   } else p.thr = 0;
   const tgt = p.thr * maxS; p.speed += (tgt - p.speed) * dt * (tgt > p.speed ? .45 : .3);
-  const air = p.y > .05;
+  const air = p.y > W.h(p.x, p.z) + .05;
   if (!air && p.speed < 24) p.pitch += (0 - p.pitch) * Math.min(1, 6 * dt);
   if (air && p.speed < 22) p.pitch -= dt * .5;
   const cp = Math.cos(p.pitch), fx_ = Math.sin(p.yaw) * cp, fy = Math.sin(p.pitch), fz = Math.cos(p.yaw) * cp;
@@ -414,7 +434,8 @@ function updPlane(p, dt) {
   if (p.rollT > 0) { p.x += -Math.cos(p.yaw) * 14 * dt * (yawRate > 0 ? -1 : 1); p.z += Math.sin(p.yaw) * 14 * dt * (yawRate > 0 ? -1 : 1); }
   p.roll += (clamp(-yawRate * .55, -1, 1) - p.roll) * Math.min(1, 4 * dt);
   p.vx = fx_ * p.speed; p.vz = fz * p.speed; p.prop += p.speed * dt * 2 + p.thr * dt * 20;
-  if (p.y <= 0) { if (vy < -16 || p.pitch < -.55) hurt(p, 60 + -vy * 2, null); p.y = 0; if (p.pitch < 0) p.pitch *= .5; }
+  const gh = W.h(p.x, p.z);
+  if (p.y <= gh) { if (vy < -16 || p.pitch < -.55) hurt(p, 60 + -vy * 2, null); p.y = gh; if (p.pitch < 0) p.pitch *= .5; }
   if (p.y > 420) { p.y = 420; if (p.pitch > 0) p.pitch *= .9; }
   if (Math.abs(p.x) > 950 || Math.abs(p.z) > 950) { p.x = clamp(p.x, -950, 950); p.z = clamp(p.z, -950, 950); p.yaw += dt * 1.5; if (piloted && G.t % 3 < dt) UI.toast('これ以上は進めない'); }
   if (p.speed > 3 && W.pointIn(p.x + fx_ * 3, p.y + 1.3, p.z + fz * 3)) { hurt(p, 70 + p.speed, null); p.x -= fx_ * 5; p.z -= fz * 5; p.speed = -4; boom(p.x + fx_ * 4, p.y + 1, p.z + fz * 4, 3); }
@@ -431,7 +452,7 @@ function updPlane(p, dt) {
 }
 
 // ---------- のりおり ----------
-function enterMech() { const m = P.mech; P.state = 'mech'; P.human.hidden = true; m.parked = false; m.aimYaw = cam.yaw; sfx('ui'); if (SV.quest === 2) SV.quest = 3;  }
+function enterMech() { const m = P.mech; P.state = 'mech'; P.human.hidden = true; m.parked = false; m.aimYaw = cam.yaw; sfx('ui'); if (SV.quest === 0) SV.quest = 1;  }
 function enterPlane(p) { P.plane = p; P.state = 'plane'; P.human.hidden = true; p.parked = false; cam.yaw = p.yaw; sfx('ui'); UI.toast('[plane] W で加速、マウスを上へ動かすと離陸'); }
 function exitVehicle(forced) {
   const b = body(), h = P.human; if (b === h) return;
@@ -483,9 +504,10 @@ function updBuild() {
   if (IN.hit.KeyT) { B_.lvl = Math.min(8, B_.lvl + 1); UI.buildBar(); }
   if (IN.hit.KeyG) { B_.lvl = Math.max(0, B_.lvl - 1); UI.buildBar(); }
   if (IN.hit.KeyC) { B_.col = (B_.col + 1) % BUILD_COLS.length; UI.buildBar(); }
-  const cy = Math.cos(cam.pitch), dx = Math.sin(cam.yaw) * cy, dy = Math.sin(cam.pitch), dz = Math.cos(cam.yaw) * cy, py = B_.lvl * 3;
+  const cy = Math.cos(cam.pitch), dx = Math.sin(cam.yaw) * cy, dy = Math.sin(cam.pitch), dz = Math.cos(cam.yaw) * cy, py = B_.lvl * 3 + W.h(b.x, b.z);
   let t = dy < -.05 ? (py - cam.ey) / dy : 14; t = clamp(t, 3, 30 + Math.hypot(cam.ex - b.x, cam.ez - b.z));
   const g = { t: B_.t, gx: Math.round((cam.ex + dx * t) / 4), gy: B_.lvl, gz: Math.round((cam.ez + dz * t) / 4), rot: B_.rot, col: B_.col };
+  g.gy += Math.round(W.h(g.gx * 4, g.gz * 4) / 3 + .2);      // 丘の上では、その高さの 階から 建てる
   const same = SV.pieces.find(p => p.gx === g.gx && p.gy === g.gy && p.gz === g.gz && p.t === g.t && (!edgePiece(g.t) || p.rot === g.rot));
   const x = g.gx * 4, z = g.gz * 4;
   B_.ok = !same && canPay(PIECES[g.t].cost) && !W.inCity(x, z, 6) && ['grass', 'junk', 'rock', 'waste'].includes(W.region(x, z)) && Math.hypot(x - b.x, z - b.z) > b.r + 1.5;
@@ -577,7 +599,8 @@ function update(dt) {
     if (e.broken > 0) { e.broken -= dt; if (e.broken <= 0) { e.dead = false; e.hidden = false; e.hp = e.maxhp; e.parked = true; if (e.kind === 'plane') { e.x = e.spot.x; e.z = e.spot.z; e.y = 0; e.yaw = e.spot.yaw; e.pitch = 0; e.speed = 0; } else { e.x = P.human.x + 4; e.z = P.human.z; e.y = P.human.y + 40; UI.toast('[wrench] メカの修理完了'); } } continue; }
     if (e.kind === 'plane') { updPlane(e, dt); continue; }
     if (e === body()) continue;
-    if (e.kind === 'car') { if (e.traffic) updTraffic(e, dt); continue; }
+    if (e.kind === 'car') { if (e.traffic) updTraffic(e, dt); else if (e.police && !e.deployed) updPoliceCar(e, dt); continue; }
+    if (e.surrender) { updCaptive(e, dt); continue; }
     if (e.citizen) { if (Math.hypot(e.x - cam.ex, e.z - cam.ez) < 220) updCitizen(e, dt); continue; }
     if (e.kind === 'drone') { updDrone(e, dt); continue; }
     if (e.parked || e === P.human) { if (!e.hidden) { e.vx *= .8; e.vz *= .8; physics(e, dt); for (const k of TIMERS) if (e[k] > 0) e[k] -= dt; e.spinA = 0; } continue; }
@@ -594,8 +617,8 @@ function update(dt) {
     }
     for (let j = 0; j < n && !done; j++) {
       s.vy -= s.g * h; s.x += s.vx * h; s.y += s.vy * h; s.z += s.vz * h; s.life -= h;
-      let hit = null;
-      if (s.life <= 0 || s.y <= 0 || W.pointIn(s.x, s.y, s.z)) done = true;
+      let hit = null, wall = false;
+      if (s.life <= 0 || s.y <= W.h(s.x, s.z) || W.pointIn(s.x, s.y, s.z)) { done = true; wall = s.life > 0; }
       else for (const e of ents) {
         if (e.team === s.team || (e.team === 2 && (e.kind !== 'human' || e.down)) || e.dead || e.hidden || e.parked) continue;
         const dx = e.x - s.x, dz = e.z - s.z, rr = e.r + s.size;
@@ -604,16 +627,17 @@ function update(dt) {
       if (!done && s.team === 0 && s.y < 3) for (const nd of W.nodes) if (nd.hp > 0 && Math.abs(nd.x - s.x) < 1.5 && Math.abs(nd.z - s.z) < 1.5) { mine(nd, 1); done = true; break; }
       if (done) {
         if (s.aoe) explode(s.x, Math.max(.3, s.y), s.z, s.aoe, s.dmg, s.team, s.src);
-        else { if (hit) hurt(hit, s.dmg, s.src); if (!s.flame && s.life > 0) spark(s.x, s.y, s.z, 2, 0xffe0a0, 4, .12, .25); }
+        else { if (hit) hurt(hit, s.dmg, s.src); if (!s.flame && s.life > 0) spark(s.x, s.y, s.z, 2, 0xffe0a0, 4, .12, .25); if (wall && !s.flame) addDecal(s.x, s.y, s.z, .17, 0x14141a, 0); }
       }
     }
     if (s.flame) s.size += dt * 3;
     if ((s.aoe || s.tgt) && fx.length < 480 && Math.random() < .7) fx.push({ x: s.x, y: s.y, z: s.z, vx: 0, vy: .5, vz: 0, life: .5, max: .5, size: .5, col: 0x8a8a90, type: 2 });
     if (done) shots.splice(i, 1);
   }
-  for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.life -= dt; if (f.life <= 0) { fx.splice(i, 1); continue; } f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt; if (f.type === 0) f.vy -= 14 * dt; }
+  for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.life -= dt; if (f.life <= 0) { fx.splice(i, 1); continue; } f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt; if (f.type === 0 || f.type === 3) f.vy -= 14 * dt; }
   for (let i = beams.length - 1; i >= 0; i--) { beams[i].life -= dt; if (beams[i].life <= 0) beams.splice(i, 1); }
   for (const n of W.nodes) if (n.hp <= 0) { n.t -= dt; if (n.t <= 0) n.hp = n.max; }
+  for (let i = G.decals.length - 1; i >= 0; i--) { G.decals[i].t -= dt; if (G.decals[i].t <= 0) G.decals.splice(i, 1); }
   G.spawnT -= dt; if (G.spawnT <= 0) { G.spawnT = 1.2; spawnTick(); }
   // きちへの しゅうげき
   if (G.turrets.length || SV.bed) {
@@ -628,8 +652,8 @@ function update(dt) {
     }
   }
   // チュートリアル
-  if (SV.quest === 0 && SV.mats.scrap >= 20) { SV.quest = 1; UI.toast('[scrap] スクラップがそろった'); }
-  if (SV.quest <= 1 && SV.mechs.length) SV.quest = 2;
+  if (SV.quest === 1 && SV.mats.scrap >= 20) { SV.quest = 2; UI.toast('[scrap] スクラップがそろった'); }
+  if (SV.quest <= 2 && SV.mechs.some(m => !m.armor)) SV.quest = 3;
   for (const k in IN.hit) IN.hit[k] = false; IN.wheel = 0;
 }
 // ---------- カメラと 描画 ----------
@@ -650,7 +674,7 @@ function updateCamera(dt) {
   else { dist = 4.4; h = 1.65; side = .65; }
   const tx = b.x - Math.cos(cam.yaw) * side, ty = b.y + h, tz = b.z + Math.sin(cam.yaw) * side;
   let d = dist;
-  for (let t = .6; t < dist; t += .6) if (ty - dy * t < .25 || W.pointIn(tx - dx * t, ty - dy * t, tz - dz * t)) { d = Math.max(.8, t - .6); break; }
+  for (let t = .6; t < dist; t += .6) if (ty - dy * t < W.h(tx - dx * t, tz - dz * t) + .25 || W.pointIn(tx - dx * t, ty - dy * t, tz - dz * t)) { d = Math.max(.8, t - .6); break; }
   cam.ex = tx - dx * d; cam.ey = ty - dy * d; cam.ez = tz - dz * d; cam.tx = tx; cam.ty = ty; cam.tz = tz; cam.shadowR = P.state === 'plane' ? 140 : 90;
   let far = W.raycast(tx, ty, tz, dx, dy, dz, 300);
   const hit = rayEnts(tx, ty, tz, dx, dy, dz, far, 0);
@@ -689,7 +713,7 @@ function render(dt) {
     drawEnt(e);
   }
   for (const n of W.nodes) if (n.hp > 0 && Math.hypot(n.x - cx, n.z - cz) < 240) drawNode(n);
-  RAIN = env.rain;
+  RAIN = env.rain; BLOOD = SV.q.blood; drawDecals(G.decals);
   for (const t of W.trees) if (Math.abs(t.x - cx) < 260 && Math.abs(t.z - cz) < 260) drawTree(t, G.t);
   if (cam.ey < 60) drawGrass(cx, cz, G.t);
   if (env.rain > .05) drawRain(cam, G.t, env.rain);
@@ -703,7 +727,7 @@ function render(dt) {
   if (env.night > .3) { R.glow(1); for (const l of W.lamps) if (Math.abs(l.x - cx) < 130 && Math.abs(l.z - cz) < 130) S(l.x, 5.6, l.z, 2.2, 2.2, 2.2, 0xffe2a0, .16 * env.night); R.glow(0); }
   for (const g of G.groups) { const a = g.alley; if (Math.hypot(a.x - cx, a.z - cz) < 150) { B(a.x + 1.4, .7, a.z, 1.6, 1, 1, 0x6a4a2a); B(a.x + 1.4, 1.35, a.z, 1.2, .3, .7, 0x303038); S(a.x + 1.4, 2.4, a.z, .3, .3, .3, 0xb060ff, 1); } }
   R.glow(1);
-  for (const f of W.facilities) if (Math.hypot(f.x - cx, f.z - cz) < 200) C(f.x, f.y + .1, f.z, f.r * 2, .12, f.r * 2, f.col, .35 + Math.sin(G.t * 3) * .1);
+  for (const f of W.facilities) if (Math.hypot(f.x - cx, f.z - cz) < 200) C(f.x, f.y + .1, f.z, f.r * 2, .12, f.r * 2, f.col, .13 + Math.sin(G.t * 3) * .04);
   R.glow(0);
   for (const s of shots) {
     if (s.flame) { R.glow(1); S(s.x, s.y, s.z, s.size, s.size, s.size, s.col, .5); R.glow(0); continue; }
@@ -714,6 +738,7 @@ function render(dt) {
   for (const f of fx) {
     const k = f.life / f.max;
     if (f.type === 0) B(f.x, f.y, f.z, f.size * k, f.size * k, f.size * k, f.col, 1);
+    else if (f.type === 3) S(f.x, f.y, f.z, f.size, f.size, f.size, f.col, 0);
     else if (f.type === 1) { R.glow(1); const s = f.size * (2.2 - k * 1.4); S(f.x, f.y, f.z, s, s, s, f.col, k * .9); R.glow(0); }
     else { const s = f.size * (2 - k); S(f.x, f.y, f.z, s, s, s, f.col, 0); }
   }
@@ -727,7 +752,7 @@ function render(dt) {
   G.beacons.length = 0;
   const q = questInfo(); if (q && !q.none && !G.job) G.beacons.push({ x: q.x, z: q.z, col: 0xffd040, label: '目標' });
   for (const p of jobPoints()) G.beacons.push({ x: p.x, z: p.z, col: p.col || 0x40c0ff, label: p.label });
-  for (const b of G.beacons) drawBeacon(b.x, 0, b.z, b.col, G.t);
+  for (const b of G.beacons) drawBeacon(b.x, W.h(b.x, b.z), b.z, b.col, G.t);
   if (G.build.ghost) drawPiece(G.build.ghost, G.build.ok ? 1 : 2);
   if (G.preview) { const pv = G.pv || (G.pv = baseEnt('mech', 0, W.showroom.x, W.showroom.z)); pv.walk = G.t * 2; pv.aimYaw = pv.yaw = 0; pv.load = SV.load; if (!G.preview.human) { pv.spec = G.preview; pv.st = mechStats(G.preview); }
     if (G.preview.human) { const hm = G.pvH || (G.pvH = mkHuman(0, W.showroom.x, W.showroom.z)); hm.fit = SV.outfit; hm.walk = G.t * 3; drawHuman(hm); } else drawMech(pv); }
@@ -752,7 +777,7 @@ function sfx(name, dist) {
 
 // ---------- はじめる ----------
 function startGame() {
-  ents = []; shots = []; fx = []; beams = []; G.planes = []; G.turrets = []; G.usePieces = []; G.groups = []; G.job = null;
+  ents = []; shots = []; fx = []; beams = []; G.planes = []; G.turrets = []; G.usePieces = []; G.groups = []; G.job = null; G.decals = []; G.report = null; G.build.on = false; G.build.ghost = null;
   P.human = mkHuman(0, 0, 0); P.human.load = SV.load; P.human.y = .2; P.state = 'foot'; P.mech = null; P.plane = null; P.human.fit = SV.outfit;
   if (SV.bed) { P.human.x = SV.bed.x; P.human.y = SV.bed.y; P.human.z = SV.bed.z; }
   ents.push(P.human);

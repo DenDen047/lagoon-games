@@ -7,30 +7,79 @@ function addWanted(n, why) {
   if (G.wanted > before) { UI.toast('[police] 手配度 ' + G.wanted + (why ? '　' + why : '')); sfx('boom', 0); }
 }
 function clearPolice(msg) {
-  G.wanted = 0; for (const e of ents.slice()) if (e.police) ents.splice(ents.indexOf(e), 1);
+  G.wanted = 0; G.report = null; for (const e of ents.slice()) if (e.police) { if (e.kind === 'car') { if (e !== P.car) removeCar(e); } else ents.splice(ents.indexOf(e), 1); }
   if (msg) UI.toast(msg);
 }
-function spawnPolice() {
-  const b = body(), an = rnd(6.28), d = rnd(38, 60), x = b.x + Math.sin(an) * d, z = b.z + Math.cos(an) * d;
-  if (W.pointIn(x, 1, z) || W.houseAt(x, z)) return;
+/* 目撃者が いれば、少し たってから 通報される。min は 最低の 手配度、add は 上乗せ。 */
+function reportCrime(min, add, why, x, z, rad, delay) {
+  if (rad && !ents.some(e => e.citizen && e.kind === 'human' && !e.down && Math.hypot(e.x - x, e.z - z) < rad)) return;
+  const r = G.report;
+  if (r) { r.min = Math.max(r.min, min); r.add = Math.max(r.add, add); r.why = why; return; }
+  G.report = { min, add, why, t: delay, max: delay }; UI.toast('[eye] 目撃された　まもなく通報される');
+}
+function spawnOfficer(x, z) {
+  const e = mkHuman(1, x, z, OUTFIT_POLICE); e.y = W.h(x, z) + .2; e.hp = e.maxhp = 90; e.dmgMul = .5; e.tier = 1; e.police = true; e.name = '警官';
+  e.load = { main: G.wanted >= 2 ? 'mg' : 'pistol', sub: null, melee: 'pipe' }; e.ai = mkAi(1, 14, 200); e.ai.aggro = true; e.ai.keep = true; ents.push(e); return e;
+}
+/* パトカーは 警察署から 出て、道なりに プレイヤーの 近くまで 走り、警官を おろす。 */
+function dispatch() {
+  const s = W.station, c = mkCar(s.carX, s.carZ + rnd(-5, 5), 0, false);
+  c.police = true; c.parked = false; c.col = 0xf4f4f0; c.type = 0; c.name = 'パトカー'; c.keep = true; c.crew = G.wanted >= 3 ? 3 : 2; c.life = 0;
+  sfx('laser', Math.hypot(s.x - cam.ex, s.z - cam.ez) * .3);
+}
+function deploy(c) {
+  c.deployed = true; c.parked = true; c.speed = 0; c.keep = false;
+  for (let i = 0; i < c.crew; i++) spawnOfficer(c.x + Math.cos(c.yaw) * (i % 2 ? 2.4 : -2.4), c.z - Math.sin(c.yaw) * (i % 2 ? 2.4 : -2.4) + (i > 1 ? 2 : 0));
   if (G.wanted >= 3 && !ents.some(e => e.police && e.kind === 'mech')) {
-    const m = spawnEnemyMech(x, z, 2, false); m.police = true; m.name = '警察メカ'; m.spec.c1 = 0; m.spec.c2 = 8; m.ai.aggro = true; m.ai.keep = true; return;
+    const m = spawnEnemyMech(c.x + Math.sin(c.yaw) * 6, c.z + Math.cos(c.yaw) * 6, 2, false); m.police = true; m.name = '警察メカ'; m.spec.c1 = 0; m.spec.c2 = 8; m.ai.aggro = true; m.ai.keep = true;
   }
-  const e = mkHuman(1, x, z, OUTFIT_POLICE); e.hp = e.maxhp = 90; e.dmgMul = .5; e.tier = 1; e.police = true; e.name = '警官';
-  e.load = { main: G.wanted >= 2 ? 'mg' : 'pistol', sub: null, melee: 'pipe' }; e.ai = mkAi(1, 14, 200); e.ai.aggro = true; e.ai.keep = true; ents.push(e);
+}
+function updPoliceCar(c, dt) {
+  const b = body(), L = W.roadLines, nl = (v) => L.reduce((p, q) => Math.abs(q - v) < Math.abs(p - v) ? q : p);
+  c.life += dt;
+  if (Math.hypot(b.x - c.x, b.z - c.z) < 24 || c.life > 100) return deploy(c);
+  let tx = b.x, tz = b.z;
+  if (W.inCity(c.x, c.z, 8)) {
+    const gx = nl(b.x), gz = nl(b.z), onX = Math.abs(nl(c.x) - c.x) < 1.2, onZ = Math.abs(nl(c.z) - c.z) < 1.2;
+    if (onZ && Math.abs(gx - c.x) > 1.5) { tx = gx; tz = c.z; }            // 東西の 道を 進む
+    else if (onX && Math.abs(gz - c.z) > 1.5) { tx = c.x; tz = gz; }       // 南北の 道を 進む
+    else if (!onX && !onZ) { tx = nl(c.x); tz = c.z; }
+  }
+  const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz) || 1, st = Math.min(d, (c.speed = Math.min(26, c.speed + 14 * dt)) * dt);
+  c.x += dx / d * st; c.z += dz / d * st; c.y = W.h(c.x, c.z); c.wheel += st * 2.5;
+  c.yaw += angDiff(Math.atan2(dx, dz), c.yaw) * Math.min(1, 8 * dt);
 }
 function updWanted(dt) {
+  const r = G.report;
+  if (r) { r.t -= dt; if (r.t <= 0) { G.report = null; const to = Math.min(3, Math.max(G.wanted + r.add, r.min)); if (to > G.wanted) addWanted(to - G.wanted, r.why); else G.wantedT = 40; } }
   if (G.wanted <= 0) return;
   const b = body(); let near = 1e9, n = 0;
   for (const e of ents.slice()) {
-    if (!e.police || e.dead) continue;
+    if (e.kind === 'car' && e.police && !e.deployed) { n += e.crew; continue; }
+    if (!e.police || e.dead || e.kind === 'car') continue;
     const d = Math.hypot(e.x - b.x, e.z - b.z);
-    if (d > 150) { ents.splice(ents.indexOf(e), 1); continue; }
+    if (d > 220) { ents.splice(ents.indexOf(e), 1); continue; }
     n++; near = Math.min(near, d);
   }
   if (near > 55) G.wantedT -= dt; else G.wantedT = Math.max(G.wantedT, 18);
-  G.polT -= dt; if (G.polT <= 0 && n < G.wanted * 2 + (G.wanted >= 3 ? 1 : 0)) { G.polT = 2.5; spawnPolice(); }
+  G.polT -= dt; if (G.polT <= 0 && n < G.wanted * 2) { G.polT = 9; dispatch(); }
   if (G.wantedT <= 0) { G.wanted--; G.wantedT = 22; if (G.wanted <= 0) clearPolice('警察は追跡をあきらめた'); }
+}
+/* 降参した 相手。捕まえると、プレイヤーの あとを ついてくる。 */
+function updCaptive(e, dt) {
+  if (e.flash > 0) e.flash -= dt;
+  if (!e.captive) return;
+  const b = body(), dx = b.x - e.x, dz = b.z - e.z, d = Math.hypot(dx, dz);
+  if (d > 70) { e.x = b.x - Math.sin(b.yaw) * 3; e.z = b.z - Math.cos(b.yaw) * 3; e.y = b.y; return; }
+  e.yaw = Math.atan2(dx, dz);
+  if (d > 2.6 + b.r) { const sp = Math.min(11, d * 2.5); e.x += dx / d * sp * dt; e.z += dz / d * sp * dt; e.walk += sp * dt * 2.2; e.vx = dx / d * sp; e.vz = dz / d * sp; } else { e.vx = e.vz = 0; }
+  e.y = collide(e);
+}
+function handover() {
+  const cs = ents.filter(e => e.captive && Math.hypot(e.x - W.station.x, e.z - W.station.z) < 45);
+  for (const e of cs) { e.arrested = true; kill(e); }
+  if (cs.length) { UI.toast('[police] ' + cs.length + ' 人を引き渡した'); sfx('coin'); save(); }
+  return cs.length;
 }
 
 // ---------- 住人 ----------
@@ -65,8 +114,8 @@ function citizenHurt(e, dmg, src) {
   const mine = !!src && (src === body() || src.team === 0);
   if (e.hp <= 0) {
     e.down = true; e.ko = 40;
-    if (mine) { const m = rndi(20, 90); SV.money += m; UI.gain('[money]+' + m); addWanted(G.wanted < 2 ? 2 - G.wanted : 1, '住人を倒した'); }
-  } else if (mine && G.t - G.crimeT > 2) { G.crimeT = G.t; if (!G.wanted) addWanted(1, '住人を攻撃した'); else G.wantedT = 40; }
+    if (mine) { const m = rndi(20, 90); SV.money += m; UI.gain('[money]+' + m); reportCrime(2, G.wanted >= 2 ? 1 : 0, '住人を倒した', e.x, e.z, 60, 7); }
+  } else if (mine && G.t - G.crimeT > 2) { G.crimeT = G.t; reportCrime(1, 0, '住人を攻撃した', e.x, e.z, 60, 7); }
   for (const o of ents) if (o.citizen && !o.resident && Math.hypot(o.x - e.x, o.z - e.z) < 25) o.flee = Math.max(o.flee || 0, 6);
 }
 
@@ -122,7 +171,8 @@ function updCar(c, dt) {
   }
 }
 function enterCar(c) {
-  if (c.traffic) { c.traffic = false; if (!G.wanted && Math.random() < .4) addWanted(1, '車を盗んだ'); }
+  if (c.traffic) { c.traffic = false; if (Math.random() < .5) reportCrime(1, 0, '車を盗んだ', c.x, c.z, 0, 9); }
+  if (c.police) { c.police = false; c.wasPolice = true; reportCrime(1, 0, 'パトカーを盗んだ', c.x, c.z, 0, 4); }
   P.car = c; P.state = 'car'; P.human.hidden = true; c.parked = false; c.team = 0; sfx('ui');
 }
 
@@ -135,7 +185,7 @@ function updHouses(dt) {
     const d = Math.hypot(r.x - h.x, r.z - h.z), sp = Math.hypot(h.vx, h.vz);
     G.sus += dt * (r.asleep ? .1 : .45) * (sp > 9 ? 2.5 : 1) * clamp(1.3 - d / 9, .15, 1.3);
     if (!r.asleep) r.yaw = Math.atan2(h.x - r.x, h.z - r.z);
-    if (G.sus >= 1) { G.sus = 0; r.asleep = false; UI.toast('「泥棒！ 警察を呼ぶぞ！」'); addWanted(G.wanted ? 1 : (G.t - G.stoleT < 60 ? 2 : 1), '見つかった'); }
+    if (G.sus >= 1) { G.sus = 0; r.asleep = false; UI.toast('「泥棒！ 警察を呼ぶぞ！」'); reportCrime(G.t - G.stoleT < 60 ? 2 : 1, G.wanted ? 1 : 0, '住人に見つかった', 0, 0, 0, 5); }
   } else G.sus = Math.max(0, G.sus - dt * .4);
 }
 function refreshResidents() {
@@ -219,9 +269,9 @@ function updJob(dt) {
 }
 function questInfo() {
   switch (SV.quest) {
-    case 0: return { text: '北のスクラップ置き場で [scrap] を 20 個集める (F)　' + SV.mats.scrap + '/20', x: 0, z: -222 };
-    case 1: return { text: '広場の工房でメカを作る', x: W.facilities[0].x, z: W.facilities[0].z };
-    case 2: return P.mech ? { text: 'メカに近づいて E で乗る', x: P.mech.x, z: P.mech.z } : null;
+    case 0: return P.mech ? { text: 'パンチアーマーに近づいて E で乗る', x: P.mech.x, z: P.mech.z } : null;
+    case 1: return { text: '北のスクラップ置き場で [scrap] を 20 個集める (F)　' + SV.mats.scrap + '/20', x: 0, z: -222 };
+    case 2: return { text: '広場の工房で本格的なメカを作る', x: W.facilities[0].x, z: W.facilities[0].z };
     case 3: return { text: '仕事案内で仕事を受ける', x: W.facilities[3].x, z: W.facilities[3].z };
     case 4: return { text: '街の外で B を押して基地を建てる', none: true };
     default: return null;
@@ -252,7 +302,8 @@ function findPrompt() {
   const m = P.mech;
   if (m && !m.hidden && near(m, m.r + 2.5)) { G.prompt = { text: '[mech] 乗る', act: enterMech }; return; }
   for (const p of G.planes) if (!p.hidden && near(p, 6) && Math.abs(p.y - b.y) < 4) { G.prompt = { text: '[plane] 乗る', act: () => enterPlane(p) }; return; }
-  for (const c of G.cars) if (near(c, 3.4)) { G.prompt = { text: '[car] ' + (c.traffic ? '車を奪う' : '乗る'), act: () => enterCar(c) }; return; }
+  for (const e of ents) if (e.surrender && !e.captive && near(e, 2.6)) { G.prompt = { text: '[police] 捕まえる', act: () => { e.captive = true; sfx('ui'); UI.toast('[police] 捕まえた　警察署へ連れて行こう'); } }; return; }
+  for (const c of G.cars) if (near(c, 3.4) && (!c.police || c.deployed)) { G.prompt = { text: '[car] ' + (c.traffic ? '車を奪う' : '乗る'), act: () => enterCar(c) }; return; }
   for (const e of ents) if (e.citizen && e.kind === 'human' && !e.down && !e.resident && !(e.flee > 0) && near(e, 2.2)) {
     G.prompt = { text: '話す', act: () => { e.pause = 2.5; e.yaw = Math.atan2(b.x - e.x, b.z - e.z); UI.toast('「' + pick(TALK) + '」'); } }; return;
   }
@@ -277,8 +328,8 @@ function spawnTick() {
   refreshResidents();
   // 野生の敵
   const cfg = { grass: [2, 0], junk: [2, 0], rock: [3, 0], waste: [Math.min(9, 5 + SV.rank / 2), 1] }[reg];
-  if (!SV.mechs.length || !cfg) return;
-  if (ents.filter(e => e.team === 1 && !e.group && !e.boss && !e.police).length >= cfg[0]) return;
+  if (!SV.mechs.some(m => !m.armor) || !cfg) return;
+  if (ents.filter(e => e.team === 1 && !e.group && !e.boss && !e.police && e.kind !== 'car').length >= cfg[0]) return;
   const dist = Math.hypot(b.x, b.z), far = dist > 900 ? 2 : dist > 560 ? 1 : 0;
   for (let i = 0; i < 8; i++) {
     const an = rnd(6.28), d = rnd(110, 170), x = b.x + Math.sin(an) * d, z = b.z + Math.cos(an) * d, rg = W.region(x, z);

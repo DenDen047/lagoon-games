@@ -145,6 +145,7 @@ function drawGun(w, s) {
 function drawMelee(w, s) {
   const r = w.reach * s * .8, c = w.col, em = w.glow ? 1 : 0;
   B(0, 0, .3 * s, .14 * s, .14 * s, .6 * s, DK);
+  if (w.shape === 'fist') { SB(0, 0, .5 * s, .9 * s, .8 * s, 1 * s, c); SB(0, 0, 1.05 * s, .8 * s, .66 * s, .3 * s, 0x30343c); return; }
   if (w.shape === 'hammer') { B(0, 0, r * .5, .14 * s, .14 * s, r, MID); B(0, 0, r, .9 * s, .7 * s, .6 * s, c); }
   else if (w.shape === 'axe') { B(0, 0, r * .5, .14 * s, .14 * s, r, MID); B(0, .35 * s, r * .9, .1 * s, .9 * s, .8 * s, c, em); }
   else if (w.shape === 'lance') { R.push(); R.rotX(Math.PI / 2); K(0, r * .55, 0, .4 * s, r, .4 * s, c); R.pop(); }
@@ -221,7 +222,7 @@ function drawMech(e) {
 }
 
 const shade = (c, f) => (Math.min(255, (c >> 16 & 255) * f) << 16) | (Math.min(255, (c >> 8 & 255) * f) << 8) | Math.min(255, (c & 255) * f);
-let RAIN = 0;
+let RAIN = 0, BLOOD = 1;
 /* 人。カプセルと球で 丸みのある 体を 作る。走ると 腕と脚を ふり、体が はずんで 前に かたむく。 */
 function drawHuman(e) {
   const o = e.fit || baseOutfit(), L = e.load || {}, tc = o.topC, hc = o.hairC, sk = o.skin, bc = o.botC;
@@ -267,18 +268,22 @@ function drawHuman(e) {
   else if (o.hat === 3) { S(0, .08, 0, .48, .48, .48, o.hatC); SB(0, .04, .2, .32, .14, .08, 0x60f0ff, .3); }
   else if (o.hat === 4) { S(0, .18, 0, .41, .3, .41, o.hatC); C(0, .12, 0, .4, .07, .4, shade(o.hatC, .85)); S(0, .35, 0, .1, .1, .1, o.hatC); }
   R.pop();
+  if (e.wounds && BLOOD) for (let k = 0; k < e.wounds; k++) { const a = hash2(k, 5), b = hash2(k, 9); B((a - .5) * .4, .18 + b * .46, b > .5 ? .158 : -.158, .07, .06, .02, 0x9a0818); }
   const sl = o.top === 5 ? sk : tc, fore = o.top === 0 || o.top === 5 ? sk : tc;
   const arm = (bend) => { S(0, 0, 0, .19, .19, .19, sl); R.push(); R.rotX(Math.PI / 2); CP(0, .17, 0, .15, .38, .15, sl); R.translate(0, .34, 0); R.rotX(-bend); CP(0, .14, 0, .13, .32, .13, fore); S(0, .32, 0, .15, .16, .15, sk); R.pop(); R.translate(0, 0, .66); };
   const sw2 = e.swingT > 0 ? 1 - e.swingT / .3 : -1;
   R.push(); R.translate(-.33, .52, 0);
+  if (e.surrender) { R.rotX(-1.5); arm(.5); } else
   if (sw2 >= 0) { R.rotY(1.3 - sw2 * 2.6); R.rotX(-.2); arm(0); } else if (L.main) { R.rotX(-(e.aimPitch || 0)); arm(0); } else { R.rotX(1.42 - sw * .95); arm(.25 + amp * .9); }
-  if (sw2 >= 0 && L.melee) drawMelee(WEAPONS[L.melee], .45);
+  if (e.surrender) { /* 手を上げている */ }
+  else if (sw2 >= 0 && L.melee) drawMelee(WEAPONS[L.melee], .45);
   else if (L.main) { const ml = drawGun(WEAPONS[L.main], .42); if (e.fireFlash > 0) glowS(0, 0, ml + .1, .4, 0xffd070, .8); }
   R.pop();
   R.push(); R.translate(.33, .52, 0);
   const sub = L.sub ? WEAPONS[L.sub] : null;
+  if (e.surrender) { R.rotX(-1.5); arm(.5); } else
   if (sub && sub.kind === 'shield' && e.blocking) { R.rotY(-.6); R.rotX(-.1); arm(0); } else if (sub) { R.rotX(-(e.aimPitch || 0)); arm(0); } else { R.rotX(1.42 + sw * .95); arm(.25 + amp * .9); }
-  if (sub && sub.kind === 'gun') drawGun(sub, .42); else if (sub) drawShield(sub, .5, e.blocking);
+  if (e.surrender) { /* 手を上げている */ } else if (sub && sub.kind === 'gun') drawGun(sub, .42); else if (sub) drawShield(sub, .5, e.blocking);
   R.pop();
   if (e.citizen && !e.resident && !e.down && RAIN > .5) { R.matte(0); C(.25, .95, .15, .03, 1.3, .03, 0x404448); K(.25, 1.7, .15, 1.5, .34, 1.5, o.hatC); R.matte(1); }
   if (e.chute) { R.translate(0, 2.7, 0); S(0, 0, 0, 3, 1.4, 3, 0xff8040); for (const s of [-1, 1]) B(s * .7, -1, 0, .03, 2, .03, 0xf0f0f0); }
@@ -297,7 +302,6 @@ function drawTree(t, tm) {
   }
   R.pop(); R.matte(0);
 }
-const hash2 = (x, z) => { let h = (Math.imul(x, 374761393) + Math.imul(z, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 /* カメラの近くにだけ 草むら・花・しげみを はやす (位置は 場所から 決まるので、毎回 同じ所に 出る)。 */
 function drawGrass(cx, cz, tm) {
   const R0 = 46, st = 3; R.matte(1);
@@ -306,9 +310,11 @@ function drawGrass(cx, cz, tm) {
     const x = gx * st + (hs * 31 % 1) * st, z = gz * st + (hs * 57 % 1) * st, dx = x - cx, dz = z - cz;
     if (dx * dx + dz * dz > R0 * R0 || W.region(x, z) !== 'grass' || W.inCity(x, z, 3)) continue;
     const sw = Math.sin(tm * 2 + x * .3 + z * .2) * .12 * (1 + RAIN);
+    R.push(); R.translate(0, W.h(x, z), 0);
     if (hs < .025) { B(x, .3, z, .04, .6, .04, 0x3f8a3a); S(x + sw * .5, .66, z, .28, .24, .28, [0xf2d13a, 0xf07090, 0xf6f6f2, 0xa070f0][Math.floor(hs * 4000) % 4]); }
     else if (hs < .06) { S(x, .45, z, 1.7, 1.1, 1.5, 0x3f9a4a); S(x + .6, .35, z + .3, 1.1, .8, 1.1, 0x4fae4a); }
     else { const g = hs < .2 ? 0x5fb84e : 0x4aa64a; K(x + sw, .32, z, .34, .7, .34, g); K(x + .22 + sw, .25, z + .12, .28, .55, .28, shade(g, .9)); K(x - .16 + sw, .28, z - .2, .28, .6, .28, shade(g, 1.08)); }
+    R.pop();
   }
   R.matte(0);
 }
@@ -336,8 +342,19 @@ function drawCar(c) {
   }
   B(0, .52, 2.17, .9, .18, .04, 0x202020); B(0, .4, 2.2, 1.9, .16, .1, 0x30343c); B(0, .4, -2.2, 1.9, .16, .1, 0x30343c); B(0, .56, -2.17, .5, .14, .03, 0xf4f4f0);
   if (c.taxi) B(0, 1.48, -.25, .5, .16, .24, 0xffe040, 1);
+  if (c.police) {
+    B(0, .6, 0, 1.92, .3, 1.7, 0x16203c); B(0, 1.46, -.25, 1.2, .1, .3, 0x30343c);
+    const on = !c.deployed || true, fl = Math.floor(c.wheel * .2 + c.x) % 2 === 0;
+    B(-.36, 1.56, -.25, .44, .16, .26, 0xff3030, on && fl ? 1 : .1); B(.36, 1.56, -.25, .44, .16, .26, 0x3060ff, on && !fl ? 1 : .1);
+    if (!c.deployed) { R.glow(1); S(fl ? -.36 : .36, 1.6, -.25, 2.4, 2.4, 2.4, fl ? 0xff3030 : 0x3060ff, .35); R.glow(0); }
+  }
   if (NIGHT) { R.glow(1); for (const sx of [-1, 1]) S(sx * .65, .6, 3.4, 1.4, .8, 2.6, 0xfff0b0, .18); R.glow(0); }
   R.pop(); R.flash = 0;
+}
+function drawDecals(list) {
+  R.matte(1);
+  for (const d of list) { const k = Math.min(1, d.t / 6); if (d.flat) C(d.x, d.y, d.z, d.s * k, .025, d.s * k, d.col); else S(d.x, d.y, d.z, d.s, d.s, d.s, d.col); }
+  R.matte(0);
 }
 function drawLoot(l, t) {
   const y = l.y;
@@ -375,7 +392,7 @@ function drawTurret(t) {
 }
 function drawNode(n) {
   const r = seeded(n.seed * 77 + n.type.length), k = .5 + .5 * n.hp / n.max;
-  R.matte(1); R.push(); R.translate(n.x, 0, n.z); R.scale(k, k, k);
+  R.matte(1); R.push(); R.translate(n.x, n.y, n.z); R.scale(k, k, k);
   if (n.type === 'crop') { B(0, .35, 0, .12, .7, .12, 0x3f8a3a); for (let i = 0; i < 4; i++) { R.push(); R.rotY(i * 1.57 + .4); R.rotX(.7); B(0, .6, .25, .35, .04, .6, 0x4aa84a); R.pop(); } S(0, .3, 0, .5, .45, .5, [0xe07030, 0xd03a30, 0xe8c040][n.seed % 3]); }
   else if (n.type === 'scrap') { for (let i = 0; i < 5; i++) { R.push(); R.rotY(r() * 6); B(r() * 1.4 - .7, .3 + i * .3, r() * 1.4 - .7, .8 + r() * 1.4, .4 + r() * .5, .6 + r(), [0x8a5a3a, 0x70757c, 0xa06a3a, 0x5a6068][i % 4]); R.pop(); } B(.3, 1.9, 0, .15, 1.2, .15, 0xb0b4ba); }
   else if (n.type === 'iron') { S(0, .7, 0, 2.6, 1.8, 2.2, 0x6a6e74); S(.8, .5, .6, 1.3, 1.1, 1.2, 0x7c8088); for (let i = 0; i < 4; i++) B(r() * 1.6 - .8, .9 + r() * .5, r() * 1.6 - .8, .35, .35, .35, 0xd09060, .25); }

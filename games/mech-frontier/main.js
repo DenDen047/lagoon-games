@@ -124,6 +124,7 @@ function boot() {
     else if (name === 'ball') { h.x = -40; h.z = 300; give(13); P.mech.mode = 2; SV.load.main = 'mg'; cam.yaw = .5; }
     else if (name === 'titan') { h.x = 60; h.z = 300; give(48); P.mech.mode = 1; cam.yaw = 2.6; cam.pitch = -.1; spawnEnemyMech(40, 270, 3, false); }
     else if (name === 'rain') { h.x = 30; h.z = 26; cam.yaw = 2.6; cam.pitch = .05; G.rain = 1; G.rainV = 1; G.rainT = 999; SV.time = .55; }
+    else if (name === 'hills') { h.x = -420; h.z = 60; h.y = W.h(h.x, h.z); cam.yaw = -1.9; cam.pitch = -.05; }
     else if (name === 'grass') { h.x = -216; h.z = 214; cam.yaw = -2.2; cam.pitch = -.08; SV.time = .34; }
     else if (name === 'night') { SV.time = .9; h.x = 28; h.z = 60; cam.yaw = Math.PI; cam.pitch = .15; }
     else if (name === 'plane') { enterPlane(G.planes[0]); const p = P.plane; p.y = 90; p.x = -120; p.z = 150; p.yaw = -.6; p.speed = 55; p.thr = 1; p.pitch = -.12; }
@@ -143,7 +144,10 @@ function boot() {
     else if (name === 'car') { h.x = 31; h.z = 40; enterCar(mkCar(31, 44, Math.PI, false)); cam.yaw = Math.PI; cam.pitch = -.12; }
     else if (name === 'beach') { h.x = 780; h.z = 200; h.y = .5; cam.yaw = 2.4; cam.pitch = -.1; }
     else if (name === 'farm') { h.x = -430; h.z = -330; cam.yaw = 3.4; cam.pitch = -.15; }
-    else if (name === 'wanted') { h.x = 30; h.z = 26; cam.yaw = 2.6; addWanted(2); for (let i = 0; i < 6; i++) spawnPolice(); }
+    else if (name === 'wanted') { h.x = 30; h.z = 26; cam.yaw = 2.6; addWanted(2); dispatch(); const pc = G.cars[G.cars.length - 1]; pc.x = 40; pc.z = 34; pc.yaw = 1.2; deploy(pc); cam.yaw = .6; }
+    else if (name === 'station') { h.x = 112; h.z = 26; cam.yaw = Math.PI; cam.pitch = .05; dispatch(); }
+    else if (name === 'armor') { h.x = 6; h.z = 8; cam.yaw = 2.2; cam.pitch = -.1; SV.mechs = [Object.assign({}, ARMOR)]; SV.active = 0; spawnPlayerMech(9, 6); }
+    else if (name === 'blood') { h.x = 30; h.z = 26; cam.yaw = 2.6; cam.pitch = -.25; const t = spawnThug(27, 21, 0, false, { members: [], alley: { x: 0, z: 0 } }); t.group.members.push(t); t.y = .2; SV.load.melee = 'knife'; for (let i = 0; i < 3; i++) { blood(t, 6); } hurt(t, t.maxhp * .8, h); for (let i = 0; i < 6; i++) addDecal(26 + i * .4, 1 + i * .3, 19.9, .17, 0x14141a, 0); }
     for (let i = 0; i < 40; i++) step(.016);
   }
   function selfTest() {
@@ -176,21 +180,30 @@ function boot() {
     run('住人と手配', () => {
       debugSetup('city'); for (let i = 0; i < 200; i++) step(.033);
       const cs = ents.filter(e => e.citizen && !e.resident && Math.hypot(e.x - P.human.x, e.z - P.human.z) < 200); if (cs.length < 20) throw new Error('近くの住人が少ない ' + cs.length);
-      const x0 = cs[0].x, z0 = cs[0].z; for (let i = 0; i < 120; i++) step(.033); if (!cs.some(c => Math.hypot(c.x - x0, c.z - z0) > .5 || c !== cs[0])) throw new Error('歩いていない');
-      hurt(cs[1], 10, P.human); if (G.wanted !== 1) throw new Error('攻撃で手配されない'); hurt(cs[1], 999, P.human); if (!cs[1].down || G.wanted < 2) throw new Error('倒れない');
-      for (let i = 0; i < 300; i++) step(.033); if (!ents.some(e => e.police)) throw new Error('警察が来ない');
+      hurt(cs[1], 10, P.human); if (G.wanted) throw new Error('通報の前に手配された'); if (!G.report) throw new Error('目撃されない');
+      for (let i = 0; i < 260 && !G.wanted; i++) step(.033); if (G.wanted !== 1) throw new Error('通報されない');
+      hurt(cs[2], 999, P.human); if (!cs[2].down) throw new Error('倒れない'); for (let i = 0; i < 260; i++) step(.033); if (G.wanted < 2) throw new Error('手配度が上がらない');
+      for (let i = 0; i < 900 && !ents.some(e => e.police && e.kind === 'human'); i++) step(.033); if (!ents.some(e => e.police && e.kind === 'human')) throw new Error('パトカーが着かない');
       hurt(P.human, 1e9, null); sim(260, []); if (G.wanted || ents.some(e => e.police)) throw new Error('逮捕後も手配が残る');
     });
+    run('目撃者なし', () => { debugSetup('hills'); for (const e of ents.slice()) if (e.citizen) { e.x = 900; } G.report = null; const c = spawnCitizen(0); c.x = P.human.x + 2; c.z = P.human.z; hurt(c, 999, P.human); if (G.report) throw new Error('目撃者がいないのに通報された'); });
+    run('捕獲', () => {
+      debugSetup('city'); spawnGroup(true); const g = G.groups[0], t = g.members[1]; hurt(t, t.maxhp * .8, P.human); if (!t.surrender) throw new Error('降参しない');
+      t.x = P.human.x + 1; t.z = P.human.z; IN.k = {}; IN.fire = IN.sub = false; step(.016); step(.016); if (!G.prompt || !/捕まえる/.test(G.prompt.text)) throw new Error('捕まえられない: ' + (G.prompt && G.prompt.text) + ' d=' + Math.hypot(t.x - P.human.x, t.z - P.human.z).toFixed(1) + ' in=' + ents.includes(t) + ' dead=' + t.dead + ' st=' + P.state); G.prompt.act();
+      P.human.x = W.station.x; P.human.z = W.station.z + 3; for (let i = 0; i < 60; i++) step(.016); const m0 = SV.money; if (handover() !== 1 || SV.money <= m0) throw new Error('引き渡せない');
+    });
+    run('アーマー', () => { debugSetup('armor'); if (!P.mech || !P.mech.spec.armor) throw new Error('アーマーがない'); enterMech(); sim(200, ['KeyW']); if (shots.some(s => s.src === P.mech)) throw new Error('アーマーが銃を撃った'); const n = W.nodes.find(q => q.type === 'scrap'); P.mech.x = n.x + 1; P.mech.z = n.z; const s0 = SV.mats.scrap; P.mech.mcd = 0; melee(P.mech, false); if (SV.mats.scrap <= s0) throw new Error('パンチで掘れない'); });
+    run('地形', () => { debugSetup('hills'); const x = -520, z = 40, hh = W.h(x, z); P.human.x = x; P.human.z = z; P.human.y = hh + 5; IN.k = {}; IN.fire = IN.sub = false; for (let i = 0; i < 120; i++) step(.016); if (Math.abs(P.human.y - W.h(P.human.x, P.human.z)) > .3) throw new Error('地面に立てていない'); sim(300, ['KeyW']); if (P.human.y < W.h(P.human.x, P.human.z) - .2) throw new Error('地面にもぐった'); });
     run('家と泥棒', () => {
       debugSetup('house'); const hs = W.houseAt(P.human.x, P.human.z); if (!hs) throw new Error('家の中にいない');
       sim(30, []); const l = hs.loot[0]; if (l) { P.human.x = l.x; P.human.z = l.z + .8; sim(2, []); steal(hs, l); if (!SV.loot) throw new Error('盗めない'); }
       SV.time = .9; for (let i = 0; i < 60; i++) step(.033); const h2 = W.houses.find(h => h.res && !h.sale); if (!h2) throw new Error('夜に住人がいない');
-      P.human.x = h2.res.x + 1; P.human.z = h2.res.z; h2.res.asleep = false; for (let i = 0; i < 200 && !G.wanted; i++) step(.033); if (!G.wanted) throw new Error('見つからない');
+      P.human.x = h2.res.x + 1; P.human.z = h2.res.z; h2.res.asleep = false; for (let i = 0; i < 600 && !G.wanted; i++) step(.033); if (!G.wanted) throw new Error('見つからない');
       const s = W.houses.find(h => h.sale); buyHouse(s); if (SV.home !== s.id) throw new Error('家が買えない'); sleep({ x: s.bed.x, y: .15, z: s.bed.z });
     });
     run('やられる・ふっかつ', () => { debugSetup('city'); hurt(P.human, 1e9, null); sim(260, []); if (P.human.dead || P.human.hp <= 0) throw new Error('ふっかつ しない'); });
     run('メカが こわれる', () => { debugSetup('mech'); hurt(P.mech, 1e9, null); if (P.state !== 'foot') throw new Error('だっしゅつ しない'); for (let i = 0; i < 2700; i++) step(.016); if (P.mech.dead) throw new Error('しゅうり されない'); });
-    run('メニュー', () => { debugSetup('city'); for (const id of ['workshop', 'mechshop', 'weapons', 'jobs', 'factory', 'food', 'mats', 'clothes', 'wardrobe', 'fence', 'pier', 'airport', 'bag', 'pause']) { UI.open(id); const n = document.querySelectorAll('#mTabs .tab').length; for (let t = 0; t < Math.max(1, n); t++) { if (n) document.querySelectorAll('#mTabs .tab')[t].click(); const k = document.querySelectorAll('#mBody .opt').length; for (let i = 0; i < Math.min(k, 40); i++) { const b = document.querySelectorAll('#mBody .opt')[i]; if (b) b.click(); } document.querySelectorAll('#mBody .sw button').forEach((b, i) => { if (i % 7 === 0) b.click(); }); } UI.close(); } });
+    run('メニュー', () => { debugSetup('city'); for (const id of ['workshop', 'mechshop', 'weapons', 'jobs', 'factory', 'food', 'mats', 'clothes', 'wardrobe', 'fence', 'police', 'pier', 'airport', 'bag', 'pause']) { UI.open(id); const n = document.querySelectorAll('#mTabs .tab').length; for (let t = 0; t < Math.max(1, n); t++) { if (n) document.querySelectorAll('#mTabs .tab')[t].click(); const k = document.querySelectorAll('#mBody .opt').length; for (let i = 0; i < Math.min(k, 40); i++) { const b = document.querySelectorAll('#mBody .opt')[i]; if (b) b.click(); } document.querySelectorAll('#mBody .sw button').forEach((b, i) => { if (i % 7 === 0) b.click(); }); } UI.close(); } });
     run('じさく', () => { debugSetup('city'); SV.mechs = []; UI.open('workshop'); UI.tab = 'custom'; UI.redraw(); document.querySelector('#mBody .btn.big').click(); if (SV.mechs.length !== 1 || !P.mech) throw new Error('メカが できない'); UI.close(); });
     run('よる・ながい じかん', () => { debugSetup('mech'); for (let i = 0; i < 3000; i++) { IN.k = { KeyW: true }; IN.fire = true; step(.033); } });
     const pre = document.createElement('pre'); pre.id = 'testOut'; pre.textContent = log.filter(l => l.startsWith('FAIL')).length + ' FAIL / ' + log.length + '\n' + log.filter(l => l.startsWith('FAIL')).join('\n'); document.body.appendChild(pre);
