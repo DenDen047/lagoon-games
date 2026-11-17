@@ -15,7 +15,7 @@ const Movie = {
     { who: 'チビ', text: 'だれも いないね…。ちょっと こわいかも…。', scene: 'ruin', ghosts: 'shy' },
     { who: 'ユキ', text: 'そうだ! ここを こわくて たのしい テーマパークに して、おかねを かせごう!', scene: 'ruin', ghosts: 'idea' },
     { who: 'みんな', text: 'さんせーい!', scene: 'ruin', ghosts: 'cheer' },
-    { who: 'ネズミ', text: 'それなら わたしが オーナーに なるよ! いっしょに がんばろう!', scene: 'ruin', ghosts: 'cheer', owner: true },
+    { who: 'あなた', text: 'それなら わたしが オーナーに なるよ! いっしょに がんばろう!', scene: 'ruin', ghosts: 'cheer', owner: true },
     { who: '', text: 'こうして、ゆきオバケたちの テーマパークづくりが はじまりました。', scene: 'open', ghosts: 'cheer', owner: true },
   ],
 
@@ -93,7 +93,8 @@ const Movie = {
     }
     if (L.owner) {
       const k = Math.min(1, (this.i === 7 ? this.lt : 9) / 1.8), x = lerp(-80 * u, cx - 170 * u, 1 - (1 - k) * (1 - k));
-      drawOwner(g, x, gy + 62 * u, 76 * u, 'none', { t, face: 1, moving: k < 1, walk: t, pose: L.who === 'ネズミ' && k >= 1 ? 0.6 : 0 });
+      drawOwner(g, x, gy + 52 * u, 70 * u, Sim.s && !Sim.demo ? Sim.ownerLook() : { color: 'pink', face: 'sparkle', wear: 'sheet' }, { t, face: 1, moving: k < 1, walk: t, pose: L.who === 'あなた' && k >= 1 ? 0.6 : 0 });
+      if (L.who === 'あなた') poly(g, [x - 8 * u, gy - 52 * u, x + 8 * u, gy - 52 * u, x, gy - 40 * u], '#ffe24a', INK, 1);
     }
     if (open) for (let i = 0; i < 24; i++) { const a = t * 2 + i; g.globalAlpha = 0.5 + 0.5 * Math.sin(a * 3); circ(g, (hash2(i, 3) * W + t * 10) % W, hash2(i, 4) * gy, 2.5 * u, ['#ffe060', '#ff9ab8', '#8ad0ff'][i % 3]); }
     g.globalAlpha = 1;

@@ -18,7 +18,7 @@ function newState() {
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) grid.push(x < EXPAND[0].cols ? CELL.WALL : CELL.LOCK);
   const s = {
     v: 1, day: 1, coins: 300, rep: 10, price: 30, expand: 0, grid, mission: 0, event: null, nextId: 1,
-    park: 'ゆきやま ゴーストランド', costume: 'sheet', wardrobe: ['none', 'sheet'], deco: [], rails: [],
+    park: 'ゆきやま ゴーストランド', look: { color: 'snow', face: 'round' }, costume: 'sheet', wardrobe: ['none', 'sheet'], soul: 0, menuOwned: [], colorsOwned: [], deco: [], rails: [],
     props: [], ghosts: [],
     stats: { nights: 0, guests: 0, great: 0, fled: 0, bestCombo: 0, bestNight: 0, bestIncome: 0 },
   };
@@ -52,7 +52,7 @@ const Sim = {
   placeDeco(type, x, y) {
     if (!this.parkFree(x, y)) return false;
     if (DECOS[type].one && this.s.deco.some((d) => d.type === type)) { toast(`${DECOS[type].name}は ひとつだけ おけるよ`, 'bad'); return false; }
-    if (!this.pay(DECOS[type].cost)) return false;
+    if (!this.payItem(DECOS[type])) return false;
     this.s.deco.push({ type, x, y }); this.findTrack(); return true;
   },
   placeRail(x, y) {
@@ -118,6 +118,17 @@ const Sim = {
     if (this.s.coins < cost) { toast('コインが たりないよ', 'bad'); Sound.no(); return false; }
     this.s.coins -= cost; return true;
   },
+  /* おばけだま: オバケだけの おかね。じぶんで おどかすと もらえる */
+  paySoul(k) {
+    if (this.s.soul < k) { toast('おばけだまが たりないよ。じぶんで おどかして あつめよう', 'bad'); Sound.no(); return false; }
+    this.s.soul -= k; return true;
+  },
+  payItem(d) { return d.soul ? this.paySoul(d.soul) : this.pay(d.cost); },
+  gainSoul(k, x, y) {
+    if (this.demo) return;
+    this.s.soul += k; this.n.soul = (this.n.soul || 0) + k;
+    this.float(x, y, `おばけだま +${k}`, '#9af0ff', 0.75);
+  },
   placeFloor(x, y) {
     if (this.cell(x, y) !== CELL.WALL || this.propAt(x, y) || this.ghostAt(x, y)) return false;
     if (!this.pay(5)) return false;
@@ -130,13 +141,119 @@ const Sim = {
   },
   moveGhost(gh, x, y) {
     if (!this.free(x, y)) return false;
-    gh.x = x; gh.y = y; gh.desk = false; return true;
+    gh.x = x; gh.y = y; gh.desk = false; gh.clerk = false; return true;
   },
   deskGhost() { return this.s.ghosts.find((g) => g.desk); },
   /* カウンターの うけつけ係に する。まえの 係は まちあいに もどる */
   setDesk(gh) {
     for (const g of this.s.ghosts) g.desk = false;
-    gh.desk = true; gh.x = gh.y = -1;
+    gh.desk = true; gh.clerk = false; gh.x = gh.y = -1;
+  },
+  clerkGhost() { return this.s.ghosts.find((g) => g.clerk); },
+  setClerk(gh) {
+    for (const g of this.s.ghosts) g.clerk = false;
+    gh.clerk = true; gh.desk = false; gh.x = gh.y = -1;
+  },
+
+  /* ------------------------------ たべものやさん ------------------------------ */
+  foodShop() { return this.s.deco.find((d) => d.type === 'foodshop'); },
+  menu() { const s = this.s; return Object.keys(FOODS).filter((k) => (FOODS[k].soul ? s.menuOwned.includes(k) : stars(s) >= FOODS[k].star)); },
+  shopFront() { const f = this.foodShop(); return f ? { x: f.x + 0.5, y: f.y + 1.1 } : null; },
+  atShop() { const f = this.shopFront(); return !!f && !!this.p && dist(this.p.x, this.p.y, f.x - 0.4, f.y) < 1.1; },
+  shopFrontCustomer() { return this.n && this.n.shoppers && this.n.shoppers.find((c) => c.slot === 0 && c.st === 'wait'); },
+  canSell() { return !!this.shopFrontCustomer() && this.atShop(); },
+  addShopper(from) {
+    const n = this.n, menu = this.menu();
+    if (!this.foodShop() || !menu.length) return false;
+    if (n.shoppers.filter((c) => c.st === 'go' || c.st === 'wait').length >= 5) return false;
+    n.shopSeq = (n.shopSeq || 0) + 1;
+    n.shoppers.push({ id: 900 + n.shopSeq, sp: from.sp, kid: from.kid, hue: from.hue, reporter: false, x: from.x, y: from.y, st: 'go', slot: 9,
+      face: 1, fear: 0, thrill: 0, stun: 0, idle: false, hop: 0, aura: false, iced: false, want: pick(menu), pat: 24, bub: null });
+    return true;
+  },
+  sell(c) {
+    const s = this.s, n = this.n, d = FOODS[c.want];
+    c.st = 'leave'; c.idle = false; this.bubble(c, 'おいしい!', 1.2);
+    if (!this.demo) { s.coins += d.price; n.food = (n.food || 0) + d.price; }
+    this.float(c.x, c.y - 1, '+' + d.price, '#ffd23a', 0.85); Sound.coin();
+  },
+  updateShop(dt) {
+    const n = this.n, f = this.shopFront();
+    let k = 0;
+    for (const c of n.shoppers) {
+      c.hop = Math.max(0, c.hop - dt * 3);
+      if (c.bub && c.bub.t < 50 && (c.bub.t -= dt) <= 0) c.bub = null;
+      if (c.st === 'go' || c.st === 'wait') {
+        if (!f) { c.st = 'leave'; continue; }
+        c.slot = k++;
+        const tx = f.x + 0.6 * c.slot, ty = f.y, dx = tx - c.x, dy = ty - c.y, l = Math.hypot(dx, dy);
+        if (l > 0.05) {
+          const m = Math.min(l, 2.2 * dt); c.x += dx / l * m; c.y += dy / l * m; c.idle = false;
+          if (Math.abs(dx) > 0.05) c.face = dx > 0 ? 1 : -1;
+          if (l > 0.3) c.st = 'go';
+        } else { c.st = 'wait'; c.idle = true; c.face = -1; }
+        if (c.st === 'wait') {
+          c.pat -= dt;
+          if (c.slot === 0 && !c.bub) c.bub = { text: `${FOODS[c.want].name} ください`, t: 99, life: 99 };
+          if (c.slot !== 0 && c.bub && c.bub.t > 50) c.bub = null;
+        }
+        if (c.pat <= 0) { c.st = 'leave'; c.idle = false; this.bubble(c, 'もう いいや…', 1.2); }
+      } else if (c.st === 'leave') {
+        const dx = OUT.exit - c.x, dy = GATE_Y + 0.5 - c.y, l = Math.hypot(dx, dy);
+        if (l < 0.1) c.st = 'out';
+        else { const m = Math.min(l, 2 * dt); c.x += dx / l * m; c.y += dy / l * m; if (Math.abs(dx) > 0.05) c.face = dx > 0 ? 1 : -1; }
+        if (c.bub && c.bub.t > 50) c.bub = null;
+      }
+    }
+    n.shoppers = n.shoppers.filter((c) => c.st !== 'out');
+    // おみせ係の なかまは すこしずつ うる
+    n.clerkT = (n.clerkT == null ? 1 : n.clerkT) - dt;
+    const front = this.shopFrontCustomer();
+    if (front && n.clerkT <= 0 && this.clerkGhost()) { n.clerkT = 3; this.sell(front); }
+  },
+
+  /* ------------------------------ ひる ------------------------------
+     ひるも あなたの オバケは うごける。ひろばに おさんぽの おきゃくさんが くるので おどかせる */
+  startDay() {
+    this.n = { day: true, t: 0, ev: null, guests: [], queue: [], shoppers: [], fx: [], parts: [], bestCombo: 0, pScares: 0, soul: 0, food: 0,
+      nextWalker: 1.5, expect: expectThrill(this.s), patience: PATIENCE, spawned: 0, lvUps: [] };
+  },
+  makeWalker() {
+    const n = this.n, g = this.makeGuest(false);
+    n.spawned++;
+    const cols = EXPAND[this.s.expand].cols, wp = () => ({ x: rfloat(0.4, cols - 0.4), y: rfloat(PARK_Y0 + 0.5, PARK_Y1 + 0.6) });
+    return Object.assign(g, { st: 'stroll', x: OUT.exit + 0.2, y: GATE_Y + 0.3, wps: [wp(), wp()], shop: this.foodShop() && chance(0.5) });
+  },
+  dayUpdate(dt) {
+    const n = this.n;
+    n.t += dt;
+    if (this.p) this.updatePlayer(dt);
+    n.nextWalker -= dt;
+    if (n.nextWalker <= 0) { n.nextWalker = rfloat(4, 8); if (n.guests.length < 3) n.guests.push(this.makeWalker()); }
+    for (const gu of n.guests) {
+      gu.hop = Math.max(0, gu.hop - dt * 3);
+      if (gu.bub && (gu.bub.t -= dt) <= 0) gu.bub = null;
+      if (n.t - gu.lastHit > 1.2) gu.fear = Math.max(0, gu.fear - 10 * dt);
+      if (gu.stun > 0) { gu.stun -= dt; continue; }
+      const target = gu.st === 'run' ? { x: OUT.exit, y: GATE_Y + 0.5 } : gu.wps[0] || { x: OUT.exit, y: GATE_Y + 0.5 };
+      const dx = target.x - gu.x, dy = target.y - gu.y, l = Math.hypot(dx, dy), sp = (gu.st === 'run' ? 3 : 1) * dt;
+      if (Math.abs(dx) > 0.05) gu.face = dx > 0 ? 1 : -1;
+      if (l > sp) { gu.x += dx / l * sp; gu.y += dy / l * sp; continue; }
+      gu.x = target.x; gu.y = target.y;
+      if (gu.st === 'run' || !gu.wps.length) { gu.st = 'out'; continue; }
+      gu.wps.shift();
+      if (gu.shop && this.addShopper(gu)) gu.st = 'out';
+    }
+    n.guests = n.guests.filter((g) => g.st !== 'out');
+    this.updateShop(dt);
+    this.updateFx(dt);
+  },
+  updateFx(dt) {
+    const n = this.n;
+    for (const f of n.fx) { f.t += dt; f.y -= dt * 0.7; }
+    n.fx = n.fx.filter((f) => f.t < f.life);
+    for (const p of n.parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 2.4 * dt; }
+    n.parts = n.parts.filter((p) => p.t < p.life);
   },
   /* けす: しかけは はんがくで うる / オバケは まちあいに もどす / ろうかは かべに もどす */
   erase(x, y) {
@@ -158,7 +275,8 @@ const Sim = {
     for (let y = 0; y < MAP_H; y++) for (let x = EXPAND[s.expand].cols; x < nx.cols; x++) s.grid[idx(x, y)] = CELL.WALL;
     s.expand++; return true;
   },
-  /* ------------------------------ オーナー ------------------------------ */
+  /* ------------------------------ あなたの オバケ ------------------------------ */
+  ownerLook() { const s = this.s; return { color: s.look.color, face: s.look.face, wear: s.costume }; },
   resetPlayer(inside) {
     const c = inside && this.path ? this.path[1] : null;
     this.p = { x: c ? c.x + 0.5 : OUT.staff, y: c ? c.y + 0.5 : OUT.deskY, face: 1, cd: 0, pose: 0, walk: 0, moving: false, bub: null };
@@ -199,14 +317,16 @@ const Sim = {
   playerAction() {
     const n = this.n, p = this.p;
     if (this.canServe()) { this.serve(n.queue[0]); this.bubble(p, 'いらっしゃいませ!', 0.8); return; }
+    if (this.canSell()) { this.sell(this.shopFrontCustomer()); this.bubble(p, 'まいど!', 0.8); return; }
     if (p.cd > 0) return;
     const c = COSTUMES[this.s.costume];
     p.cd = 1; p.pose = 1;
     this.bubble(p, 'ばあ!', 0.7); Sound.boo();
     for (const gu of n.guests) {
-      if (gu.st !== 'walk' || dist(p.x, p.y, gu.x, gu.y) > 1.6 || n.t - gu.pHit < 2.5) continue;
+      if ((gu.st !== 'walk' && gu.st !== 'stroll') || dist(p.x, p.y, gu.x, gu.y) > 1.6 || n.t - gu.pHit < 2.5) continue;
       gu.pHit = n.t; n.pScares++;
-      this.scare(gu, c.power, c.kind, 0.4);
+      const amt = this.scare(gu, c.power, c.kind, 0.4);
+      this.gainSoul(amt >= 20 ? 2 : 1, gu.x - 0.3, gu.y - 1.5);
     }
   },
 
@@ -255,7 +375,7 @@ const Sim = {
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y));
     this.n = {
       t: 0, ev, fair: fairPrice(s), expect: expectThrill(s), price: s.price, times, total: this.demo ? 0 : total, reporterAt: ev && ev.reporter ? rint(0, total - 1) : -1,
-      pts, cum, len: cum[cum.length - 1], guests: [], queue: [], spawned: 0, served: 0, left: 0, tickets: 0, tips: 0, bonus: 0, shop: 0, deskT: 1, pScares: 0, patience: patienceOf(s),
+      pts, cum, len: cum[cum.length - 1], guests: [], queue: [], shoppers: [], food: 0, soul: 0, spawned: 0, served: 0, left: 0, tickets: 0, tips: 0, bonus: 0, shop: 0, deskT: 1, pScares: 0, patience: patienceOf(s),
       ratings: [0, 0, 0, 0, 0, 0], rides: 0, coaster: null, bestCombo: 0, repBefore: s.rep, starsBefore: stars(s), lvUps: [], fx: [], parts: [], nextDemo: 0.5,
     };
     this.findTrack();
@@ -320,7 +440,7 @@ const Sim = {
 
   scare(gu, power, kind, stun = 0.35) {
     const n = this.n;
-    if (gu.st !== 'walk') return;
+    if (gu.st !== 'walk' && gu.st !== 'stroll') return 0;
     gu.combo = n.t - gu.lastHit < 1.6 ? gu.combo + 1 : 1;
     gu.lastHit = n.t;
     const amt = power * this.kindMul(gu, kind) * (1 + 0.15 * Math.min(4, gu.combo - 1)) / gu.brave;
@@ -329,8 +449,14 @@ const Sim = {
     this.float(gu.x, gu.y - 0.9, '+' + Math.round(amt), KINDS[kind].color);
     if (gu.combo >= 2) this.float(gu.x + 0.35, gu.y - 1.25, `コンボ ×${gu.combo}`, '#ffe24a', 0.85);
     if (kind === 'hiehie') Sound.chill(); else if (kind === 'zokuzoku') Sound.pop();
-    if (gu.fear >= 100) return this.flee(gu);
+    if (gu.fear >= 100) { if (gu.st === 'stroll') this.runAway(gu); else this.flee(gu); return amt; }
     this.bubble(gu, gu.weak === kind && chance(0.6) ? 'にがて〜!' : pick(REACT));
+    return amt;
+  },
+  runAway(gu) {
+    gu.fear = 100; gu.st = 'run'; gu.stun = 0.25;
+    this.bubble(gu, 'ぎゃー!! おばけー!', 1.4); Sound.scream();
+    this.gainSoul(2, gu.x + 0.3, gu.y - 1.9);
   },
   flee(gu) {
     gu.fear = 100; gu.st = 'flee'; gu.stun = 0.25; gu.iced = false;
@@ -360,7 +486,8 @@ const Sim = {
     if (gu.fear >= 100) s.stats.fled++;
     const ex = n.pts[n.pts.length - 2];
     this.float(ex.x - 0.3, ex.y - 0.8, FACES[r] + (tip ? ` +${tip}` : ''), r >= 4 ? '#ffe680' : r === 3 ? '#e8f0ff' : '#ff9a9a', 0.9);
-    if (r === 5) Sound.coin();
+    if (r === 5) { Sound.coin(); this.gainSoul(1, ex.x + 0.3, ex.y - 1.3); }
+    if (r !== 2 && chance(0.55)) this.addShopper({ sp: gu.sp, kid: gu.kid, hue: gu.hue, x: OUT.exit, y: GATE_Y + 0.3 });
     // かえりに ひろばの おみせで かいもの
     if (r !== 2) for (const dc of s.deco) {
       const d = DECOS[dc.type];
@@ -398,6 +525,7 @@ const Sim = {
       }
     }
     this.updateQueue(dt);
+    this.updateShop(dt);
     if (this.p) {
       if (this.demo) this.demoPlayer();
       this.updatePlayer(dt);
@@ -595,7 +723,7 @@ const Sim = {
     const s = this.s, n = this.n;
     const wages = s.ghosts.reduce((a, g) => a + GHOSTS[g.type].wage, 0);
     s.coins -= wages;
-    const income = n.tickets + n.tips + n.bonus + n.shop;
+    const income = n.tickets + n.tips + n.bonus + n.shop + (n.food || 0);
     s.stats.nights++;
     s.stats.bestCombo = Math.max(s.stats.bestCombo, n.bestCombo);
     s.stats.bestNight = Math.max(s.stats.bestNight, n.served);
@@ -603,7 +731,7 @@ const Sim = {
     const slept = s.ghosts.filter((g) => g._st === 'sleep').length;
     for (const gh of s.ghosts) { gh._st = 'idle'; gh._ox = gh._oy = 0; gh.bub = null; }
     return {
-      served: n.served, left: n.left, pScares: n.pScares, rides: n.rides, ratings: n.ratings, tickets: n.tickets, tips: n.tips, bonus: n.bonus, shop: n.shop, wages, net: income - wages,
+      served: n.served, left: n.left, pScares: n.pScares, rides: n.rides, ratings: n.ratings, tickets: n.tickets, tips: n.tips, bonus: n.bonus, shop: n.shop, food: n.food || 0, soul: n.soul || 0, wages, net: income - wages,
       repBefore: n.repBefore, repAfter: s.rep, starsBefore: n.starsBefore, starsAfter: stars(s), lvUps: n.lvUps, bestCombo: n.bestCombo, slept,
     };
   },
@@ -612,7 +740,6 @@ const Sim = {
     const s = this.s;
     s.day++;
     s.event = chance(0.45) ? pick(Object.keys(EVENTS)) : null;
-    this.n = null;
   },
 };
 

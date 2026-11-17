@@ -28,6 +28,13 @@ button:disabled { opacity: 0.45; cursor: default; }
 .coin { display: inline-block; width: 0.95em; height: 0.95em; border-radius: 50%; vertical-align: -0.12em; margin: 0 1px;
   background: radial-gradient(circle at 35% 30%, #fff6b0, #ffd23a 45%, #d89a10); box-shadow: inset 0 0 0 1px #b07a08; }
 .coin.big { width: 18px; height: 18px; }
+.soul { display: inline-block; width: 0.8em; height: 1em; vertical-align: -0.15em; margin: 0 1px; border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
+  background: radial-gradient(circle at 40% 35%, #ffffff, #9af0ff 45%, #30b8d8); box-shadow: 0 0 6px rgba(120, 230, 255, 0.8); }
+.soul.big { width: 15px; height: 19px; }
+.soulbox { font: inherit; cursor: pointer; }
+.soulbox b { color: #2a9ab8; font-size: 16px; font-variant-numeric: tabular-nums; }
+.soulnow b { font-size: 20px; color: #2a9ab8; }
+.sw.locked { opacity: 0.45; background-image: repeating-linear-gradient(45deg, rgba(0,0,0,.15) 0 3px, transparent 3px 7px) !important; }
 .good { color: var(--good); } .bad { color: var(--bad); } .muted { color: var(--ink3); }
 .mini { font-size: 12px; color: var(--ink2); line-height: 1.6; }
 .center { text-align: center; }
@@ -63,7 +70,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 #setup .tbtns { margin-top: 12px; }
 .lead { margin: 0 0 18px; line-height: 1.85; font-size: 14px; }
 .tbtns { display: flex; gap: 10px; flex-wrap: wrap; }
-.tbtns .btn { flex: 1 1 140px; padding: 13px 16px; font-size: 15px; }
+.tbtns .btn { flex: 1 1 120px; padding: 13px 12px; font-size: 15px; white-space: nowrap; }
 #newWarn { visibility: hidden; margin: 10px 0 0; color: var(--bad); font-size: 12px; font-weight: 700; }
 #newWarn.show { visibility: visible; }
 .foot { color: var(--ink3); font-size: 12px; margin: 12px 0 0; }
@@ -219,6 +226,18 @@ body.touch .keyhint { display: none; }
 .money-tbl .sum { border-top: 2px dashed var(--line); margin-top: 3px; padding-top: 5px; font-size: 15px; font-weight: 900; }
 .tipbox { background: #fff8dc; border: 2px solid #ffe28a; border-radius: 12px; padding: 6px 10px; font-size: 12.5px; margin-top: 8px; }
 
+/* ------------------------------ きせかえ ------------------------------ */
+.lookhead { display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
+.lookhead canvas { width: 110px; height: 110px; flex: 0 0 auto; background: radial-gradient(circle, #4a4280, #2a2458); border-radius: 18px; }
+.grow { flex: 1; min-width: 0; }
+.lookrow { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 8px 0; }
+.sw { width: 34px; height: 34px; border-radius: 50%; border: 3px solid; padding: 0; box-shadow: 0 0 0 2px #fff; }
+.sw.on { box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--main); }
+.facebtn { display: flex; flex-direction: column; align-items: center; background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 3px 6px; min-width: 62px; }
+.facebtn img { width: 40px; height: 40px; background: #2e2858; border-radius: 10px; }
+.facebtn span { font-size: 11px; font-weight: 800; }
+.facebtn.on { border-color: var(--main); background: #f0eaff; box-shadow: 0 0 0 2px #d8ccff; }
+
 /* ------------------------------ よるの そうさ ------------------------------ */
 #ctrl { position: fixed; inset: 0; pointer-events: none; z-index: 11; }
 #pad {
@@ -264,7 +283,8 @@ body.touch #pad { display: block; }
   .namebox span { font-size: 11px; }
   #top { gap: 4px; }
   .starsy { font-size: 13px; }
-  .money b { font-size: 14px; }
+  .money b, .soulbox b { font-size: 14px; }
+  .namebox { display: none; }
   .keyhint { display: none; }
   #bSound { display: none; }
   .card { flex-wrap: wrap; }

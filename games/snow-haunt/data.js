@@ -83,16 +83,43 @@ const GHOSTS = {
             wage: 120, hire: 1500, star: 5, desc: 'オバケの おうさま。ちかくの オバケを 3わり こわくする。' },
 };
 
-/* オーナー (あなた) の かそう。ばあ! の こわさと しゅるいが かわる。 */
+/* あなたの オバケの きせかえ。いろ と かお は じゆうに えらべる */
+const LOOK_COLORS = {
+  snow:     { name: 'ゆきいろ', c: ['#f6faff', '#8aa0c0'] },
+  pink:     { name: 'ピンク', c: ['#ffe2ee', '#d088a8'] },
+  sky:      { name: 'みずいろ', c: ['#daf2ff', '#5aa0d0'] },
+  lemon:    { name: 'レモン', c: ['#fff6c4', '#c8a040'] },
+  lavender: { name: 'ラベンダー', c: ['#ece0ff', '#9070c8'] },
+  mint:     { name: 'ミント', c: ['#d8faea', '#50a880'] },
+  peach:    { name: 'ピーチ', c: ['#ffe4d2', '#d08860'] },
+  night:    { name: 'よぞら', c: ['#3e3870', '#1e1a44'] },
+  gold:     { name: 'きんいろ', c: ['#ffe680', '#c09020'], soul: 20 },
+  glow:     { name: 'あおびかり', c: ['#b8fff4', '#30b8c8'], soul: 30 },
+};
+const LOOK_FACES = { round: 'まんまる', smile: 'にっこり', sparkle: 'キラキラ', sleepy: 'ねむそう', wink: 'ウインク', cyclops: 'ひとつめ' };
+/* アクセサリー。ばあ! の こわさと しゅるいが かわる (キーは まえの セーブと おなじ) */
 const COSTUMES = {
-  none:     { name: 'ふだんぎ', kind: 'bikkuri', power: 8, cost: 0, star: 1, desc: 'いつもの エプロン。あまり こわくない。' },
-  sheet:    { name: 'シーツおばけ', kind: 'zokuzoku', power: 13, cost: 0, star: 1, desc: 'しろい シーツを かぶっただけ。でも くらやみでは こわい。' },
-  pumpkin:  { name: 'かぼちゃおばけ', kind: 'bikkuri', power: 15, cost: 120, star: 1, desc: 'ぎざぎざの くちの かぼちゃ。' },
-  snowman:  { name: 'ゆきだるま', kind: 'hiehie', power: 15, cost: 150, star: 1, desc: 'つめたそうな ゆきだるまの きぐるみ。' },
-  mummy:    { name: 'ミイラ', kind: 'bikkuri', power: 20, cost: 300, star: 2, desc: 'ほうたいで ぐるぐるまき。' },
-  vampire:  { name: 'きゅうけつき', kind: 'zokuzoku', power: 22, cost: 450, star: 3, desc: 'まっくろな マントと するどい きば。' },
-  skeleton: { name: 'がいこつ', kind: 'bikkuri', power: 26, cost: 650, star: 3, desc: 'くらやみに ほねだけが うかびあがる。' },
-  queen:    { name: 'こおりの じょおう', kind: 'hiehie', power: 30, cost: 900, star: 4, desc: 'こおりの かんむりと ドレス。いちばん こわい かそう。' },
+  none:     { name: 'なにも つけない', kind: 'bikkuri', power: 10, cost: 0, star: 1, desc: 'そのままの すがた。' },
+  sheet:    { name: 'おおきな リボン', kind: 'zokuzoku', power: 13, cost: 0, star: 1, desc: 'かわいいのに なぜか ぞくっと する リボン。' },
+  pumpkin:  { name: 'かぼちゃの ぼうし', kind: 'bikkuri', power: 15, cost: 120, star: 1, desc: 'ぎざぎざの くちの かぼちゃを のせる。' },
+  snowman:  { name: 'バケツぼうしと マフラー', kind: 'hiehie', power: 15, cost: 150, star: 1, desc: 'ゆきだるまみたいな つめたい いでたち。' },
+  mummy:    { name: 'ほうたい ぐるぐる', kind: 'bikkuri', power: 20, cost: 300, star: 2, desc: 'ミイラみたいに ほうたいを まく。' },
+  vampire:  { name: 'きゅうけつきの マント', kind: 'zokuzoku', power: 22, cost: 450, star: 3, desc: 'まっくろな マントと するどい きば。' },
+  skeleton: { name: 'がいこつの おめん', kind: 'bikkuri', power: 26, cost: 650, star: 3, desc: 'くらやみに ほねの かおが うかびあがる。' },
+  queen:    { name: 'こおりの かんむり', kind: 'hiehie', power: 30, cost: 900, star: 4, desc: 'きらきら ひかる こおりの かんむり。' },
+  witch:    { name: 'まじょの ぼうし', kind: 'zokuzoku', power: 24, soul: 15, star: 1, desc: 'おばけだまで かえる とくべつな ぼうし。' },
+  tophat:   { name: 'シルクハット', kind: 'bikkuri', power: 28, soul: 30, star: 1, desc: 'おばけの しんしの しるし。おばけだまで かえる。' },
+  halo:     { name: 'ひかる わっか', kind: 'hiehie', power: 34, soul: 50, star: 1, desc: 'あたまの うえで あおく ひかる わっか。いちばん こわい。' },
+};
+
+/* たべものやさんの メニュー。soul が ある ものは おばけショップで ふやす */
+const FOODS = {
+  donut:  { name: 'おばけドーナツ', price: 8, star: 1 },
+  ice:    { name: 'ゆきだるまアイス', price: 10, star: 1 },
+  soup:   { name: 'かぼちゃスープ', price: 14, star: 2 },
+  bun:    { name: 'めだまパン', price: 12, star: 2 },
+  cake:   { name: 'こおりの ケーキ', price: 20, star: 3 },
+  candy:  { name: 'おばけだまキャンディ', price: 30, soul: 20, star: 1 },
 };
 
 /* ひろばの かざりと おみせ。cute: かわいさ / shop: おきゃくさんが かえるときに かう ねだん / photo: しゃしんで ひょうばんが ふえる */
@@ -109,6 +136,9 @@ const DECOS = {
   statue:   { name: 'オバケの こおりぞう', cost: 220, cute: 10, star: 3, desc: 'こおりで つくった おおきな ゆきオバケ。' },
   carousel: { name: 'オバケ メリーゴーランド', cost: 900, cute: 12, shop: 15, star: 3, desc: 'オバケの うまが くるくる まわる。' },
   wheel:    { name: 'かんらんしゃ', cost: 1600, cute: 18, shop: 20, star: 4, desc: 'ゆきやまが みわたせる かんらんしゃ。' },
+  foodshop: { name: 'たべものやさん', cost: 300, cute: 5, food: true, star: 1, one: true, desc: 'おきゃくさんが ならんで たべものを ちゅうもんする。おみせの まえで「うる」ボタンを おすか、なかまを おみせ係に しよう。' },
+  fountain: { name: 'おばけの いずみ', soul: 40, cute: 16, star: 1, desc: 'おばけだまで つくる ふしぎな いずみ。あおい ひかりが ふきだす。' },
+  ghostlamp:{ name: 'ゆうれい ちょうちん', soul: 15, cute: 8, star: 1, desc: 'おばけだまで つくる ちょうちん。ふわふわ うかぶ。' },
   station:  { name: 'コースターの のりば', cost: 500, cute: 6, ride: 12, star: 2, one: true, desc: 'ジェットコースターの のりば。ここから レールを ぐるっと 1しゅう つなげると コースターが はしる。' },
   skelpop:  { name: 'とびだす ガイコツ', cost: 180, cute: 1, scare: 3, star: 2, desc: 'コースターが とおると ガバッと とびだす。レールの となりに おこう。' },
   spider:   { name: 'おおグモ', cost: 240, cute: 1, scare: 4, star: 2, desc: 'コースターの うえから ぶらーんと おりてくる。レールの となりに おこう。' },

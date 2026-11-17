@@ -462,6 +462,38 @@ function drawDeco(g, x, y, ts, type, anim, t, seed = 0) {
       circ(g, 0, -30, 3, '#ffd860', INK, 0.8);
       break;
     }
+    case 'foodshop':
+      shadow(14); rect(g, -13, -14, 26, 14, '#ffe8c8', INK, 1);
+      rect(g, -11, -11, 22, 4, '#a8703a');
+      line(g, -12, -14, -12, -30, '#7a5a3a', 1.6); line(g, 12, -14, 12, -30, '#7a5a3a', 1.6);
+      for (let i = 0; i < 6; i++) poly(g, [-15 + i * 5, -30, -15 + (i + 1) * 5, -30, -15 + (i + 1) * 5 - 2.5, -25], i % 2 ? '#ffffff' : '#ffb030', INK, 0.6);
+      rect(g, -15, -33, 30, 3.5, '#ffb030', INK, 0.8);
+      g.save(); g.translate(-6, -16); drawFood(g, 'donut', 0.22); g.restore();
+      g.save(); g.translate(5, -16); drawFood(g, 'ice', 0.22); g.restore();
+      rr(g, -10, -41, 20, 7, 2); g.fillStyle = '#ffffff'; g.fill(); g.strokeStyle = INK; g.lineWidth = 0.8; g.stroke();
+      g.fillStyle = '#c05a10'; g.font = '900 4.6px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('たべもの', 0, -37.5);
+      break;
+    case 'fountain': {
+      shadow(14); ell(g, 0, -3, 13, 5, '#8aa0c8', INK, 1); ell(g, 0, -4, 10.5, 3.6, '#6ad8ff');
+      rect(g, -2, -14, 4, 10, '#a8b8d8', INK, 0.8);
+      for (let i = 0; i < 6; i++) {
+        const p = (t * 0.9 + i / 6) % 1, a = i * 1.05;
+        g.globalAlpha = 1 - p; circ(g, Math.cos(a) * p * 9, -14 - Math.sin(p * Math.PI) * 10 + p * 9, 1.4, '#9af0ff');
+      }
+      g.globalAlpha = 1;
+      drawMiniGhost(g, 0, -18 + Math.sin(t * 2 + seed) * 1.5, '#d8fbff');
+      break;
+    }
+    case 'ghostlamp':
+      line(g, 0, 0, 0, -10, '#6a5a7a', 1.2);
+      for (let i = 0; i < 2; i++) {
+        const lx = -5 + i * 10, ly = -20 + Math.sin(t * 2 + i + seed) * 2;
+        ell(g, lx, ly, 4.5, 5.5, '#ffb0c8', INK, 0.8);
+        g.globalAlpha = 0.5 + 0.3 * Math.sin(t * 5 + i); ell(g, lx, ly, 3, 4, '#fff4c0'); g.globalAlpha = 1;
+        circ(g, lx - 1.3, ly - 0.5, 0.6, INK); circ(g, lx + 1.3, ly - 0.5, 0.6, INK);
+        rect(g, lx - 2, ly - 6.5, 4, 1.4, '#3a2a48'); rect(g, lx - 2, ly + 5, 4, 1.4, '#3a2a48');
+      }
+      break;
     case 'station':
       shadow(14); rect(g, -14, -6, 28, 6, '#8a7a9a', INK, 1);
       line(g, -12, -6, -12, -24, '#5a4a6a', 1.8); line(g, 12, -6, 12, -24, '#5a4a6a', 1.8);
@@ -519,6 +551,19 @@ function drawDeco(g, x, y, ts, type, anim, t, seed = 0) {
       drawMiniGhost(g, -9 + Math.sin(t * 1.3 + seed) * 2, -28, 'rgba(255,255,255,.85)');
       break;
     }
+  }
+  g.restore();
+}
+/* たべもの。sc は 大きさ */
+function drawFood(g, type, sc = 1) {
+  g.save(); g.scale(sc * 3, sc * 3);
+  switch (type) {
+    case 'donut': circ(g, 0, 0, 7, '#e8a860', INK, 0.8); circ(g, 0, 0, 5.5, '#ffb0d0'); circ(g, 0, 0, 2.2, '#ffffff', INK, 0.6); circ(g, -2.5, -1, 0.7, INK); circ(g, 2.5, -1, 0.7, INK); break;
+    case 'ice': poly(g, [-4, 0, 4, 0, 0, 9], '#e8b870', INK, 0.8); circ(g, 0, -3, 5, '#f6faff', INK, 0.8); circ(g, -1.6, -3.5, 0.7, INK); circ(g, 1.6, -3.5, 0.7, INK); poly(g, [0, -2.5, 2.5, -2, 0, -1.5], '#f08a30'); break;
+    case 'soup': ell(g, 0, 1, 8, 5, '#f08a2a', INK, 0.8); ell(g, 0, -1, 6.5, 2.4, '#ffc060'); rect(g, -1, -6, 2, 2, '#4a8a3a'); break;
+    case 'bun': ell(g, 0, 0, 8, 6, '#e8b870', INK, 0.8); circ(g, -3, -1, 2.2, '#fff', INK, 0.5); circ(g, 3, -1, 2.2, '#fff', INK, 0.5); circ(g, -3, -1, 1, INK); circ(g, 3, -1, 1, INK); break;
+    case 'cake': rect(g, -6, -4, 12, 8, '#bfeaff', INK, 0.8); rect(g, -6, -6, 12, 2.5, '#ffffff', INK, 0.6); poly(g, [-1, -6, 1, -6, 0, -10], '#ff6a8a'); break;
+    case 'candy': line(g, 0, 2, 0, 9, '#c8a070', 1.2); circ(g, 0, -2, 5.5, '#9af0ff', INK, 0.8); circ(g, -1.6, -2.5, 0.8, INK); circ(g, 1.6, -2.5, 0.8, INK); break;
   }
   g.restore();
 }
@@ -600,103 +645,111 @@ function drawPine(g, x, y, s) {
   g.restore();
 }
 
-/* ================================ オーナー (あなた) ================================
-   ネズミの冒険の 主人公と おなじ ネズミ。かそうを きて おどかす。
-   o: { t, face, moving, walk, pose } pose は 1 で ばんざい */
-const OWNER_FUR = '#b9ab9d', OWNER_BELLY = '#f2eadf';
-function drawOwner(g, x, y, ts, costume, o = {}) {
-  const k = ts / 32, t = o.t || 0, pose = o.pose || 0;
+/* ================================ あなたの オバケ ================================
+   ゆきオバケと おなじ かたちで、いろ・かお・アクセサリーを えらべる。
+   look: { color, face, wear }  o: { t, face, moving, walk, pose } pose は 1 で ばんざい */
+function drawOwner(g, x, y, ts, look, o = {}) {
+  const k = ts / 32, t = o.t || 0, pose = o.pose || 0, wear = look.wear;
+  const [body, edge] = LOOK_COLORS[look.color] ? LOOK_COLORS[look.color].c : LOOK_COLORS.snow.c;
+  const dark = look.color === 'night';
   g.save();
   g.translate(x, y);
-  g.globalAlpha = 0.22; ell(g, 0, 0, 7.5 * k, 2.6 * k, '#000'); g.globalAlpha = 1;
-  const step = o.moving ? Math.sin((o.walk || 0) * 14) : 0;
-  g.translate(0, (-Math.abs(step) * 1.4 - pose * 3) * k);
+  g.globalAlpha = 0.22; ell(g, 0, 0, 9 * k, 3 * k, '#000'); g.globalAlpha = 1;
+  const bob = Math.sin(t * 3) * 2 + pose * 3;
+  g.translate(0, (-7 - bob) * k);
+  g.rotate(o.moving ? 0.08 * (o.face || 1) : 0);
   g.scale(k * (o.face || 1), k);
-  const hy = -17;
-  let fur = OWNER_FUR, belly = OWNER_BELLY;
-  if (costume === 'mummy') { fur = '#ece2c6'; belly = '#ece2c6'; }
-  if (costume === 'skeleton') { fur = '#2a2838'; belly = '#2a2838'; }
-  if (costume === 'vampire') { fur = '#d8d0dc'; belly = '#ffffff'; }
-  const armUp = pose > 0.2;
-  const arm = (side, col) => {
-    if (armUp) { line(g, side * 5, -11, side * 10, -19, INK, 3.4); line(g, side * 5, -11, side * 10, -19, col, 2.2); }
-    else ell(g, side * 7, -8, 2.2, 3.2, col, INK, 0.8);
-  };
   // せなかの もの
-  if (costume === 'vampire') {
-    poly(g, [-4, -14, 4, -14, 11, 0, -11, 0], '#1a1424', INK, 1);
-    poly(g, [-3, -13, 3, -13, 8, -1, -8, -1], '#b0203a');
+  if (wear === 'vampire') {
+    poly(g, [-7, -22, 7, -22, 15, -1, -15, -1], '#1a1424', INK, 1);
+    poly(g, [-6, -21, 6, -21, 12, -2, -12, -2], '#b0203a');
   }
-  if (costume === 'queen') poly(g, [-4, -14, 4, -14, 12, 0, -12, 0], 'rgba(170,225,255,.85)', '#6ab0e0', 1);
-  if (costume !== 'sheet') { g.beginPath(); g.moveTo(-5, -4); g.bezierCurveTo(-14, -3, -12, 4, -17, 1); g.strokeStyle = '#e8a0a8'; g.lineWidth = 1.4; g.stroke(); }
-  // あし
-  ell(g, -3 + step * 1.5, -1.5, 2.6, 1.8, '#e8a0a8', INK, 0.8);
-  ell(g, 3 - step * 1.5, -1.5, 2.6, 1.8, '#e8a0a8', INK, 0.8);
-  if (costume === 'sheet') {
-    // シーツを かぶる。耳の でっぱりが ふたつ
-    g.beginPath(); g.moveTo(-10, -2);
-    for (let i = 0; i <= 4; i++) g.quadraticCurveTo(-10 + i * 5 - 2.5, 0.5 + (i % 2 ? 1.6 : -1.6) + Math.sin(t * 6 + i) * 0.8, -10 + i * 5, -2);
-    g.lineTo(9, -16); g.quadraticCurveTo(9, -22, 6, -24); g.arc(5, -26.5, 2.8, 0.6, Math.PI + 0.4, true);
-    g.quadraticCurveTo(0, -26, -3, -25.5); g.arc(-5, -26.5, 2.8, -0.4 + Math.PI * 2, Math.PI - 0.6, true);
-    g.quadraticCurveTo(-9, -22, -9.5, -16); g.closePath();
-    g.fillStyle = '#f8f8ff'; g.fill(); g.strokeStyle = '#9a9ab8'; g.lineWidth = 1.2; g.stroke();
-    if (armUp) { ell(g, -10, -17, 2.6, 3.6, '#f8f8ff', '#9a9ab8', 1); ell(g, 10, -17, 2.6, 3.6, '#f8f8ff', '#9a9ab8', 1); }
-    ell(g, -1, -17, 1.8, 2.4, INK); ell(g, 4, -17, 1.8, 2.4, INK);
-    if (armUp) ell(g, 1.5, -11.5, 2.2, 2.4, INK);
+  // うで
+  const armY = pose > 0.2 ? -21 : -12;
+  ell(g, -12.5, armY, 3, 4.5, body, edge, 1.2); ell(g, 12.5, armY, 3, 4.5, body, edge, 1.2);
+  // からだ。すその なみが ゆらゆら
+  g.beginPath(); g.moveTo(-11, -4);
+  for (let i = 0; i <= 4; i++) g.quadraticCurveTo(-11 + i * 5.5 - 2.75, -1 + (i % 2 ? 2 : -2) + Math.sin(t * 6 + i) * 1.2, -11 + i * 5.5, -4);
+  g.lineTo(11, -14); g.arc(0, -14, 11, 0, Math.PI, true); g.closePath();
+  g.fillStyle = body; g.fill(); g.strokeStyle = edge; g.lineWidth = 1.4; g.stroke();
+  if (wear === 'mummy') {
+    g.save(); g.clip();
+    for (let i = 0; i < 5; i++) { line(g, -12, -22 + i * 4.4, 12, -19 + i * 4.4, '#e8dcbc', 2.2); line(g, -12, -22 + i * 4.4, 12, -19 + i * 4.4, '#c8b896', 0.5); }
     g.restore();
-    return;
   }
-  // からだ
-  if (costume === 'pumpkin') {
-    arm(-1, fur); arm(1, fur);
-    for (const dx of [-5, 0, 5]) ell(g, dx, -9, 5.5, 8, '#f08a2a', '#a04a10', 1);
-    poly(g, [-5, -12, -2, -12, -3.5, -9], '#3a1a10'); poly(g, [2, -12, 5, -12, 3.5, -9], '#3a1a10');
-    poly(g, [-5, -6, -3, -4, -1, -6, 1, -4, 3, -6, 5, -4, 4, -3, -4, -3], '#3a1a10');
-  } else if (costume === 'snowman') {
-    arm(-1, '#f6faff'); arm(1, '#f6faff');
-    circ(g, 0, -8, 8.5, '#f6faff', '#9ab0cc', 1);
-    circ(g, 0, -11, 1, INK); circ(g, 0, -7, 1, INK); circ(g, 0, -3, 1, INK);
-  } else if (costume === 'queen') {
-    arm(-1, fur); arm(1, fur);
-    poly(g, [-4, -15, 4, -15, 9, -1, -9, -1], '#bfe8ff', '#4a9ad0', 1);
-    for (const [sx, sy] of [[-3, -6], [3, -9], [0, -3]]) poly(g, [sx, sy - 1.6, sx + 1, sy, sx, sy + 1.6, sx - 1, sy], '#ffffff');
+  if (wear === 'snowman') { g.beginPath(); g.ellipse(0, -8.5, 11.5, 2.6, 0, 0, TAU); g.fillStyle = '#e0504a'; g.fill(); rect(g, 4, -8, 3.5, 7, '#e0504a'); }
+  if (wear === 'vampire') { poly(g, [-8, -9, -2, -6, -4, -14], '#1a1424'); poly(g, [8, -9, 2, -6, 4, -14], '#1a1424'); }
+  // かお
+  const ey = -15, eye = dark ? '#ffe24a' : '#2a3048';
+  const scare = pose > 0.2;
+  if (wear === 'skeleton') {
+    ell(g, 1, -14, 8, 8.5, '#f4f0e8', '#a8a090', 1);
+    ell(g, -2.2, ey, 2.4, 2.8, '#1a1424'); ell(g, 4.2, ey, 2.4, 2.8, '#1a1424');
+    poly(g, [0.2, -11.5, 1.8, -11.5, 1, -13], '#1a1424');
+    for (let i = -2; i <= 2; i++) line(g, 1 + i * 1.3, -9, 1 + i * 1.3, -7.5, '#1a1424', 0.8);
+  } else if (scare) {
+    ell(g, -2.5, ey - 1, 2.6, 3.2, eye); ell(g, 4.5, ey - 1, 2.6, 3.2, eye);
+    circ(g, -1.8, ey - 2, 0.9, '#fff'); circ(g, 5.2, ey - 2, 0.9, '#fff');
+    ell(g, 1, -9, 4, 3.4, '#3a2a48'); ell(g, 1, -7.6, 2.4, 1.3, '#ff7a9a');
   } else {
-    arm(-1, costume === 'vampire' ? '#1a1424' : fur); arm(1, costume === 'vampire' ? '#1a1424' : fur);
-    ell(g, 0, -8, 7.5, 7, costume === 'vampire' ? '#1a1424' : fur, INK, 1);
-    if (costume === 'vampire') poly(g, [-2.5, -14, 2.5, -14, 0, -6], '#ffffff');
-    else if (costume === 'skeleton') {
-      line(g, 0, -14, 0, -3, '#f4f0e8', 1.6);
-      for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(0, -11 + i * 3, 4.5 - i * 0.6, Math.PI * 0.15, Math.PI * 0.85); g.strokeStyle = '#f4f0e8'; g.lineWidth = 1.3; g.stroke(); g.beginPath(); g.arc(0, -11 + i * 3, 4.5 - i * 0.6, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
-    } else ell(g, 0.5, -7, 4.6, 4.8, belly);
-    if (costume === 'none') { rect(g, -4.5, -11, 9, 9, '#e0504a', INK, 0.8); line(g, -4, -11, -2.5, -15, '#e0504a', 1.4); line(g, 4, -11, 2.5, -15, '#e0504a', 1.4); }
-    if (costume === 'mummy') for (let i = 0; i < 4; i++) line(g, -7, -13 + i * 3.4, 7, -11.5 + i * 3.4, '#c8b896', 1);
+    switch (look.face) {
+      case 'smile':
+        for (const ex of [-2.5, 4.5]) { g.beginPath(); g.arc(ex, ey + 0.5, 2, Math.PI * 1.1, Math.PI * 1.9); g.strokeStyle = eye; g.lineWidth = 1.5; g.stroke(); }
+        g.beginPath(); g.arc(1, -11, 2.4, 0.15, Math.PI - 0.15); g.closePath(); g.fillStyle = '#5a2a40'; g.fill();
+        break;
+      case 'sleepy':
+        for (const ex of [-2.5, 4.5]) { ell(g, ex, ey + 0.4, 2, 1.3, eye); rect(g, ex - 2.4, ey - 1.6, 4.8, 1.6, body); line(g, ex - 2.2, ey, ex + 2.2, ey, eye, 1); }
+        ell(g, 1, -10.5, 1.4, 0.9, '#4a5070');
+        break;
+      case 'sparkle':
+        for (const ex of [-2.5, 4.5]) { circ(g, ex, ey, 2.6, eye); circ(g, ex + 0.8, ey - 0.9, 1, '#fff'); circ(g, ex - 0.8, ey + 0.8, 0.5, '#fff'); }
+        g.beginPath(); g.arc(1, -11, 1.8, 0.2, Math.PI - 0.2); g.strokeStyle = '#4a5070'; g.lineWidth = 1; g.stroke();
+        break;
+      case 'cyclops':
+        circ(g, 1, ey, 4, '#ffffff', eye, 1.2); circ(g, 1.6, ey, 2.2, eye); circ(g, 2.4, ey - 0.9, 0.8, '#fff');
+        ell(g, 1, -9.5, 1.8, 1.1, '#4a5070');
+        break;
+      case 'wink':
+        circ(g, -2.5, ey, 2, eye); circ(g, -2, ey - 0.6, 0.6, '#fff');
+        g.beginPath(); g.arc(4.5, ey + 0.5, 2, Math.PI * 1.1, Math.PI * 1.9); g.strokeStyle = eye; g.lineWidth = 1.5; g.stroke();
+        g.beginPath(); g.arc(1, -11, 2, 0.1, Math.PI - 0.1); g.strokeStyle = '#4a5070'; g.lineWidth = 1; g.stroke();
+        ell(g, 2, -9.2, 1.3, 1.6, '#ff7a9a');
+        break;
+      default:
+        circ(g, -2.5, ey, 2, eye); circ(g, 4.5, ey, 2, eye);
+        circ(g, -2, ey - 0.6, 0.6, '#fff'); circ(g, 5, ey - 0.6, 0.6, '#fff');
+        ell(g, 1, -10.5, 1.8, 1.1, '#4a5070');
+    }
+    if (wear === 'vampire') { poly(g, [-0.5, -10, 0.5, -10, 0, -8.2], '#fff'); poly(g, [1.5, -10, 2.5, -10, 2, -8.2], '#fff'); }
   }
-  if (costume === 'vampire') { poly(g, [-7, -14, -3, -11, -3, -20], '#1a1424'); poly(g, [7, -14, 3, -11, 3, -20], '#1a1424'); }
-  // あたま
-  const earIn = costume === 'skeleton' ? '#4a4858' : costume === 'mummy' ? '#d8c8a6' : '#f0a8b4';
-  circ(g, -5.5, hy - 6, 4.4, fur, INK, 1); circ(g, -5.5, hy - 6, 2.4, earIn);
-  circ(g, 5.5, hy - 6, 4.4, fur, INK, 1); circ(g, 5.5, hy - 6, 2.4, earIn);
-  circ(g, 0, hy, 7.5, costume === 'skeleton' ? '#f4f0e8' : fur, INK, 1);
-  const ex = 2;
-  if (costume === 'skeleton') {
-    ell(g, ex - 3, hy - 1, 2.2, 2.6, INK); ell(g, ex + 3, hy - 1, 2.2, 2.6, INK);
-    poly(g, [ex - 0.8, hy + 2.5, ex + 0.8, hy + 2.5, ex, hy + 1], INK);
-    for (let i = -2; i <= 2; i++) line(g, ex + i * 1.2, hy + 4, ex + i * 1.2, hy + 5.5, INK, 0.7);
-  } else {
-    if (costume === 'mummy') { for (let i = 0; i < 4; i++) line(g, -7, hy - 5 + i * 3.2, 7, hy - 3.5 + i * 3.2, '#c8b896', 1); circ(g, ex + 3, hy - 0.5, 1.4, '#e04040'); }
-    else { circ(g, ex - 3, hy - 0.5, 1.4, INK); circ(g, ex + 3, hy - 0.5, 1.4, INK); circ(g, ex - 2.6, hy - 1, 0.45, '#fff'); circ(g, ex + 3.4, hy - 1, 0.45, '#fff'); }
-    if (costume === 'snowman') poly(g, [ex, hy + 1, ex + 6, hy + 2, ex, hy + 3], '#f08a30');
-    else circ(g, ex + 0.5, hy + 2, 1, '#e88a98');
-    if (armUp) ell(g, ex, hy + 4.4, 2, 2, '#5a2030');
-    else { g.beginPath(); g.arc(ex, hy + 3, 1.6, 0.2, Math.PI - 0.2); g.strokeStyle = INK; g.lineWidth = 0.9; g.stroke(); }
-    if (costume === 'vampire') { poly(g, [ex - 1.5, hy + 4, ex - 0.7, hy + 4, ex - 1.1, hy + 6], '#fff'); poly(g, [ex + 0.7, hy + 4, ex + 1.5, hy + 4, ex + 1.1, hy + 6], '#fff'); }
-    if (costume !== 'mummy') { ell(g, ex - 5, hy + 2.2, 1.6, 1, 'rgba(255,130,150,.5)'); ell(g, ex + 5.5, hy + 2.2, 1.6, 1, 'rgba(255,130,150,.5)'); }
+  if (wear !== 'skeleton' && wear !== 'mummy') { const bl = dark ? 'rgba(255,160,200,.45)' : 'rgba(255,140,170,.6)'; ell(g, -5, -11, 2.2, 1.2, bl); ell(g, 7.5, -11, 2.2, 1.2, bl); }
+  // あたまの もの
+  if (wear === 'sheet') {
+    ell(g, 2, -24.5, 4, 3, '#ff8ab8', '#c0507a', 0.8); ell(g, 10, -24.5, 4, 3, '#ff8ab8', '#c0507a', 0.8); circ(g, 6, -24.5, 1.8, '#ff6aa0', '#c0507a', 0.8);
+  } else if (wear === 'pumpkin') {
+    g.save(); g.translate(1, -24); g.rotate(-0.15);
+    for (const dx of [-3.5, 0, 3.5]) ell(g, dx, 0, 3.8, 4, '#f08a2a', '#a04a10', 0.8);
+    poly(g, [-3, -1, -1, -1, -2, 1], '#3a1a10'); poly(g, [1, -1, 3, -1, 2, 1], '#3a1a10');
+    rect(g, -0.8, -6, 1.6, 2.5, '#4a8a3a'); g.restore();
+  } else if (wear === 'snowman') {
+    rect(g, -5, -32, 10, 7, '#2a2a3a'); rect(g, -7, -26, 14, 2, '#2a2a3a');
+  } else if (wear === 'witch') {
+    g.save(); g.translate(1, -23); g.rotate(-0.12);
+    ell(g, 0, 0, 12, 2.6, '#3a2a58', INK, 1);
+    poly(g, [-6, -1, 6, -1, 3, -10, 6, -15, 0, -11], '#3a2a58', INK, 1);
+    rect(g, -6, -3, 12, 2, '#b48aff'); g.restore();
+  } else if (wear === 'tophat') {
+    ell(g, 1, -24, 10, 2.4, '#1a1424', INK, 1);
+    rect(g, -5, -34, 12, 10, '#1a1424', INK, 1); rect(g, -5, -27, 12, 2, '#e0504a');
+  } else if (wear === 'halo') {
+    const a = 0.6 + 0.3 * Math.sin(t * 3);
+    g.globalAlpha = a; ell(g, 1, -30, 9, 2.8, null, '#7af0ff', 4); g.globalAlpha = 1;
+    ell(g, 1, -30, 9, 2.8, null, '#e8ffff', 1.4);
+  } else if (wear === 'queen') {
+    poly(g, [-7, -23, -7, -30, -3.5, -26, 0, -32, 3.5, -26, 7, -30, 7, -23], '#d8f4ff', '#4a9ad0', 1);
+    circ(g, 0, -27, 1.2, '#8ad0ff');
+    for (const [sx, sy] of [[-13, -26], [13, -20], [-10, -4]]) { const a = 0.5 + 0.5 * Math.sin(t * 4 + sx); g.globalAlpha = a; poly(g, [sx, sy - 2, sx + 0.8, sy, sx, sy + 2, sx - 0.8, sy], '#ffffff'); g.globalAlpha = 1; }
   }
-  // ぼうし
-  if (costume === 'pumpkin') { rect(g, -1, hy - 10, 2, 3.5, '#4a8a3a'); ell(g, 2.5, hy - 9, 2.6, 1.3, '#5aa04a'); }
-  if (costume === 'snowman') { rect(g, -4.5, hy - 13, 9, 6, '#2a2a3a'); rect(g, -6.5, hy - 7.5, 13, 1.8, '#2a2a3a'); g.beginPath(); g.ellipse(0, -11.5, 6.8, 2.2, 0, 0, TAU); g.fillStyle = '#e0504a'; g.fill(); }
-  if (costume === 'queen') poly(g, [-6, hy - 6, -6, hy - 11, -3, hy - 8, 0, hy - 13, 3, hy - 8, 6, hy - 11, 6, hy - 6], '#d8f4ff', '#4a9ad0', 0.9);
-  if (costume === 'vampire') { g.beginPath(); g.arc(0, hy - 2, 7.6, Math.PI * 1.05, Math.PI * 1.95); g.lineWidth = 3; g.strokeStyle = '#1a1424'; g.stroke(); }
   g.restore();
 }
 
@@ -729,7 +782,7 @@ function drawTool(g, type) {
       rect(g, 24, 34, 8, 12, '#7a4a2a');
       poly(g, [6, 16, 6, 8, 14, 12], '#4fb071'); poly(g, [50, 16, 50, 8, 42, 12], '#4fb071');
       break;
-    case 'costume': drawOwner(g, 28, 50, 36, 'pumpkin', { t: 0.4 }); break;
+    case 'costume': drawOwner(g, 28, 48, 36, { color: 'pink', face: 'sparkle', wear: 'sheet' }, { t: 0.4 }); break;
     case 'deco': drawDeco(g, 28, 40, 40, 'balloon', 0, 0.4); break;
     case 'rail':
       for (let i = 0; i < 5; i++) line(g, 10 + i * 9, 18, 6 + i * 9, 40, '#8a6a4a', 3);
@@ -783,10 +836,12 @@ const Icons = {
     if (kind === 'ghost') {
       const sc = GHOSTS[type].scale || 1;
       drawGhost(g, 28, 46 + (sc > 1 ? 4 : 0), 32 * 1.25 / Math.max(1, sc * 0.9), type, { t: 0.6 });
-    } else if (kind === 'owner') drawOwner(g, 28, 50, 44, type, { t: 0.4 });
+    } else if (kind === 'owner') drawOwner(g, 28, 53, 34, { color: 'snow', face: 'round', wear: type }, { t: 0.4 });
+    else if (kind === 'look') { const [part, v] = type.split(':'); drawOwner(g, 28, 48, 40, part === 'color' ? { color: v, face: 'round', wear: 'none' } : { color: 'snow', face: v, wear: 'none' }, { t: 0.4 }); }
     else if (kind === 'tool') drawTool(g, type);
     else if (kind === 'face') drawFace(g, type);
-    else if (kind === 'deco') drawDeco(g, 28, ['wheel', 'hotel'].includes(type) ? 44 : 34, ['wheel', 'hotel'].includes(type) ? 26 : 38, type, 0.6, 0.4);
+    else if (kind === 'food') { g.translate(28, 28); drawFood(g, type, 1); }
+    else if (kind === 'deco') drawDeco(g, 28, ['wheel', 'hotel', 'foodshop'].includes(type) ? 44 : 34, ['wheel', 'hotel'].includes(type) ? 26 : type === 'foodshop' ? 32 : 38, type, 0.6, 0.4);
     else drawProp(g, 28, 30, 40, type, 0, 0.3);
     const url = c.toDataURL();
     this.cache.set(key, url);

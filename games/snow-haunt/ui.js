@@ -1,11 +1,12 @@
 /* =========================================================================
    SNOW HAUNT ― 画面の ボタンと 小窓
-   上の帯 / けんちくの どうぐ / オバケ・かそう・うけつけ・ひろげる・もくひょう / 夜の そうさ / けっか
+   上の帯 / けんちくの どうぐ / オバケ・きせかえ・うけつけ・ひろげる・もくひょう / 夜の そうさ / けっか
    ========================================================================= */
 'use strict';
 
 const kindChip = (kind) => `<span class="chip kd" style="--c:${KINDS[kind].color}">${KINDS[kind].name}</span>`;
 const lockLabel = (star) => `★${star}で かいほう`;
+const priceOf = (d) => (d.soul ? d.soul + SOUL : d.cost + COIN);
 
 const UI = {
   tool: null,        // 'floor' | 'rail' | 'erase' | 'prop' | 'deco' | 'ghost' | null
@@ -29,6 +30,7 @@ const UI = {
     $('bExpand').onclick = () => this.openExpand();
     $('bOpen').onclick = () => { Sound.init(); Game.startNight(); };
     $('banner').onclick = () => this.openMissions();
+    $('bSoul').onclick = () => this.openGhostShop();
     $('bMenu').onclick = () => this.openMenu();
     $('bSound').onclick = () => { Sound.on = !Sound.on; Sound.init(); this.refresh(); };
     document.querySelectorAll('#nightBar [data-sp]').forEach((b) => b.addEventListener('click', () => { Game.speed = +b.dataset.sp; this.refresh(); }));
@@ -45,9 +47,10 @@ const UI = {
       const k = e.key.toLowerCase();
       if (k === 'escape') { if (!$('modal').classList.contains('hide')) { if (!this.modalLocked) this.closeModal(); } else this.setTool(null); }
       if (Game.mode === 'movie' && (k === ' ' || k === 'enter')) { e.preventDefault(); Movie.next(); return; }
-      if (Game.mode !== 'night') return;
+      if (Game.mode !== 'night' && Game.mode !== 'day') return;
+      if (Game.mode === 'day' && this.tool) return;
       if (k === ' ' || k === 'j' || k === 'enter') { e.preventDefault(); if (!e.repeat) Sim.input.act = true; }
-      else if (k === 'p') { Game.speed = Game.speed ? 0 : 1; this.refresh(); }
+      else if (k === 'p' && Game.mode === 'night') { Game.speed = Game.speed ? 0 : 1; this.refresh(); }
       else if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) { e.preventDefault(); this.keys.add(k); }
     });
     addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
@@ -87,6 +90,7 @@ const UI = {
     if (tool === 'deco' && arg) this.decoType = arg;
     if (tool === 'ghost') this.placing = arg;
     document.querySelectorAll('#dayBar [data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool));
+    $('ctrl').classList.toggle('hide', !(Game.mode === 'night' || (Game.mode === 'day' && !tool)));
     this.renderPick();
     View.fit();
   },
@@ -112,7 +116,7 @@ const UI = {
       for (const k in table) {
         const d = table[k], lock = stars(s) < d.star;
         o += `<button class="pitem ${k === cur ? 'on' : ''} ${lock ? 'lock' : ''}" data-${kind}="${k}" ${lock ? 'disabled' : ''}>
-          <img src="${Icons.get(kind, k)}" alt=""><span>${d.name}</span><small>${lock ? lockLabel(d.star) : d.cost + COIN}</small>${d.kind ? `<i class="kdot" style="background:${KINDS[d.kind].color}"></i>` : ''}</button>`;
+          <img src="${Icons.get(kind, k)}" alt=""><span>${d.name}</span><small>${lock ? lockLabel(d.star) : priceOf(d)}</small>${d.kind ? `<i class="kdot" style="background:${KINDS[d.kind].color}"></i>` : ''}</button>`;
       }
       return o + '</div>';
     };
@@ -193,7 +197,7 @@ const UI = {
       const wx = (e.clientX - View.ox) / View.ts, wy = (e.clientY - View.oy) / View.ts;
       if (gh) { this.sel = { x, y, range: GHOSTS[gh.type].range }; this.ghostInfo(gh); }
       else if (p) { this.sel = { x, y, range: PROPS[p.type].range }; this.propInfo(p); }
-      else if (dc) this.decoInfo(dc);
+      else if (dc) { if (dc.type === 'foodshop') this.openFoodShop(); else this.decoInfo(dc); }
       else if (wx > BOOTH.x0 - 0.6 && wx < BOOTH.x1 + 0.3 && wy > BOOTH.y0 - 0.9 && wy < BOOTH.y1 + 0.2) this.openCounter();
       else if (Sim.cell(x, y) === CELL.LOCK) this.openExpand();
       else this.sel = null;
@@ -210,6 +214,7 @@ const UI = {
     this.set('hName', s.park);
     this.set('hDay', `${s.day}日目`);
     this.set('hMoney', fmt(s.coins));
+    this.set('hSoul', fmt(s.soul));
     $('hMoney').classList.toggle('neg', s.coins < 0);
     this.set('hStars', '★'.repeat(st) + '<i>' + '★'.repeat(5 - st) + '</i>', true);
     $('hRep').style.width = (st >= 5 ? 100 : (s.rep % 20) / 20 * 100) + '%';
@@ -227,10 +232,12 @@ const UI = {
       const r = n.ratings, f = (k, v) => `<span class="fc"><img src="${Icons.get('face', k)}" alt="">${v}</span>`;
       this.set('nFaces', f(5, r[5]) + f(4, r[4]) + f(3, r[3]) + f(1, r[1]) + f(2, r[2]), true);
       document.querySelectorAll('#nightBar [data-sp]').forEach((x) => x.classList.toggle('on', +x.dataset.sp === Game.speed));
-      const serve = Sim.canServe();
-      this.set('act', serve ? 'うけつけ' : 'ばあ!');
-      $('act').classList.toggle('serve', serve);
-      $('act').classList.toggle('cool', !serve && Sim.p.cd > 0);
+    }
+    if (Sim.p && Sim.n && (Game.mode === 'night' || Game.mode === 'day')) {
+      const serve = Sim.canServe(), sell = !serve && Sim.canSell();
+      this.set('act', serve ? 'うけつけ' : sell ? 'うる' : 'ばあ!');
+      $('act').classList.toggle('serve', serve || sell);
+      $('act').classList.toggle('cool', !serve && !sell && Sim.p.cd > 0);
     }
     $('bOpen').classList.toggle('warn', !Sim.path);
   },
@@ -266,13 +273,14 @@ const UI = {
       if (!s.ghosts.length) h += '<p class="mini">まだ なかまが いないよ。「やとう」から なかまに しよう。</p>';
       for (const gh of s.ghosts) {
         const d = GHOSTS[gh.type];
-        const where = gh.desk ? '<div class="good mini">うけつけ係。カウンターで おかねを もらってくれる。</div>' : gh.x < 0 ? '<div class="bad mini">まちあい中。おかないと はたらかないよ。</div>' : '';
+        const where = gh.desk ? '<div class="good mini">うけつけ係。カウンターで おかねを もらってくれる。</div>' : gh.clerk ? '<div class="good mini">おみせ係。たべものやさんで たべものを うってくれる。</div>' : gh.x < 0 ? '<div class="bad mini">まちあい中。おかないと はたらかないよ。</div>' : '';
         h += `<div class="card"><img src="${Icons.get('ghost', gh.type)}" alt="">
           <div class="cbody"><div class="ctitle"><b>${gh.name}</b><small>${d.name}</small><span class="lv">Lv${gh.lv}</span></div>
           <div class="xp"><i style="width:${gh.lv >= 10 ? 100 : gh.exp / expNeed(gh.lv) * 100}%"></i></div>
           <div class="chips">${this.statLine(d, gh)}<span class="chip">${d.robot ? 'でんきだい' : 'きゅうりょう'} ${d.wage}${COIN}</span></div>${where}</div>
           <div class="cbtns"><button class="btn small primary" data-place="${gh.id}">${gh.x < 0 ? 'やしきに おく' : 'うごかす'}</button>
           <button class="btn small" data-desk="${gh.id}" ${gh.desk ? 'disabled' : ''}>うけつけ係</button>
+          <button class="btn small" data-clerk="${gh.id}" ${gh.clerk ? 'disabled' : ''}>おみせ係</button>
           <button class="btn small" data-fire="${gh.id}">${this.fireArm === gh.id ? 'ほんとうに?' : 'やめる'}</button></div></div>`;
       }
     } else {
@@ -296,6 +304,12 @@ const UI = {
       const gh = find(b.dataset.desk);
       Sim.setDesk(gh); Sound.boo();
       toast(`${gh.name}が うけつけ係に なったよ`);
+      Game.save(); this.openGhosts('team');
+    });
+    body.querySelectorAll('[data-clerk]').forEach((b) => b.onclick = () => {
+      const gh = find(b.dataset.clerk);
+      Sim.setClerk(gh); Sound.boo();
+      toast(`${gh.name}が おみせ係に なったよ${Sim.foodShop() ? '' : '。ひろばに たべものやさんを たてよう'}`);
       Game.save(); this.openGhosts('team');
     });
     body.querySelectorAll('[data-fire]').forEach((b) => b.onclick = () => {
@@ -338,7 +352,7 @@ const UI = {
   },
 
   decoInfo(dc) {
-    const d = DECOS[dc.type], back = Math.floor(d.cost / 2);
+    const d = DECOS[dc.type], back = Math.floor((d.cost || 0) / 2);
     this.modal(d.name,
       `<div class="card"><img src="${Icons.get('deco', dc.type)}" alt=""><div class="cbody"><div class="mini">${d.desc}</div>
        <div class="chips"><span class="chip">かわいさ +${d.cute}</span>${d.shop ? `<span class="chip">ひとり ${d.shop}${COIN}</span>` : ''}${d.photo ? '<span class="chip">ひょうばん すこし アップ</span>' : ''}${d.scare ? '<span class="chip">コースターの おきゃくさんを おどかす</span>' : ''}</div></div></div>`,
@@ -346,29 +360,112 @@ const UI = {
     $('dSell').onclick = () => { Sim.erase(dc.x, dc.y); Sound.coin(); toast(`うった <b>+${back}${COIN}</b>`); this.closeModal(); Game.save(); this.refresh(); };
   },
 
+  /* いろ と かお の えらぶ ボタン (なまえを きめる がめん でも つかう) */
+  lookPicker(look, owned = []) {
+    let h = '<div class="lookrow">';
+    for (const k in LOOK_COLORS) {
+      const c = LOOK_COLORS[k], lock = c.soul && !owned.includes(k);
+      h += `<button class="sw ${look.color === k ? 'on' : ''} ${lock ? 'locked' : ''}" ${lock ? `data-soulcolor="${k}"` : `data-color="${k}"`} title="${c.name}" style="background:${c.c[0]};border-color:${c.c[1]}"></button>`;
+    }
+    h += '</div><div class="lookrow">';
+    for (const k in LOOK_FACES) h += `<button class="facebtn ${look.face === k ? 'on' : ''}" data-face="${k}"><img src="${Icons.get('look', 'face:' + k)}" alt=""><span>${LOOK_FACES[k]}</span></button>`;
+    return h + '</div>';
+  },
+  bindLookPicker(root, look, redraw) {
+    root.querySelectorAll('[data-color]').forEach((b) => b.onclick = () => { look.color = b.dataset.color; Sound.pop(); redraw(); });
+    root.querySelectorAll('[data-face]').forEach((b) => b.onclick = () => { look.face = b.dataset.face; Sound.pop(); redraw(); });
+    root.querySelectorAll('[data-soulcolor]').forEach((b) => b.onclick = () => { toast(`${LOOK_COLORS[b.dataset.soulcolor].name}は おばけショップで おばけだまと こうかん できるよ`); Sound.no(); });
+  },
+  previewOwner(canvas, look) {
+    const g = canvas.getContext('2d'), w = canvas.width;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, w);
+    drawOwner(g, w / 2, w * 0.86, w * 0.62, look, { t: Game.t });
+  },
+
   openCostumes() {
     const s = Sim.s;
     this.setTool(null);
-    let h = '<p class="mini">オーナー (あなた) の かそう。よるに「ばあ!」ボタンで おどかすときの こわさが かわるよ。</p>';
+    let h = `<div class="lookhead"><canvas id="lookPrev" width="140" height="140"></canvas><p class="mini">あなたの オバケの きせかえ。<b>いろ</b> と <b>かお</b> は じゆうに かえられる。<b>アクセサリー</b>で よるに「ばあ!」と おどかすときの こわさが かわるよ。</p></div>`;
+    h += '<h3 class="sub3">いろ と かお</h3>' + this.lookPicker(s.look, s.colorsOwned) + '<h3 class="sub3">アクセサリー</h3>';
     for (const k in COSTUMES) {
       const d = COSTUMES[k], own = s.wardrobe.includes(k), lock = !own && stars(s) < d.star, wear = s.costume === k;
-      const btn = wear ? '<button class="btn small" disabled>きている</button>'
-        : own ? `<button class="btn small primary" data-wear="${k}">きる</button>`
-          : `<button class="btn small primary" data-buy="${k}" ${lock ? 'disabled' : ''}>${lock ? lockLabel(d.star) : `かう ${d.cost}${COIN}`}</button>`;
+      const btn = wear ? '<button class="btn small" disabled>つけている</button>'
+        : own ? `<button class="btn small primary" data-wear="${k}">つける</button>`
+          : `<button class="btn small primary" data-buy="${k}" ${lock ? 'disabled' : ''}>${lock ? lockLabel(d.star) : `かう ${priceOf(d)}`}</button>`;
       h += `<div class="card ${lock ? 'lock' : ''} ${wear ? 'wear' : ''}"><img src="${Icons.get('owner', k)}" alt="">
         <div class="cbody"><div class="ctitle"><b>${d.name}</b></div><div class="mini">${d.desc}</div>
         <div class="chips">${kindChip(d.kind)}<span class="chip">こわさ ${d.power}</span></div></div><div class="cbtns">${btn}</div></div>`;
     }
-    this.modal('かそう', h);
+    const top = $('mBody').scrollTop;
+    this.modal('きせかえ', h);
+    $('mBody').scrollTop = top;
     const body = $('mBody');
+    this.previewOwner($('lookPrev'), Sim.ownerLook());
+    this.bindLookPicker(body, s.look, () => { Game.save(); this.openCostumes(); });
     body.querySelectorAll('[data-wear]').forEach((b) => b.onclick = () => { s.costume = b.dataset.wear; Sound.pop(); Game.save(); this.openCostumes(); });
     body.querySelectorAll('[data-buy]').forEach((b) => b.onclick = () => {
       const k = b.dataset.buy;
-      if (!Sim.pay(COSTUMES[k].cost)) return;
+      if (!Sim.payItem(COSTUMES[k])) return;
       s.wardrobe.push(k); s.costume = k; Sound.great();
-      toast(`${COSTUMES[k].name}の かそうを きたよ!`, 'good');
+      toast(`${COSTUMES[k].name}を つけたよ!`, 'good');
       Game.save(); this.openCostumes(); this.refresh();
     });
+  },
+
+  openFoodShop() {
+    this.setTool(null);
+    const s = Sim.s, menu = Sim.menu(), clerk = Sim.clerkGhost();
+    let h = `<p class="mini">おきゃくさんが おみせの まえに ならんで、メニューから ひとつ ちゅうもんするよ。あなたが おみせの まえで「うる」ボタンを おすか、なかまを おみせ係に すると うれる。ひるの おさんぽの おきゃくさんも かいに くるよ。</p>
+      <p class="center">おみせ係: <b>${clerk ? clerk.name : 'いない (じぶんで うる)'}</b></p><h3 class="sub3">メニュー</h3>`;
+    for (const k in FOODS) {
+      const d = FOODS[k], on = menu.includes(k);
+      const note = on ? '<span class="good mini">うっている</span>' : d.soul ? `<span class="mini">おばけショップで ${d.soul}${SOUL}</span>` : `<span class="mini">${lockLabel(d.star)}</span>`;
+      h += `<div class="card ${on ? '' : 'lock'}"><img src="${Icons.get('food', k)}" alt=""><div class="cbody"><div class="ctitle"><b>${d.name}</b><small>${d.price}${COIN}</small></div>${note}</div></div>`;
+    }
+    const dc = Sim.foodShop();
+    this.modal('たべものやさん', h, `<button class="btn" id="fClerk">おみせ係を きめる</button><button class="btn" id="fSell">うる +${Math.floor(DECOS.foodshop.cost / 2)}${COIN}</button>`);
+    $('fClerk').onclick = () => this.openGhosts('team');
+    $('fSell').onclick = () => { Sim.erase(dc.x, dc.y); Sound.coin(); this.closeModal(); Game.save(); this.refresh(); };
+  },
+
+  /* おばけだまで こうかんする オバケだけの おみせ */
+  openGhostShop() {
+    this.setTool(null);
+    const s = Sim.s;
+    let h = `<p class="mini"><b>おばけだま</b>は オバケだけの おかね。ひるも よるも、あなたが じぶんで「ばあ!」と おどかすと もらえるよ。さいこうの おきゃくさんが でても すこし もらえる。</p>
+      <p class="center soulnow">いま もっている おばけだま <b>${fmt(s.soul)}</b>${SOUL}</p>`;
+    const row = (img, name, desc, btn) => `<div class="card"><img src="${img}" alt=""><div class="cbody"><div class="ctitle"><b>${name}</b></div><div class="mini">${desc}</div></div><div class="cbtns">${btn}</div></div>`;
+    h += '<h3 class="sub3">オバケの いろ</h3>';
+    for (const k in LOOK_COLORS) {
+      const c = LOOK_COLORS[k]; if (!c.soul) continue;
+      const own = s.colorsOwned.includes(k);
+      h += row(Icons.get('look', 'color:' + k), c.name, 'あなたの オバケを この いろに できる。', own ? '<button class="btn small" disabled>もっている</button>' : `<button class="btn small primary" data-scolor="${k}">こうかん ${c.soul}${SOUL}</button>`);
+    }
+    h += '<h3 class="sub3">アクセサリー</h3>';
+    for (const k in COSTUMES) {
+      const d = COSTUMES[k]; if (!d.soul) continue;
+      const own = s.wardrobe.includes(k);
+      h += row(Icons.get('owner', k), d.name, `${KINDS[d.kind].name} ・ こわさ ${d.power}`, own ? '<button class="btn small" disabled>もっている</button>' : `<button class="btn small primary" data-swear="${k}">こうかん ${d.soul}${SOUL}</button>`);
+    }
+    h += '<h3 class="sub3">たべものやさんの メニュー</h3>';
+    for (const k in FOODS) {
+      const d = FOODS[k]; if (!d.soul) continue;
+      const own = s.menuOwned.includes(k);
+      h += row(Icons.get('food', k), d.name, `ひとつ ${d.price}${COIN} で うれる`, own ? '<button class="btn small" disabled>もっている</button>' : `<button class="btn small primary" data-sfood="${k}">こうかん ${d.soul}${SOUL}</button>`);
+    }
+    h += '<h3 class="sub3">ひろばの かざり</h3>';
+    for (const k in DECOS) {
+      const d = DECOS[k]; if (!d.soul) continue;
+      h += row(Icons.get('deco', k), d.name, d.desc, `<button class="btn small primary" data-sdeco="${k}">おく ${d.soul}${SOUL}</button>`);
+    }
+    const top = $('modal').classList.contains('hide') ? 0 : $('mBody').scrollTop;
+    this.modal('おばけショップ', h);
+    $('mBody').scrollTop = top;
+    const body = $('mBody'), done = (msg) => { Sound.great(); toast(msg, 'good'); Game.save(); this.refresh(); this.openGhostShop(); };
+    body.querySelectorAll('[data-scolor]').forEach((b) => b.onclick = () => { const k = b.dataset.scolor; if (!Sim.paySoul(LOOK_COLORS[k].soul)) return; s.colorsOwned.push(k); s.look.color = k; done(`${LOOK_COLORS[k].name}に なったよ!`); });
+    body.querySelectorAll('[data-swear]').forEach((b) => b.onclick = () => { const k = b.dataset.swear; if (!Sim.paySoul(COSTUMES[k].soul)) return; s.wardrobe.push(k); s.costume = k; done(`${COSTUMES[k].name}を つけたよ!`); });
+    body.querySelectorAll('[data-sfood]').forEach((b) => b.onclick = () => { const k = b.dataset.sfood; if (!Sim.paySoul(FOODS[k].soul)) return; s.menuOwned.push(k); done(`メニューに ${FOODS[k].name}が ふえたよ!`); });
+    body.querySelectorAll('[data-sdeco]').forEach((b) => b.onclick = () => { this.closeModal(); this.setTool('deco', b.dataset.sdeco); });
   },
 
   openCounter() {
@@ -436,14 +533,17 @@ const UI = {
 
   openHow() {
     this.modal('あそびかた', `<div class="how">
-      <p>ゆきの山頂の ゆきオバケたちと いっしょに、ふるい ゆうえんちを こわくて かわいい テーマパークに しよう。</p>
+      <p>あなたも ゆきオバケの なかま。ゆきの山頂の ゆきオバケたちと いっしょに、ふるい ゆうえんちを こわくて かわいい テーマパークに しよう。</p>
       <h3>ひるは じゅんび</h3>
       <ul><li><b>ろうか</b>: なぞって ひく。<b>いりぐち</b>から <b>でぐち</b>まで つながっていないと ひらけない。おきゃくさんは いちばん ちかい みちを あるく。</li>
       <li><b>しかけ</b> と <b>なかま</b>: ろうかの となりの <b>かべの マス</b>に おく。とどく はんいに きた おきゃくさんを おどかす。ロボットは おきゃくさんを おいかける。</li>
       <li><b>ひろば</b>: やしきの 下の ひろばに かざり・おみせ・ホテルなどを おく。<b>かわいさ</b>が ふえると おきゃくさんが ふえて、ながく まってくれる。おみせは かえる おきゃくさんが かいものを していく。</li>
       <li><b>レール</b>: ひろばに ジェットコースターの レールを ひく。<b>のりば</b>を おいて、そこから ぐるっと 1しゅう つなげると はしる。レールの そばに こわい かざりを おくと のっている おきゃくさんを おどかすよ。</li>
-      <li><b>かそう</b>: あなたの かそうを えらぶ。おどかす こわさが かわる。</li>
-      <li><b>うけつけ カウンター</b>を タップすると にゅうじょうりょうを きめられる。</li></ul>
+      <li><b>きせかえ</b>: あなたの オバケの いろ・かお・アクセサリーを えらぶ。アクセサリーで おどかす こわさが かわる。</li>
+      <li><b>うけつけ カウンター</b>を タップすると にゅうじょうりょうを きめられる。</li>
+      <li>ひるも あなたの オバケは うごける。ひろばに くる <b>おさんぽの おきゃくさん</b>を「ばあ!」と おどかしてみよう。</li>
+      <li><b>たべものやさん</b>を ひろばに たてると、おきゃくさんが ならんで たべものを かう。おみせの まえで「うる」ボタンで うれる。</li>
+      <li><b>おばけだま</b>は オバケだけの おかね。じぶんで おどかすと たまる。上の おばけだまを タップすると <b>おばけショップ</b>で とくべつな ものと こうかん できる。</li></ul>
       <h3>よるは かいてん</h3>
       <ul><li>あなたは <b>やじるしキー / WASD</b> (スマホは ひだりしたの スティック) で あるける。</li>
       <li>おきゃくさんは まず <b>カウンター</b>に ならぶ。カウンターで <b>うけつけ</b>ボタン (スペースキー) を おすと おかねを もらえる。なかまを うけつけ係に すれば まかせられる。またせすぎると かえって しまう。</li>
@@ -462,6 +562,7 @@ const UI = {
     let h = `<div class="rgrid">${row(5, 'さいこう!', R[5])}${row(4, 'こわかった', R[4])}${row(3, 'まあまあ', R[3])}${row(1, 'つまらない', R[1])}${row(2, 'にげだした', R[2])}</div>`;
     h += `<div class="money-tbl"><div><span>にゅうじょうりょう</span><b>+${fmt(r.tickets)}</b></div><div><span>チップ</span><b>+${fmt(r.tips)}</b></div>`;
     if (r.shop) h += `<div><span>ひろばの おみせ と のりもの</span><b>+${fmt(r.shop)}</b></div>`;
+    if (r.food) h += `<div><span>たべものやさん</span><b>+${fmt(r.food)}</b></div>`;
     if (r.bonus) h += `<div><span>テレビの おれい</span><b>+${fmt(r.bonus)}</b></div>`;
     h += `<div><span>なかまの おきゅうりょう</span><b class="bad">−${fmt(r.wages)}</b></div><div class="sum"><span>こんやの もうけ</span><b class="${r.net >= 0 ? 'good' : 'bad'}">${r.net >= 0 ? '+' : ''}${fmt(r.net)}${COIN}</b></div></div>`;
     const dr = r.repAfter - r.repBefore;
@@ -471,6 +572,7 @@ const UI = {
     if (r.lvUps.length) h += `<p class="center">レベルアップ: ${r.lvUps.join('、')}</p>`;
     const extra = [];
     if (r.pScares) extra.push(`あなたが おどかした 回数 ${r.pScares}`);
+    if (r.soul) extra.push(`おばけだま +${r.soul}`);
     if (r.rides) extra.push(`ジェットコースターに のった人 ${r.rides}`);
     if (r.bestCombo >= 2) extra.push(`さいだいコンボ ×${r.bestCombo}`);
     if (extra.length) h += `<p class="center mini">${extra.join(' ・ ')}</p>`;

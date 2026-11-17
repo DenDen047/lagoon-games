@@ -70,7 +70,7 @@ const View = {
       const gy = gh.y + 0.62 + (gh._oy || 0);
       list.push({ y: gy + 0.1, f: () => this.ghost(g, gh, t) });
     }
-    if (n) for (const gu of n.guests) list.push({ y: gu.y + 0.2, f: () => drawGuest(g, this.px(gu.x), this.py(gu.y + 0.2), ts, gu, t) });
+    if (n) for (const gu of n.guests.concat(n.shoppers || [])) list.push({ y: gu.y + 0.2, f: () => drawGuest(g, this.px(gu.x), this.py(gu.y + 0.2), ts, gu, t) });
     list.push({ y: BOOTH.y1, f: () => this.booth(g, t) });
     for (const dc of s.deco) list.push({ y: dc.y + 0.8, f: () => drawDeco(g, this.px(dc.x + 0.5), this.py(dc.y + 0.5), ts, dc.type, dc._anim || 0, t, dc.x * 5 + dc.y) });
     const co = n && n.coaster, tr = Sim.track;
@@ -83,7 +83,7 @@ const View = {
     const desk = Sim.deskGhost();
     if (desk) list.push({ y: OUT.deskY + 0.1, f: () => drawGhost(g, this.px(OUT.staff), this.py(OUT.deskY + 0.1), ts, desk.type, { t, seed: desk.id }) });
     const p = Sim.p;
-    if (p) list.push({ y: p.y + 0.2, f: () => drawOwner(g, this.px(p.x), this.py(p.y + 0.2), ts, s.costume, { t, face: p.face, moving: p.moving, walk: p.walk, pose: p.pose }) });
+    if (p) list.push({ y: p.y + 0.2, f: () => drawOwner(g, this.px(p.x), this.py(p.y + 0.2), ts, Sim.ownerLook(), { t, face: p.face, moving: p.moving, walk: p.walk, pose: p.pose }) });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.f();
 
@@ -91,7 +91,7 @@ const View = {
 
     // あかりの 上に 文字を のせる
     if (n) {
-      for (const gu of n.guests) this.guestHud(g, gu);
+      for (const gu of n.guests.concat(n.shoppers || [])) this.guestHud(g, gu);
       for (const p of n.parts) { g.globalAlpha = 1 - p.t / p.life; circ(g, this.px(p.x), this.py(p.y), p.r * ts, p.color); }
       g.globalAlpha = 1;
       for (const f of n.fx) {
@@ -100,6 +100,7 @@ const View = {
       }
       g.globalAlpha = 1;
       this.queueAlert(g, t);
+      this.shopAlert(g, t);
     }
     if (p && Game.mode !== 'title') {
       const hx = this.px(p.x), hy = this.py(p.y + 0.2) - ts * 1.2 + Math.sin(t * 5) * 2;
@@ -231,6 +232,15 @@ const View = {
     this.text(g, String(Sim.s.price), cx + fs * 0.35, (y0 + y1) / 2 - lip / 2, fs, '#fff');
   },
 
+  /* たべものやさんに おきゃくさんが まっていたら しらせる */
+  shopAlert(g, t) {
+    const n = Sim.n, f = Sim.foodShop();
+    if (!f || !n.shoppers || Sim.clerkGhost() || Game.mode === 'title') return;
+    const q = n.shoppers.filter((c) => c.st === 'wait' || c.st === 'go').length;
+    if (!q || Sim.atShop()) return;
+    if (Math.sin(t * 8) > -0.3) this.bubble(g, `おみせ まち ${q}人!`, this.px(f.x + 0.5), this.py(f.y - 0.9), '#fff4e0', '#b05a00');
+  },
+
   /* だれも うけつけて いないのに おきゃくさんが まっていたら しらせる */
   queueAlert(g, t) {
     const n = Sim.n, q = n.queue.length;
@@ -317,7 +327,7 @@ const View = {
   /* あたまの うえ: どきどきメーター (いっぱいで にげる) と、いまの まんぞくの ★ */
   guestHud(g, gu) {
     const ts = this.ts, x = this.px(gu.x), y = this.py(gu.y + 0.2) - ts * (gu.kid ? 0.95 : 1.15);
-    if (gu.st === 'walk') {
+    if (gu.st === 'walk' || gu.st === 'stroll') {
       const w = ts * 0.8, h = Math.max(4, ts * 0.12), f = clamp(gu.fear / 100, 0, 1);
       g.fillStyle = 'rgba(20,14,40,.75)'; rr(g, x - w / 2 - 1, y - 1, w + 2, h + 2, h / 2); g.fill();
       g.fillStyle = f < 0.5 ? '#7ae07a' : f < 0.8 ? '#ffb030' : '#ff4a4a';

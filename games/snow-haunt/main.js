@@ -19,10 +19,11 @@ const Game = {
       Sound.init();
       if (Save.has() && !warn) { warn = true; $('newWarn').classList.add('show'); return; }
       $('title').classList.add('hide'); $('setup').classList.remove('hide');
-      $('inPark').focus();
+      this.drawSetup();
     };
     $('btnBack').onclick = () => { $('setup').classList.add('hide'); $('title').classList.remove('hide'); };
     $('btnStart').onclick = () => this.newGame($('inPark').value.trim() || 'ゆきやま ゴーストランド');
+    this.setupLook = { color: 'snow', face: 'round' };
     $('btnCont').onclick = () => { Sound.init(); this.continueGame(); };
     $('btnHow').onclick = () => { Sound.init(); UI.openHow(); };
     $('mvSkip').onclick = (e) => { e.stopPropagation(); Movie.finish(); };
@@ -33,7 +34,7 @@ const Game = {
   /* タイトルの うしろで うごく お手本の パーク */
   demo() {
     const s = newState();
-    s.expand = 2; s.rep = 70; s.costume = 'vampire'; s.park = 'ゆきやま ゴーストランド';
+    s.expand = 2; s.rep = 70; s.costume = 'vampire'; s.look = { color: 'lavender', face: 'wink' }; s.park = 'ゆきやま ゴーストランド';
     s.grid = s.grid.map(() => CELL.WALL);
     const fl = (x0, x1, y) => { for (let x = x0; x <= x1; x++) s.grid[idx(x, y)] = CELL.FLOOR; };
     fl(0, 12, 2); fl(12, 12, 3); fl(2, 12, 4); fl(2, 2, 5); fl(2, 12, 6); fl(12, 12, 7); fl(1, 12, 8); fl(0, 1, 7);
@@ -43,7 +44,8 @@ const Game = {
     s.ghosts = [['yuki', 2, 3], ['kori', 11, 3], ['yozora', 4, 5], ['skull', 13, 6], ['ousama', 6, 9], ['fubuki', 3, 9], ['robo', 13, 4]]
       .map(([type, x, y]) => Sim.makeGhost(s, type, x, y));
     const desk = Sim.makeGhost(s, 'chibi'); desk.desk = true; s.ghosts.push(desk);
-    s.deco = [['lantern', -3, 10], ['balloon', -3, 12], ['cocoa', 0, 10], ['lights', 1, 13], ['carousel', 9, 12], ['wheel', 12, 12], ['hotel', 13, 13], ['station', 3, 11], ['skelpop', 6, 10], ['spider', 4, 13], ['pumpkin', 0, 13], ['photo', 10, 10]]
+    const clerk = Sim.makeGhost(s, 'yuki'); clerk.clerk = true; s.ghosts.push(clerk);
+    s.deco = [['lantern', -3, 10], ['balloon', -3, 12], ['cocoa', 0, 10], ['lights', 1, 13], ['carousel', 9, 12], ['wheel', 12, 12], ['hotel', 13, 13], ['station', 3, 11], ['skelpop', 6, 10], ['spider', 4, 13], ['pumpkin', 0, 13], ['photo', 10, 10], ['foodshop', -3, 12], ['fountain', 11, 10]]
       .map(([type, x, y]) => ({ type, x, y }));
     s.rails = [];
     for (let x = 4; x <= 7; x++) s.rails.push({ x, y: 11 });
@@ -58,10 +60,17 @@ const Game = {
     this.mode = 'title';
   },
 
+  drawSetup() {
+    $('setupLook').innerHTML = UI.lookPicker(this.setupLook, []);
+    UI.bindLookPicker($('setupLook'), this.setupLook, () => this.drawSetup());
+    UI.previewOwner($('setupPrev'), { ...this.setupLook, wear: 'sheet' });
+  },
+
   newGame(name) {
     Sim.demo = false;
     Sim.s = newState();
     Sim.s.park = name;
+    if (this.setupLook) Sim.s.look = { ...this.setupLook };
     Sim.findPath(); Sim.findTrack(); Sim.resetPlayer(false);
     $('setup').classList.add('hide');
     this.save();
@@ -72,7 +81,7 @@ const Game = {
     if (!s || s.v !== 1) return this.newGame('ゆきやま ゴーストランド');
     // まえの はんの セーブに ない ものを たす
     const base = newState();
-    for (const k of ['park', 'costume', 'wardrobe', 'deco', 'rails']) if (s[k] == null) s[k] = base[k];
+    for (const k of ['park', 'look', 'costume', 'wardrobe', 'deco', 'rails', 'soul', 'menuOwned', 'colorsOwned']) if (s[k] == null) s[k] = base[k];
     Sim.demo = false;
     Sim.s = s;
     this.enterDay();
@@ -88,15 +97,14 @@ const Game = {
 
   enterDay() {
     this.mode = 'day';
-    Sim.n = null;
     Sim.findPath(); Sim.findTrack(); Sim.resetPlayer(false);
+    Sim.startDay();
     for (const gh of Sim.s.ghosts) Object.assign(gh, { _st: 'idle', _ox: 0, _oy: 0, bub: null });
     for (const p of Sim.s.props) p._anim = 0;
     $('title').classList.add('hide');
     $('hud').classList.remove('hide');
     $('dayBar').classList.remove('hide');
     $('nightBar').classList.add('hide');
-    $('ctrl').classList.add('hide');
     UI.setTool(null);
     UI.refresh();
     View.fit();
@@ -105,7 +113,7 @@ const Game = {
   startNight() {
     const s = Sim.s;
     if (!Sim.path) { toast('いりぐちから でぐちまで ろうかが つながっていないよ', 'bad'); Sound.no(); UI.setTool('floor'); return; }
-    const idle = s.ghosts.filter((g) => g.x < 0 && !g.desk).length;
+    const idle = s.ghosts.filter((g) => g.x < 0 && !g.desk && !g.clerk).length;
     if (idle) toast(`まちあい中の なかまが ${idle}にん いるよ (よるは はたらかない)`);
     UI.setTool(null);
     this.mode = 'night'; this.speed = 1;
@@ -158,6 +166,11 @@ const Game = {
       Movie.draw(View.g, View.W, View.H);
     } else {
       if (this.mode === 'title') Sim.update(dt);
+      else if (this.mode === 'day') {
+        if (!UI.tool && $('modal').classList.contains('hide')) UI.readInput(); else Sim.input.dx = Sim.input.dy = 0;
+        Sim.dayUpdate(dt);
+        UI.refresh();
+      }
       else if (this.mode === 'night') {
         UI.readInput();
         for (let i = 0; i < this.speed; i++) if (Sim.update(dt)) { this.endNight(); break; }
