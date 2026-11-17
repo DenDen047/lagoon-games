@@ -4,7 +4,7 @@ const W = (() => {
   const CELL = 16, grid = new Map(); let stamp = 0;
   const key = (cx, cz) => (cx + 600) * 4096 + (cz + 600);
   const w = { size: 1120, maxX: 832, cityR: 203, facilities: [], alleys: [], nodes: [], corners: [], planeSpots: [], showroom: { x: -940, z: 940 },
-    walk: [], houses: [], lamps: [], carSpots: [], roadLines: [-196, -140, -84, -28, 28, 84, 140, 196] };
+    walk: [], houses: [], lamps: [], carSpots: [], trees: [], roadLines: [-196, -140, -84, -28, 28, 84, 140, 196] };
 
   // ---------- あたり判定の 箱 ----------
   w.addBox = (b) => {
@@ -101,11 +101,23 @@ const W = (() => {
     sbox(x, .2, z + bd / 2 + .15, 3, 2.8, .3, 0x202630, 0, false); sbox(x, 3, z + bd / 2 + .8, 4.4, .25, 1.6, neon, 2, false);
     if (r() < .35 && h > 20) { const sy = 8 + r() * (h - 16); sbox(x + bw / 2 + .25, sy, z, .3, 5, Math.min(8, bd * .5), NEON[Math.floor(r() * NEON.length)], 2, false); }
   }
+  /* 木は 位置だけ 覚えておき、近くのものを 毎コマ 丸い形で描く (models.js の drawTree)。 */
+  const LEAF = [0x4fae4a, 0x3f9a4a, 0x62b84e, 0x2f8a50, 0x7cc452], BLOSSOM = [0xf2a6c8, 0xf0c060, 0xe8804a];
   function tree(r, x, z, y = 0) {
-    const h = 3 + r() * 3, g = r() < .5 ? 0x3f8a3a : 0x2f7a44, g2 = r() < .5 ? 0x4a9a44 : 0x3a8a50;
-    sbox(x, y, z, .55, h, .55, 0x6a4a30, 0, false);
-    sbox(x, y + h - .6, z, 3 + r() * 1.5, 1.6, 3 + r() * 1.5, g, 0, false);
-    sbox(x + .3, y + h + .8, z - .2, 2.4, 1.4, 2.4, g2, 0, false); sbox(x - .2, y + h + 2, z + .2, 1.4, 1, 1.4, g, 0, false);
+    const pine = r() < .25, t = r();
+    w.trees.push({ x, y, z, h: 3 + r() * 3.2, s: .85 + r() * .5, pine, col: t < .1 ? BLOSSOM[Math.floor(r() * 3)] : LEAF[Math.floor(r() * LEAF.length)], ph: r() * 6.28 });
+  }
+  /* 動かない 円すい (遠くの山)。面ごとの法線で、ローポリの山に見せる。 */
+  function scone(x, y, z, rad, h, col, sides, tw) {
+    const k = Math.floor(x / CH) + ',' + Math.floor(z / CH);
+    let c = chunkMap.get(k); if (!c) chunkMap.set(k, c = { v: [], box: [1e9, 1e9, 1e9, -1e9, -1e9, -1e9] });
+    const cr = (col >> 16 & 255) / 255, cg = (col >> 8 & 255) / 255, cb = (col & 255) / 255, v = c.v;
+    for (let i = 0; i < sides; i++) {
+      const a0 = i / sides * 6.283 + tw, a1 = (i + 1) / sides * 6.283 + tw, x0 = Math.cos(a0) * rad, z0 = Math.sin(a0) * rad, x1 = Math.cos(a1) * rad, z1 = Math.sin(a1) * rad;
+      let nx = h * (z1 - z0) * -1, ny = x0 * z1 - x1 * z0, nz = h * (x1 - x0); const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l; if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
+      v.push(x, y + h, z, nx, ny, nz, cr, cg, cb, 0, x + x0, y, z + z0, nx, ny, nz, cr, cg, cb, 0, x + x1, y, z + z1, nx, ny, nz, cr, cg, cb, 0);
+    }
+    const bx = c.box; bx[0] = Math.min(bx[0], x - rad); bx[1] = Math.min(bx[1], y); bx[2] = Math.min(bx[2], z - rad); bx[3] = Math.max(bx[3], x + rad); bx[4] = Math.max(bx[4], y + h); bx[5] = Math.max(bx[5], z + rad);
   }
   const HOUSE_COL = [0xe8dcc4, 0xd8c8b0, 0xc8d4dc, 0xe0c8c0, 0xcfd8c0, 0xf0ece0, 0xb8c4cc], ROOF_COL = [0x8a3c30, 0x3a4a5c, 0x5a4636, 0x2f5a4a, 0x70402c];
   function house(r, hx, hz, f, id) {
@@ -279,6 +291,14 @@ const W = (() => {
     for (let k = 0; k < 1100; k++) {
       const x = (r() - .5) * 2200, z = (r() - .5) * 2200;
       if (w.region(x, z) === 'grass' && !w.inCity(x, z, 8) && !w.inTown(x + 8, z + 8) && !w.inTown(x - 8, z - 8)) tree(r, x, z);
+    }
+    // --- 遠くの山なみ (行けない 背景) ---
+    for (let k = 0; k < 46; k++) {
+      const a = k / 46 * 6.283 + r() * .1, d = 2150 + r() * 250, x = Math.sin(a) * d, z = Math.cos(a) * d;
+      if (x > 1200 && Math.abs(z) < 1700) continue;      // 東は 海
+      const rad = 260 + r() * 200, h = 200 + r() * 260, tw = r() * 6;
+      scone(x, -2, z, rad, h, [0x5f7f5a, 0x6a8662, 0x7a8474, 0x556f60][k % 4], 7, tw);
+      if (h > 320) scone(x, h * .62 - 2, z, rad * .39, h * .385, 0xf2f4f8, 7, tw);
     }
     for (const n of w.nodes) { n.max = n.hp; n.t = 0; }
     for (const c of chunkMap.values()) R.addStatic(new Float32Array(c.v), c.box);

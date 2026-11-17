@@ -9,7 +9,7 @@ const P = { human: null, mech: null, plane: null, car: null, state: 'foot' };
 const G = {
   t: 0, running: false, menu: false, preview: null, pvAng: 0, aim: { x: 0, y: 0, z: 0 }, lock: null, lockT: 0, prompt: null,
   job: null, groups: [], turrets: [], usePieces: [], build: { on: false, t: 0, rot: 0, lvl: 0, col: 0, ghost: null, ok: false },
-  beacons: [], hitT: 0, lastHurt: -99, deadT: 0, callCd: 0, spawnT: 0, raidT: 240, groupT: 5, planes: [], kills: 0, cars: [], wanted: 0, wantedT: 0, polT: 0, sus: 0, crimeT: -99, stoleT: -999, inHouse: null, dayN: 0,
+  beacons: [], hitT: 0, lastHurt: -99, deadT: 0, callCd: 0, spawnT: 0, raidT: 240, groupT: 5, planes: [], kills: 0, rain: 0, rainV: 0, rainT: 150, cars: [], wanted: 0, wantedT: 0, polT: 0, sus: 0, crimeT: -99, stoleT: -999, inHouse: null, dayN: 0,
 };
 const body = () => P.state === 'mech' ? P.mech : P.state === 'plane' ? P.plane : P.state === 'car' ? P.car : P.human;
 
@@ -570,6 +570,8 @@ function update(dt) {
   if (G.lock && G.lock.dead) G.lock = null;
   G.groupT -= dt;
   updBuild(); findPrompt(); updPlayer(dt); lifeUpdate(dt);
+  G.rainT -= dt; if (G.rainT <= 0) { G.rain = G.rain ? 0 : (Math.random() < .35 ? 1 : 0); G.rainT = G.rain ? rnd(70, 150) : rnd(150, 320); }
+  G.rainV += (G.rain - G.rainV) * Math.min(1, dt * .25);
   for (const e of ents.slice()) {
     if (e.dead && !e.broken) continue;
     if (e.broken > 0) { e.broken -= dt; if (e.broken <= 0) { e.dead = false; e.hidden = false; e.hp = e.maxhp; e.parked = true; if (e.kind === 'plane') { e.x = e.spot.x; e.z = e.spot.z; e.y = 0; e.yaw = e.spot.yaw; e.pitch = 0; e.speed = 0; } else { e.x = P.human.x + 4; e.z = P.human.z; e.y = P.human.y + 40; UI.toast('[wrench] メカの修理完了'); } } continue; }
@@ -666,11 +668,12 @@ function environment() {
   const li = sy > 0 ? sm(0, .18, sy) : sm(0, .2, -sy) * .28;
   const lightCol = sy > 0 ? sunCol.map(v => v * li * .78) : [.5 * li, .6 * li, 1 * li];
   const dusk = clamp(1 - Math.abs(sy) / .3, 0, 1) * .65;
+  const rn = G.rainV, gray = [.5, .54, .6].map(v => v * (.25 + .75 * day)), wet = (c) => mix3(c, gray, rn * .8);
   return {
-    lx, ly, lz, lightCol, sun: [sx, sy, sz], moon: [-sx, -sy, sz], night, time: G.t,
-    ambS: mix3([.17, .2, .32], [.38, .44, .56], day), ambG: mix3([.09, .09, .14], [.24, .22, .2], day),
-    top: mix3([.02, .03, .09], [.2, .44, .88], day), hor: mix3(mix3([.07, .09, .17], [.7, .82, .95], day), [.95, .55, .32], dusk),
-    sunCol: sunCol.map(v => v * sm(-.1, .1, sy)),
+    lx, ly, lz, lightCol: lightCol.map(v => v * (1 - rn * .6)), sun: [sx, sy, sz], moon: [-sx, -sy, sz], night, time: G.t, rain: rn,
+    ambS: mix3([.17, .2, .32], [.36, .48, .66], day), ambG: mix3([.09, .09, .14], [.24, .22, .2], day),
+    top: wet(mix3([.02, .03, .09], [.12, .42, .95], day)), hor: wet(mix3(mix3([.07, .09, .17], [.62, .84, 1], day), [1, .58, .34], dusk)),
+    sunCol: sunCol.map(v => v * sm(-.1, .1, sy) * (1 - rn)),
   };
 }
 function drawEnt(e) {
@@ -686,6 +689,10 @@ function render(dt) {
     drawEnt(e);
   }
   for (const n of W.nodes) if (n.hp > 0 && Math.hypot(n.x - cx, n.z - cz) < 240) drawNode(n);
+  RAIN = env.rain;
+  for (const t of W.trees) if (Math.abs(t.x - cx) < 260 && Math.abs(t.z - cz) < 260) drawTree(t, G.t);
+  if (cam.ey < 60) drawGrass(cx, cz, G.t);
+  if (env.rain > .05) drawRain(cam, G.t, env.rain);
   for (const p of SV.pieces) if (Math.hypot(p.gx * 4 - cx, p.gz * 4 - cz) < 380) drawPiece(p, 0);
   for (const t of G.turrets) drawTurret(t);
   for (const hs of W.houses) {

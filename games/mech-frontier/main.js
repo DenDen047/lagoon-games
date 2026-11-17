@@ -123,6 +123,8 @@ function boot() {
     if (name === 'mech') { h.x = 30; h.z = 330; give(2); SV.load.main = 'gatling'; SV.load.sub = 'tower'; SV.load.melee = 'saber'; for (let i = 0; i < 4; i++) spawnEnemyMech(30 + i * 9 - 14, 372 + i * 3, 2, false).yaw = Math.PI; cam.yaw = 0; cam.pitch = -.05; }
     else if (name === 'ball') { h.x = -40; h.z = 300; give(13); P.mech.mode = 2; SV.load.main = 'mg'; cam.yaw = .5; }
     else if (name === 'titan') { h.x = 60; h.z = 300; give(48); P.mech.mode = 1; cam.yaw = 2.6; cam.pitch = -.1; spawnEnemyMech(40, 270, 3, false); }
+    else if (name === 'rain') { h.x = 30; h.z = 26; cam.yaw = 2.6; cam.pitch = .05; G.rain = 1; G.rainV = 1; G.rainT = 999; SV.time = .55; }
+    else if (name === 'grass') { h.x = -216; h.z = 214; cam.yaw = -2.2; cam.pitch = -.08; SV.time = .34; }
     else if (name === 'night') { SV.time = .9; h.x = 28; h.z = 60; cam.yaw = Math.PI; cam.pitch = .15; }
     else if (name === 'plane') { enterPlane(G.planes[0]); const p = P.plane; p.y = 90; p.x = -120; p.z = 150; p.yaw = -.6; p.speed = 55; p.thr = 1; p.pitch = -.12; }
     else if (name === 'base') {

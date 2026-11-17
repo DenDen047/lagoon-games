@@ -6,6 +6,8 @@ const B = (x, y, z, sx, sy, sz, c, em) => R.prim(0, x, y, z, sx, sy, sz, c, em);
 const S = (x, y, z, sx, sy, sz, c, em) => R.prim(1, x, y, z, sx, sy, sz, c, em);
 const C = (x, y, z, sx, sy, sz, c, em) => R.prim(2, x, y, z, sx, sy, sz, c, em);
 const K = (x, y, z, sx, sy, sz, c, em) => R.prim(3, x, y, z, sx, sy, sz, c, em);
+const CP = (x, y, z, sx, sy, sz, c, em) => R.prim(4, x, y, z, sx, sy, sz, c, em);   // カプセル
+const SB = (x, y, z, sx, sy, sz, c, em) => R.prim(5, x, y, z, sx, sy, sz, c, em);   // 丸い箱
 function glowS(x, y, z, s, c, a) { R.glow(1); S(x, y, z, s, s, s, c, a); R.glow(0); }
 
 // ---------- あし (こしの 高さを かえす) ----------
@@ -218,58 +220,105 @@ function drawMech(e) {
   R.pop(); R.flash = 0;
 }
 
+const shade = (c, f) => (Math.min(255, (c >> 16 & 255) * f) << 16) | (Math.min(255, (c >> 8 & 255) * f) << 8) | Math.min(255, (c & 255) * f);
+let RAIN = 0;
+/* 人。カプセルと球で 丸みのある 体を 作る。走ると 腕と脚を ふり、体が はずんで 前に かたむく。 */
 function drawHuman(e) {
-  const o = e.fit || baseOutfit(), sw = Math.sin(e.walk) * .7, L = e.load || {}, tc = o.topC, hc = o.hairC;
-  R.flash = e.flash > 0 ? Math.min(1, e.flash * 6) : 0;
+  const o = e.fit || baseOutfit(), L = e.load || {}, tc = o.topC, hc = o.hairC, sk = o.skin, bc = o.botC;
+  const spd = Math.hypot(e.vx || 0, e.vz || 0);
+  const amp = e.citizen ? (e.down || e.pause > 0 || e.resident ? 0 : e.flee > 0 ? 1 : .55) : clamp(spd / 7, 0, 1);
+  const sw = Math.sin(e.walk) * amp, bob = Math.abs(Math.cos(e.walk)) * .06 * amp, lean = amp * .16;
+  R.flash = e.flash > 0 ? Math.min(1, e.flash * 6) : 0; R.matte(1);
   R.push(); R.translate(e.x, e.y, e.z); R.rotY(e.yaw + (e.spinA || 0)); if (e.sc) R.scale(e.sc, e.sc, e.sc);
   if (e.down) { R.translate(0, .22, 0); R.rotX(-Math.PI / 2); }
   if (e.rollA) { R.translate(0, .9, 0); R.rotX(e.rollA); R.translate(0, -.9, 0); }
+  R.translate(0, bob, 0);
   const bare = o.bottom > 0;
-  for (const s of [-1, 1]) {                                  // 脚とくつ
-    R.push(); R.translate(s * .13, .88, 0); R.rotX(e.down ? 0 : sw * s);
-    B(0, -.2, 0, .2, .44, .23, o.botC); R.translate(0, -.42, 0); R.rotX(Math.max(0, sw * s) * .7);
-    B(0, -.2, 0, .17, .4, .2, bare ? o.skin : o.botC); B(0, -.42, .05, .2, .1, .32, o.shoeC); R.pop();
+  for (const s of [-1, 1]) {                                  // 脚
+    R.push(); R.translate(s * .115, .93, 0); R.rotX(sw * s * .95 - lean * .4);
+    CP(0, -.22, 0, .21, .5, .23, bc); R.translate(0, -.44, 0); R.rotX(Math.max(0, sw * s) * 1.1 + amp * .2);
+    CP(0, -.2, 0, .17, .46, .19, bare ? sk : bc); SB(0, -.43, .06, .2, .15, .36, o.shoeC); SB(0, -.49, .06, .21, .04, .37, 0x1a1a1e); R.pop();
   }
-  if (o.bottom === 2) B(0, .8, 0, .52, .34, .38, o.botC);
-  B(0, .93, 0, .47, .1, .27, o.top === 4 ? tc : 0x2a2a2e); B(0, .93, .14, .08, .07, .02, 0xc8b060);       // ベルト
-  B(0, 1.24, 0, .5, .54, .28, tc); B(0, 1.47, 0, .56, .1, .3, tc);                                        // 胴と肩
-  if (o.top === 1) { B(0, 1.58, -.15, .36, .22, .13, tc); B(-.06, 1.38, .145, .02, .18, .02, 0xf4f4f0); B(.06, 1.38, .145, .02, .18, .02, 0xf4f4f0); B(0, 1.08, .145, .3, .13, .02, 0x00000 + (tc >> 1 & 0x7f7f7f)); }
-  else if (o.top === 2) { B(0, 1.25, .143, .13, .5, .02, 0xf4f4f0); B(-.1, 1.45, .15, .08, .1, .02, tc); B(.1, 1.45, .15, .08, .1, .02, tc); }
-  else if (o.top === 3) { B(0, 1.27, .143, .12, .46, .02, 0xf4f4f0); B(0, 1.26, .156, .045, .36, .02, 0xc03030); B(-.09, 1.42, .152, .1, .16, .02, tc); B(.09, 1.42, .152, .1, .16, .02, tc); }
-  else if (o.top === 4) { B(0, 1.16, .145, .3, .36, .02, o.botC); B(-.12, 1.42, .145, .05, .2, .02, o.botC); B(.12, 1.42, .145, .05, .2, .02, o.botC); }
-  if (o.badge) B(-.14, 1.38, .15, .07, .08, .02, 0xffd24a, .5);
-  B(0, 1.56, 0, .14, .1, .14, o.skin); B(0, 1.76, 0, .32, .34, .32, o.skin);                                // 首と頭
-  B(-.08, 1.79, .162, .05, .05, .012, 0x202020); B(.08, 1.79, .162, .05, .05, .012, 0x202020); B(0, 1.68, .162, .1, .02, .012, 0x9a5a50);
-  B(-.17, 1.76, 0, .03, .1, .08, o.skin); B(.17, 1.76, 0, .03, .1, .08, o.skin);
-  if (o.face === 1) { B(-.08, 1.79, .17, .11, .09, .012, 0x9fd8f0, .1); B(.08, 1.79, .17, .11, .09, .012, 0x9fd8f0, .1); B(0, 1.8, .172, .32, .02, .012, 0x202020); }
-  else if (o.face === 2) { B(-.08, 1.79, .17, .13, .08, .014, 0x101014); B(.08, 1.79, .17, .13, .08, .014, 0x101014); B(0, 1.81, .172, .33, .02, .012, 0x101014); }
+  R.translate(0, .93, 0); R.rotX(lean);
+  SB(0, .04, 0, .44, .22, .27, o.top === 4 ? tc : bc);
+  if (o.bottom === 2) SB(0, -.08, 0, .54, .34, .4, bc);
+  B(0, .12, 0, .46, .06, .285, 0x2a2a2e); B(0, .12, .145, .08, .07, .02, 0xd8b860);                      // ベルト
+  SB(0, .4, 0, .52, .52, .31, tc); SB(0, .56, 0, .58, .18, .3, tc);                                      // 胸と肩
+  if (o.top === 1) { SB(0, .7, -.15, .4, .26, .16, tc); B(-.06, .5, .158, .02, .2, .02, 0xf4f4f0); B(.06, .5, .158, .02, .2, .02, 0xf4f4f0); SB(0, .22, .15, .32, .14, .04, shade(tc, .8)); }
+  else if (o.top === 2) { B(0, .4, .152, .14, .5, .02, 0xf4f4f0); SB(-.11, .58, .15, .1, .14, .05, shade(tc, .85)); SB(.11, .58, .15, .1, .14, .05, shade(tc, .85)); }
+  else if (o.top === 3) { B(0, .42, .152, .13, .46, .02, 0xf4f4f0); B(0, .4, .164, .05, .36, .02, 0xc03030); SB(-.1, .55, .158, .11, .2, .04, shade(tc, .85)); SB(.1, .55, .158, .11, .2, .04, shade(tc, .85)); }
+  else if (o.top === 4) { SB(0, .3, .15, .32, .36, .04, bc); B(-.13, .56, .152, .05, .22, .02, bc); B(.13, .56, .152, .05, .22, .02, bc); }
+  if (o.badge) B(-.14, .52, .16, .07, .08, .02, 0xffd24a, .5);
+  CP(0, .7, 0, .14, .16, .14, sk);
+  R.push(); R.translate(0, .9, .01);                                                                      // 頭
+  SB(0, 0, 0, .36, .38, .36, sk); S(-.185, 0, 0, .05, .1, .09, sk); S(.185, 0, 0, .05, .1, .09, sk); S(0, -.03, .185, .06, .07, .06, shade(sk, .95));
+  for (const s of [-1, 1]) { S(s * .085, .035, .172, .095, .1, .04, 0xffffff); S(s * .085, .03, .188, .05, .058, .025, 0x30241c); B(s * .085, .115, .178, .1, .022, .02, hc); }
+  B(0, -.11, .176, .1, .018, .012, 0x9a4a44);
+  if (o.face === 1) { for (const s of [-1, 1]) B(s * .085, .035, .2, .12, .1, .012, 0x9fd8f0, .1); B(0, .05, .202, .34, .02, .012, 0x202020); }
+  else if (o.face === 2) { for (const s of [-1, 1]) SB(s * .085, .035, .2, .14, .09, .02, 0x101014); B(0, .06, .202, .35, .02, .012, 0x101014); }
   if (o.hat !== 3) {
-    if (o.hair === 3) B(0, 1.94, 0, .33, .03, .33, hc);
-    else { B(0, 1.95, -.02, .35, .1, .36, hc); B(0, 1.82, -.16, .35, .22, .05, hc); B(-.17, 1.86, -.04, .03, .14, .26, hc); B(.17, 1.86, -.04, .03, .14, .26, hc); }
-    if (o.hair === 1) { B(0, 1.6, -.17, .36, .34, .07, hc); B(-.18, 1.66, -.06, .04, .3, .2, hc); B(.18, 1.66, -.06, .04, .3, .2, hc); }
-    else if (o.hair === 2 && !o.hat) for (let k = 0; k < 5; k++) K(-.12 + k * .06, 2.06, -.1 + (k % 2) * .12, .1, .2, .1, hc);
+    if (o.hair === 3) SB(0, .15, 0, .365, .12, .365, hc);
+    else { SB(0, .17, -.02, .39, .18, .4, hc); SB(0, .04, -.17, .38, .3, .1, hc); SB(-.185, .1, -.04, .05, .18, .28, hc); SB(.185, .1, -.04, .05, .18, .28, hc); SB(.06, .2, .13, .26, .1, .14, hc); }
+    if (o.hair === 1) { SB(0, -.16, -.18, .38, .42, .1, hc); SB(-.19, -.1, -.06, .06, .34, .22, hc); SB(.19, -.1, -.06, .06, .34, .22, hc); }
+    else if (o.hair === 2 && !o.hat) for (let k = 0; k < 6; k++) K(-.14 + k * .056, .32, -.1 + (k % 2) * .14, .12, .24, .12, hc);
   }
-  if (o.hat === 1) { B(0, 1.98, 0, .37, .12, .37, o.hatC); B(0, 1.94, .25, .3, .03, .2, o.hatC); }
-  else if (o.hat === 2) { C(0, 1.96, 0, .64, .03, .64, o.hatC); C(0, 2.05, 0, .35, .17, .35, o.hatC); C(0, 1.99, 0, .36, .04, .36, 0x202020); }
-  else if (o.hat === 3) { S(0, 1.84, 0, .46, .46, .46, o.hatC); B(0, 1.8, .2, .3, .12, .06, 0x60f0ff, .3); }
-  else if (o.hat === 4) { S(0, 1.94, 0, .38, .26, .38, o.hatC); B(0, 1.9, 0, .37, .06, .37, o.hatC); }
-  const sl = o.top === 5 ? o.skin : tc, fore = o.top === 0 || o.top === 5 ? o.skin : tc;
-  const arm = () => { B(0, 0, .15, .15, .15, .34, sl); B(0, 0, .44, .13, .13, .28, fore); B(0, 0, .62, .13, .13, .1, o.skin); R.translate(0, 0, .64); };
+  if (o.hat === 1) { SB(0, .21, 0, .4, .16, .4, o.hatC); SB(0, .16, .26, .32, .04, .22, o.hatC); }
+  else if (o.hat === 2) { C(0, .19, 0, .68, .03, .68, o.hatC); C(0, .29, 0, .37, .19, .37, o.hatC); C(0, .22, 0, .38, .04, .38, 0x202020); }
+  else if (o.hat === 3) { S(0, .08, 0, .48, .48, .48, o.hatC); SB(0, .04, .2, .32, .14, .08, 0x60f0ff, .3); }
+  else if (o.hat === 4) { S(0, .18, 0, .41, .3, .41, o.hatC); C(0, .12, 0, .4, .07, .4, shade(o.hatC, .85)); S(0, .35, 0, .1, .1, .1, o.hatC); }
+  R.pop();
+  const sl = o.top === 5 ? sk : tc, fore = o.top === 0 || o.top === 5 ? sk : tc;
+  const arm = (bend) => { S(0, 0, 0, .19, .19, .19, sl); R.push(); R.rotX(Math.PI / 2); CP(0, .17, 0, .15, .38, .15, sl); R.translate(0, .34, 0); R.rotX(-bend); CP(0, .14, 0, .13, .32, .13, fore); S(0, .32, 0, .15, .16, .15, sk); R.pop(); R.translate(0, 0, .66); };
   const sw2 = e.swingT > 0 ? 1 - e.swingT / .3 : -1;
-  R.push(); R.translate(-.34, 1.44, 0);
-  if (sw2 >= 0) { R.rotY(1.3 - sw2 * 2.6); R.rotX(-.2); } else R.rotX(-(e.aimPitch || 0) + (L.main ? 0 : 1.35 - sw * .5));
-  arm();
+  R.push(); R.translate(-.33, .52, 0);
+  if (sw2 >= 0) { R.rotY(1.3 - sw2 * 2.6); R.rotX(-.2); arm(0); } else if (L.main) { R.rotX(-(e.aimPitch || 0)); arm(0); } else { R.rotX(1.42 - sw * .95); arm(.25 + amp * .9); }
   if (sw2 >= 0 && L.melee) drawMelee(WEAPONS[L.melee], .45);
   else if (L.main) { const ml = drawGun(WEAPONS[L.main], .42); if (e.fireFlash > 0) glowS(0, 0, ml + .1, .4, 0xffd070, .8); }
   R.pop();
-  R.push(); R.translate(.34, 1.44, 0);
+  R.push(); R.translate(.33, .52, 0);
   const sub = L.sub ? WEAPONS[L.sub] : null;
-  if (sub && sub.kind === 'shield' && e.blocking) { R.rotY(-.6); R.rotX(-.1); } else R.rotX(sub ? -(e.aimPitch || 0) : 1.35 + sw * .5);
-  arm();
+  if (sub && sub.kind === 'shield' && e.blocking) { R.rotY(-.6); R.rotX(-.1); arm(0); } else if (sub) { R.rotX(-(e.aimPitch || 0)); arm(0); } else { R.rotX(1.42 + sw * .95); arm(.25 + amp * .9); }
   if (sub && sub.kind === 'gun') drawGun(sub, .42); else if (sub) drawShield(sub, .5, e.blocking);
   R.pop();
-  if (e.chute) { R.translate(0, 3.6, 0); S(0, 0, 0, 3, 1.4, 3, 0xff8040); for (const s of [-1, 1]) B(s * .7, -1, 0, .03, 2, .03, 0xf0f0f0); }
-  R.pop(); R.flash = 0;
+  if (e.citizen && !e.resident && !e.down && RAIN > .5) { R.matte(0); C(.25, .95, .15, .03, 1.3, .03, 0x404448); K(.25, 1.7, .15, 1.5, .34, 1.5, o.hatC); R.matte(1); }
+  if (e.chute) { R.translate(0, 2.7, 0); S(0, 0, 0, 3, 1.4, 3, 0xff8040); for (const s of [-1, 1]) B(s * .7, -1, 0, .03, 2, .03, 0xf0f0f0); }
+  R.pop(); R.flash = 0; R.matte(0);
+}
+function drawTree(t, tm) {
+  const s = t.s, h = t.h, sw = Math.sin(tm * 1.2 + t.ph) * .08 * (1 + RAIN), c = t.col;
+  R.matte(1); R.push(); R.translate(t.x, t.y, t.z);
+  if (t.pine) {
+    C(0, h * .3, 0, .45 * s, h * .6, .45 * s, 0x6a4a30);
+    for (let k = 0; k < 3; k++) K(sw * (k + 1), h * (.55 + k * .32), 0, (3.4 - k * .9) * s, h * .55, (3.4 - k * .9) * s, shade(0x2f7a48, 1 + k * .12));
+  } else {
+    R.push(); R.rotZ(.04); C(0, h * .5, 0, .5 * s, h, .5 * s, 0x7a5236); R.pop(); CP(.5 * s, h * .8, 0, .18 * s, 1.3 * s, .18 * s, 0x7a5236);
+    S(sw, h + .7 * s, 0, 3.7 * s, 3.1 * s, 3.7 * s, c); S(1.2 * s + sw, h + .1, .5 * s, 2.5 * s, 2.1 * s, 2.5 * s, shade(c, .9));
+    S(-1.1 * s + sw, h + .3, -.6 * s, 2.7 * s, 2.3 * s, 2.7 * s, shade(c, .94)); S(.2 * s + sw * 1.6, h + 2 * s, -.2 * s, 2.3 * s, 1.9 * s, 2.3 * s, shade(c, 1.12));
+  }
+  R.pop(); R.matte(0);
+}
+const hash2 = (x, z) => { let h = (Math.imul(x, 374761393) + Math.imul(z, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+/* カメラの近くにだけ 草むら・花・しげみを はやす (位置は 場所から 決まるので、毎回 同じ所に 出る)。 */
+function drawGrass(cx, cz, tm) {
+  const R0 = 46, st = 3; R.matte(1);
+  for (let gx = Math.floor((cx - R0) / st); gx <= (cx + R0) / st; gx++) for (let gz = Math.floor((cz - R0) / st); gz <= (cz + R0) / st; gz++) {
+    const hs = hash2(gx, gz); if (hs > .36) continue;
+    const x = gx * st + (hs * 31 % 1) * st, z = gz * st + (hs * 57 % 1) * st, dx = x - cx, dz = z - cz;
+    if (dx * dx + dz * dz > R0 * R0 || W.region(x, z) !== 'grass' || W.inCity(x, z, 3)) continue;
+    const sw = Math.sin(tm * 2 + x * .3 + z * .2) * .12 * (1 + RAIN);
+    if (hs < .025) { B(x, .3, z, .04, .6, .04, 0x3f8a3a); S(x + sw * .5, .66, z, .28, .24, .28, [0xf2d13a, 0xf07090, 0xf6f6f2, 0xa070f0][Math.floor(hs * 4000) % 4]); }
+    else if (hs < .06) { S(x, .45, z, 1.7, 1.1, 1.5, 0x3f9a4a); S(x + .6, .35, z + .3, 1.1, .8, 1.1, 0x4fae4a); }
+    else { const g = hs < .2 ? 0x5fb84e : 0x4aa64a; K(x + sw, .32, z, .34, .7, .34, g); K(x + .22 + sw, .25, z + .12, .28, .55, .28, shade(g, .9)); K(x - .16 + sw, .28, z - .2, .28, .6, .28, shade(g, 1.08)); }
+  }
+  R.matte(0);
+}
+function drawRain(cam_, tm, k) {
+  R.glow(1);
+  for (let i = 0; i < 300; i++) {
+    const a = hash2(i, 7), b = hash2(i, 13), c = hash2(i, 29), y = 22 - ((tm * 30 + c * 26) % 26);
+    R.prim(0, cam_.ex + (a * 2 - 1) * 26 + Math.sin(cam_.yaw) * 10, cam_.ey + y - 10, cam_.ez + (b * 2 - 1) * 26 + Math.cos(cam_.yaw) * 10, .03, 1.1, .03, 0xa8c8ff, .22 * k);
+  }
+  R.glow(0);
 }
 
 let NIGHT = 0;
@@ -326,12 +375,12 @@ function drawTurret(t) {
 }
 function drawNode(n) {
   const r = seeded(n.seed * 77 + n.type.length), k = .5 + .5 * n.hp / n.max;
-  R.push(); R.translate(n.x, 0, n.z); R.scale(k, k, k);
+  R.matte(1); R.push(); R.translate(n.x, 0, n.z); R.scale(k, k, k);
   if (n.type === 'crop') { B(0, .35, 0, .12, .7, .12, 0x3f8a3a); for (let i = 0; i < 4; i++) { R.push(); R.rotY(i * 1.57 + .4); R.rotX(.7); B(0, .6, .25, .35, .04, .6, 0x4aa84a); R.pop(); } S(0, .3, 0, .5, .45, .5, [0xe07030, 0xd03a30, 0xe8c040][n.seed % 3]); }
   else if (n.type === 'scrap') { for (let i = 0; i < 5; i++) { R.push(); R.rotY(r() * 6); B(r() * 1.4 - .7, .3 + i * .3, r() * 1.4 - .7, .8 + r() * 1.4, .4 + r() * .5, .6 + r(), [0x8a5a3a, 0x70757c, 0xa06a3a, 0x5a6068][i % 4]); R.pop(); } B(.3, 1.9, 0, .15, 1.2, .15, 0xb0b4ba); }
   else if (n.type === 'iron') { S(0, .7, 0, 2.6, 1.8, 2.2, 0x6a6e74); S(.8, .5, .6, 1.3, 1.1, 1.2, 0x7c8088); for (let i = 0; i < 4; i++) B(r() * 1.6 - .8, .9 + r() * .5, r() * 1.6 - .8, .35, .35, .35, 0xd09060, .25); }
   else { for (let i = 0; i < 4; i++) { R.push(); R.translate(r() * 1.4 - .7, 0, r() * 1.4 - .7); R.rotZ(r() * .6 - .3); K(0, .9 + r() * .6, 0, .7, 2 + r() * 1.4, .7, 0x50e0ff, .7); R.pop(); } glowS(0, 1.2, 0, 3, 0x40c0ff, .09); }
-  R.pop();
+  R.pop(); R.matte(0);
 }
 function drawPiece(p, ghost) {
   const d = PIECES[p.t], col = BUILD_COLS[p.col || 0];

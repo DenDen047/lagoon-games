@@ -8,17 +8,20 @@ import { EffectComposer } from './lib/three/addons/postprocessing/EffectComposer
 import { RenderPass } from './lib/three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from './lib/three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from './lib/three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from './lib/three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from './lib/three/addons/environments/RoomEnvironment.js';
 
 const R = (() => {
   const MAXI = 8192;
-  let cv, renderer, scene, camera, composer, sun, hemi, sky, shN = -1, cw = 0, ch = 0;
-  const bat = [[], [], []];          // [光を受ける, 自分で光る, 加算で光る][形]
+  let cv, renderer, scene, camera, composer, grade, sun, hemi, sky, shN = -1, cw = 0, ch = 0;
+  const bat = [[], [], [], []];      // [金属, つや消し, 自分で光る, 加算で光る][形]
+  const NT = 6;                      // 形の数: 箱・球・円柱・円すい・カプセル・丸い箱
+  let matte = 0;
   let glow = 0;
   const stack = new Float32Array(16 * 64); let sp = 0;
   const LIN = new Float32Array(256); for (let i = 0; i < 256; i++) LIN[i] = Math.pow(i / 255, 2.2);
   const lin = (v) => Math.pow(Math.max(0, v), 2.2);
-  const SU = { uNight: { value: 0 }, uTime: { value: 0 } };
+  const SU = { uNight: { value: 0 }, uTime: { value: 0 }, uRain: { value: 0 } };
   const api = { flash: 0, res: 1, shadowQ: 2, stats: { draws: 0, inst: 0 }, ok: false };
   const v3 = new THREE.Vector3();
 
@@ -39,11 +42,12 @@ const R = (() => {
   api.rotX = (a) => rot(a, 4, 8, 1);
   api.rotZ = (a) => rot(a, 0, 4, 1);
   api.glow = (g) => { glow = g ? 1 : 0; };
+  api.matte = (m) => { matte = m ? 1 : 0; };     // 人・木・岩などの つや消しの材質
 
-  /* 形を 1 こ 置く。type: 0 箱 / 1 球 / 2 円柱 / 3 円すい。col は 0xRRGGBB、em は 光る強さ (0〜1)。 */
+  /* 形を 1 こ 置く。type: 0 箱 / 1 球 / 2 円柱 / 3 円すい / 4 カプセル / 5 丸い箱。col は 0xRRGGBB、em は 光る強さ (0〜1)。 */
   api.prim = (type, x, y, z, sx, sy, sz, col, em) => {
     em = em || 0;
-    const b = bat[glow ? 2 : em >= .45 ? 1 : 0][type]; if (b.n >= MAXI) return;
+    const b = bat[glow ? 3 : em >= .45 ? 2 : matte][type]; if (b.n >= MAXI) return;
     const a = b.mat, o = b.n * 16, m = stack, s = sp;
     a[o] = m[s] * sx; a[o + 1] = m[s + 1] * sx; a[o + 2] = m[s + 2] * sx; a[o + 3] = 0;
     a[o + 4] = m[s + 4] * sy; a[o + 5] = m[s + 5] * sy; a[o + 6] = m[s + 6] * sy; a[o + 7] = 0;
@@ -59,28 +63,40 @@ const R = (() => {
   };
 
   // ---------- 形の頂点 ----------
-  function boxMesh() {
-    const v = [], N = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-    for (const n of N) {
-      const u = n[1] ? [1, 0, 0] : [0, 1, 0];
-      const w = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
-      const c = (a, b) => [n[0] * .5 + u[0] * a + w[0] * b, n[1] * .5 + u[1] * a + w[1] * b, n[2] * .5 + u[2] * a + w[2] * b];
-      for (const [a, b] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, -.5], [.5, .5], [-.5, .5]]) v.push(...c(a, b), ...n);
+  /* 角を 面取りした 箱。bv が 面取りの幅 (0.5 が 半分)。法線を なめらかに つなぐので 丸く見える。 */
+  function boxMesh(bv) {
+    const v = [], h = .5, q = h - bv, S = [-1, 1];
+    const P = (ax, sx, sy, sz) => {      // 角 (sx,sy,sz) の、ax 向きの面に のる 頂点
+      const p = [sx * (ax === 0 ? h : q), sy * (ax === 1 ? h : q), sz * (ax === 2 ? h : q)], n = [0, 0, 0]; n[ax] = [sx, sy, sz][ax];
+      return [p[0], p[1], p[2], n[0], n[1], n[2]];
+    };
+    const tri = (a, b, c) => v.push(...a, ...b, ...c), quad = (a, b, c, d) => { tri(a, b, c); tri(a, c, d); };
+    for (const s of S) {
+      quad(P(0, s, -1, -1), P(0, s, 1, -1), P(0, s, 1, 1), P(0, s, -1, 1));
+      quad(P(1, -1, s, -1), P(1, 1, s, -1), P(1, 1, s, 1), P(1, -1, s, 1));
+      quad(P(2, -1, -1, s), P(2, 1, -1, s), P(2, 1, 1, s), P(2, -1, 1, s));
+    }
+    for (const a of S) for (const b of S) {
+      quad(P(0, a, b, -1), P(0, a, b, 1), P(1, a, b, 1), P(1, a, b, -1));      // z に そった へり
+      quad(P(0, a, -1, b), P(0, a, 1, b), P(2, a, 1, b), P(2, a, -1, b));      // y に そった へり
+      quad(P(1, -1, a, b), P(1, 1, a, b), P(2, 1, a, b), P(2, -1, a, b));      // x に そった へり
+      for (const c of S) tri(P(0, a, b, c), P(1, a, b, c), P(2, a, b, c));     // 角
     }
     return v;
   }
-  function sphMesh() {
-    const v = [], LA = 8, LO = 12;
-    const p = (i, j) => { const t = i / LA * Math.PI, f = j / LO * Math.PI * 2; return [Math.sin(t) * Math.cos(f), Math.cos(t), Math.sin(t) * Math.sin(f)]; };
-    const put = (q) => v.push(q[0] * .5, q[1] * .5, q[2] * .5, q[0], q[1], q[2]);
-    for (let i = 0; i < LA; i++) for (let j = 0; j < LO; j++) {
-      const a = p(i, j), b = p(i + 1, j), c = p(i + 1, j + 1), d = p(i, j + 1);
-      put(a); put(b); put(c); put(a); put(c); put(d);
+  function sphMesh(cap) {   // cap: 0 = 球、0.3 = まん中が 円柱の カプセル (上下の 丸みの 高さが 0.2)
+    const v = [], LA = 12, LO = 18, rows = [];
+    for (let i = 0; i <= LA; i++) { const t = i / LA * Math.PI; rows.push([Math.sin(t), Math.cos(t), t <= Math.PI / 2 + 1e-6 ? 1 : -1]); }
+    if (cap) rows.splice(LA / 2 + 1, 0, [1, 0, -1]);
+    const p = (r, j) => { const f = j / LO * Math.PI * 2, y = cap ? r[2] * cap + r[1] * (.5 - cap) : r[1] * .5; return [r[0] * Math.cos(f) * .5, y, r[0] * Math.sin(f) * .5, r[0] * Math.cos(f), r[1], r[0] * Math.sin(f)]; };
+    for (let i = 0; i < rows.length - 1; i++) for (let j = 0; j < LO; j++) {
+      const a = p(rows[i], j), b = p(rows[i + 1], j), c = p(rows[i + 1], j + 1), d = p(rows[i], j + 1);
+      v.push(...a, ...b, ...c, ...a, ...c, ...d);
     }
     return v;
   }
   function cylMesh(top) {   // top: 上の半径 (1 = 円柱, 0 = 円すい)
-    const v = [], S = 12, sl = (1 - top) * .5;
+    const v = [], S = 20, sl = (1 - top) * .5;
     for (let j = 0; j < S; j++) {
       const f0 = j / S * Math.PI * 2, f1 = (j + 1) / S * Math.PI * 2;
       const c0 = Math.cos(f0), s0 = Math.sin(f0), c1 = Math.cos(f1), s1 = Math.sin(f1);
@@ -91,7 +107,6 @@ const R = (() => {
     }
     return v;
   }
-
 
   function toGeo(v) {
     const n = v.length / 6, p = new Float32Array(n * 3), nr = new Float32Array(n * 3);
@@ -134,16 +149,16 @@ const R = (() => {
   function staticMaterial() {
     const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .86, metalness: 0 });
     m.onBeforeCompile = (sh) => {
-      sh.uniforms.uNight = SU.uNight; sh.uniforms.uTime = SU.uTime;
+      sh.uniforms.uNight = SU.uNight; sh.uniforms.uTime = SU.uTime; sh.uniforms.uRain = SU.uRain;
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aMat; varying float vMat; varying vec3 vWp; varying vec3 vOn;')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMat = aMat; vWp = (modelMatrix * vec4(transformed, 1.)).xyz; vOn = normal;');
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-varying float vMat; varying vec3 vWp; varying vec3 vOn; uniform float uNight, uTime; float gWet = 0.;
+varying float vMat; varying vec3 vWp; varying vec3 vOn; uniform float uNight, uTime, uRain; float gWet = 0.;
 float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 ${GROUND}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
 float cEm = 0., cGl = 0.;
-if (vMat > 2.5) { diffuseColor.rgb = pow(ground(vWp.xz), vec3(2.2)); cGl = gWet; }
+if (vMat > 2.5) { diffuseColor.rgb = pow(ground(vWp.xz), vec3(2.2)); cGl = max(gWet, uRain * .75); diffuseColor.rgb *= 1. - uRain * .35; }
 else if (vMat > 1.5) { cEm = .5 + 1.5 * uNight; }
 else if (vMat > .5) {
   vec3 n = normalize(vOn);
@@ -185,23 +200,27 @@ void main(){
     cv = canvas;
     try { renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, powerPreference: 'high-performance' }); } catch (e) { return false; }
     if (!renderer.capabilities.isWebGL2) return false;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1;
+    renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0x8090a0, .0021);
-    camera = new THREE.PerspectiveCamera(60, 1, .5, 2400);
+    scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(0x8090a0, .0013);
+    camera = new THREE.PerspectiveCamera(60, 1, .5, 3600);
     const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), .04).texture; pm.dispose();
     sun = new THREE.DirectionalLight(0xffffff, 3); sun.castShadow = true; sun.shadow.bias = -.0006; sun.shadow.normalBias = .09;
     sun.shadow.camera.near = 1; sun.shadow.camera.far = 900; scene.add(sun); scene.add(sun.target);
     hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1); scene.add(hemi);
-    const geos = [boxMesh(), sphMesh(), cylMesh(1), cylMesh(0)].map(toGeo);
+    const geos = [boxMesh(.06), sphMesh(0), cylMesh(1), cylMesh(0), sphMesh(.3), boxMesh(.2)].map(toGeo);
+    /* 輪郭に 空の色の光が 回る (リムライト)。カートゥーン調の 立体感を出す。 */
+    const rim = (m, k) => { m.onBeforeCompile = (sh) => { sh.uniforms.uNight = SU.uNight; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uNight;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n{ float rm = pow(1. - clamp(dot(normal, normalize(vViewPosition)), 0., 1.), 3.); totalEmissiveRadiance += min(diffuseColor.rgb * 1.6 + .015, vec3(.5)) * vec3(.8, .9, 1.) * rm * ${k} * (1. - uNight * .8) * (.3 + .7 * clamp(normal.y * .5 + .6, 0., 1.)); }`); }; return m; };
     const mats = [
-      new THREE.MeshStandardMaterial({ roughness: .5, metalness: .32, side: THREE.DoubleSide }),
+      rim(new THREE.MeshStandardMaterial({ roughness: .42, metalness: .3, side: THREE.DoubleSide }), '.4'),
+      rim(new THREE.MeshStandardMaterial({ roughness: .78, metalness: 0, side: THREE.DoubleSide }), '.42'),
       new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }),
       new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
     ];
-    for (let k = 0; k < 3; k++) for (let t = 0; t < 4; t++) {
+    for (let k = 0; k < 4; k++) for (let t = 0; t < NT; t++) {
       const mesh = new THREE.InstancedMesh(geos[t], mats[k], MAXI);
-      mesh.setColorAt(0, new THREE.Color(1, 1, 1)); mesh.frustumCulled = false; mesh.castShadow = k === 0; mesh.receiveShadow = k === 0; mesh.count = 0; mesh.renderOrder = k === 2 ? 10 : 0;
+      mesh.setColorAt(0, new THREE.Color(1, 1, 1)); mesh.frustumCulled = false; mesh.castShadow = k < 2; mesh.receiveShadow = k < 2; mesh.count = 0; mesh.renderOrder = k === 3 ? 10 : 0;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
       scene.add(mesh); bat[k][t] = { mesh, mat: mesh.instanceMatrix.array, col: mesh.instanceColor.array, n: 0 };
     }
@@ -214,6 +233,10 @@ void main(){
     composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 }));
     composer.addPass(new RenderPass(scene, camera));
     composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), .3, .5, 1.05));
+    grade = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uSat: { value: 1.14 }, uVig: { value: .55 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+      fragmentShader: 'uniform sampler2D tDiffuse; uniform float uSat, uVig; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(.2126, .7152, .0722)); c.rgb = max(mix(vec3(l), c.rgb, uSat), 0.); vec2 d = vUv - .5; c.rgb *= 1. - dot(d, d) * uVig; gl_FragColor = c; }' });
+    composer.addPass(grade);      // 色を あざやかにし、画面の はしを すこし 暗くする
     composer.addPass(new OutputPass());
     api.ok = true; reset();
     return true;
@@ -236,7 +259,7 @@ void main(){
     const mesh = new THREE.Mesh(g, smat || (smat = staticMaterial())); mesh.castShadow = true; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; scene.add(mesh);
   };
 
-  api.begin = () => { reset(); glow = 0; api.flash = 0; for (const g of bat) for (const b of g) b.n = 0; };
+  api.begin = () => { reset(); glow = 0; matte = 0; api.flash = 0; for (const g of bat) for (const b of g) b.n = 0; };
 
   /* cam: {ex,ey,ez,tx,ty,tz,fov,shadowR}  env: 光と空の色 (game.js の environment()) */
   api.render = (cam, env) => {
@@ -270,7 +293,7 @@ void main(){
     }
     sun.target.position.set(fx, fy, fz); sun.position.set(fx + lx * 400, fy + ly * 400, fz + lz * 400); sun.target.updateMatrixWorld();
     // 空
-    SU.uNight.value = env.night; SU.uTime.value = env.time;
+    SU.uNight.value = env.night; SU.uTime.value = env.time; SU.uRain.value = env.rain || 0; scene.fog.density = .0013 + .0022 * (env.rain || 0);
     const u = sky.material.uniforms; u.uSun.value.fromArray(env.sun); u.uMoon.value.fromArray(env.moon); u.uTop.value.fromArray(env.top); u.uHor.value.fromArray(env.hor); u.uSunCol.value.fromArray(env.sunCol);
     sky.position.copy(camera.position);
     composer.render();
