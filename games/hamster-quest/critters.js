@@ -1,25 +1,31 @@
 /* =========================================================================
-   ハムスターの冒険 ― なかまの動物
+   ネズミの冒険 ― なかまの動物
    魔物ではない生きもの。のれる虫や動物、ついてくる相棒、牧場のアブラムシ。
    攻撃は当たらない (G.mobs とは別の入れもの G.critters に入っている)。
    ========================================================================= */
 'use strict';
 
-/* ride: のったときの速さ / pet: 相棒になる / milk: あまつゆをくれる / shy: 近づくとにげる
-   gift: のっているあいだや相棒のときに ときどきくれる物 [アイテム, 秒] */
+/* ride: のったときの速さ / milk: あまつゆをくれる / shy: 近づくとにげる
+   food: 好物。何回か あげると なかまになる (tame は 1回で なかよくなる確率)
+   gift: のっているあいだや なかまのときに ときどきくれる物 [アイテム, 秒] */
 const CRITTERS = {
   rabbit:    { name: 'ウサギ', ride: 1.8, seat: 30, r: 22, spd: 50, gift: ['seed', 50], hint: '大きなウサギ。背中にのせてくれる。' },
   worm:      { name: 'イモムシ', ride: 1.3, seat: 11, r: 10, spd: 22, gift: ['silk', 45] },
   bee:       { name: 'ハチ', ride: 1.6, seat: 26, r: 16, spd: 55, fly: true, gift: ['honey', 40] },
-  gecko:     { name: 'ヤモリ', pet: 'tame', r: 10, spd: 95, gift: ['acorn', 55] },
-  spider:    { name: 'クモ', pet: 'catch', r: 20, spd: 70, shy: true, gift: ['silk', 50] },
+  gecko:     { name: 'ヤモリ', food: 'seed', tame: 0.35, r: 10, spd: 95, gift: ['acorn', 55] },
+  spider:    { name: 'クモ', food: 'honey', tame: 0.3, r: 20, spd: 70, shy: true, gift: ['silk', 50], shooter: true },
+  squirrel:  { name: 'リス', food: 'acorn', tame: 0.35, r: 9, spd: 80, shy: true, gift: ['acorn', 70] },
+  frog:      { name: 'カエル', food: 'honeydew', tame: 0.4, r: 9, spd: 60, shy: true },
+  bird:      { name: '小鳥', food: 'seed', tame: 0.3, r: 7, spd: 90, shy: true, bird: true, gift: ['feather', 80] },
   aphid:     { name: 'アブラムシ', milk: true, r: 7, spd: 10 },
-  squirrel:  { name: 'リス', r: 9, spd: 80, shy: true },
-  bird:      { name: '小鳥', r: 7, spd: 60, shy: true, bird: true },
   butterfly: { name: 'ちょうちょ', r: 4, spd: 40, fly: true },
   ladybug:   { name: 'テントウムシ', r: 4, spd: 18 },
-  frog:      { name: 'カエル', r: 9, spd: 40, shy: true },
+  /* 「つくる」で生まれる 味方。野原には あらわれない */
+  golem:     { name: '小石のゴーレム', golem: true, r: 14, spd: 70 },
 };
+
+/* なかま: ついてくるのは PET_FOLLOW ひきまで。ほかは 家のそばの牧場で まっている */
+const PET_FOLLOW = 4, PET_MAX = 12;
 
 /* 地方ごとにあらわれる生きもの [種類, 重み] */
 const CRITTER_SPAWN = {
@@ -33,6 +39,8 @@ const CRITTER_SPAWN = {
   valley:   [['frog', 3], ['spider', 2], ['butterfly', 1]],
   moon:     [['butterfly', 3], ['rabbit', 1]],
   kingdom:  [['bird', 3], ['butterfly', 3], ['squirrel', 1], ['ladybug', 1]],
+  plains:   [['rabbit', 3], ['squirrel', 2], ['bird', 3], ['frog', 2], ['butterfly', 3], ['bee', 1], ['aphid', 1], ['ladybug', 1]],
+  quarry:   [['gecko', 3], ['bird', 1], ['spider', 1]],
 };
 
 const RANCH = { x: 25, y: 104, w: 6, h: 4 };
@@ -49,7 +57,7 @@ const Critters = {
     }, extra);
   },
 
-  clear() { const G = Game.G; G.critters = []; if (G.pet) this.placePet(); },
+  clear() { const G = Game.G; G.critters = []; this.placePets(); },
 
   /* ------------------------------ わく ------------------------------ */
   spawn(dt) {
@@ -72,7 +80,6 @@ const Critters = {
       let tot = 0; for (const [, w] of tbl) tot += w;
       let k = Math.random() * tot, type = tbl[0][0];
       for (const [tt, w] of tbl) { if (k < w) { type = tt; break; } k -= w; }
-      if (G.pet && G.pet.type === type && type === 'gecko' && Math.random() < 0.5) continue;
       G.critters.push(this.make(type, x, y));
       return;
     }
@@ -99,7 +106,7 @@ const Critters = {
       if (c.gone) G.critters.splice(i, 1);
     }
     this.updateRide(dt);
-    this.updatePet(dt);
+    this.updatePets(dt);
   },
 
   think(c, dt) {
@@ -107,21 +114,26 @@ const Critters = {
     c.t += dt; c.milkT = Math.max(0, c.milkT - dt); c.flee = Math.max(0, c.flee - dt);
     const dx = c.x - p.x, dy = c.y - p.y, dp = Math.hypot(dx, dy) || 1;
     let vx = 0, vy = 0;
+    /* 好物を もっていると こわがらずに 近よってくる */
+    const lured = d.food && !G.ride && Game.count(d.food) > 0;
     /* 小鳥は近づくと飛んでいく */
-    if (d.bird && (c.leave > 0 || (dp < 80 && p.moving))) {
+    if (d.bird && (c.leave > 0 || (dp < 80 && p.moving && !lured))) {
       c.leave += dt; c.z = Math.min(80, c.z + dt * 120);
       c.x += (dx / dp) * 140 * dt; c.y -= 60 * dt;
       if (c.leave > 1.6) c.gone = true;
       c.vx = dx; return;
     }
-    if (d.shy && (c.flee > 0 || (dp < 70 && p.moving && !G.ride))) {
+    if (lured && dp < 170) {
+      c.face = dx > 0 ? -1 : 1;
+      if (dp > 36) { vx = (-dx / dp) * d.spd * 0.5; vy = (-dy / dp) * d.spd * 0.5; }
+    } else if (d.shy && (c.flee > 0 || (dp < 70 && p.moving && !G.ride))) {
       if (c.flee <= 0) c.flee = 0.8;
       vx = (dx / dp) * d.spd * 1.6; vy = (dy / dp) * d.spd * 1.6;
     } else if (d.fly) {
       c.wd += rand(-1, 1) * dt * 3;
       if (dist(c.x, c.y, c.home.x, c.home.y) > 120) c.wd = Math.atan2(c.home.y - c.y, c.home.x - c.x);
       vx = Math.cos(c.wd) * d.spd; vy = Math.sin(c.wd) * d.spd;
-    } else if (dp < 56 && (d.ride || d.pet === 'tame' || d.milk)) {
+    } else if (dp < 56 && (d.ride || d.food || d.milk)) {
       /* なかよしの動物は、近くに来ると こっちを見る */
       c.face = dx > 0 ? -1 : 1;
     } else {
@@ -142,16 +154,20 @@ const Critters = {
   /* ------------------------------ しらべる ------------------------------ */
   /* findNear の consider に、動物ごとの「できること」をわたす */
   actions(consider) {
-    const G = Game.G;
+    const G = Game.G, p = G.p;
     for (const c of G.critters) {
       if (c.leave > 0) continue;
       const d = CRITTERS[c.type];
       let label = 'なでる', fn = () => this.pat(c);
       if (d.ride && !G.ride) { label = 'のる'; fn = () => this.mount(c); }
-      else if (d.pet === 'tame') { label = 'なかまにする'; fn = () => this.tame(c); }
-      else if (d.pet === 'catch') { label = 'つかまえる'; fn = () => this.catchIt(c); }
+      else if (d.food) { label = `えさ ${ITEMS[d.food].icon}`; fn = () => this.feed(c); }
       else if (d.milk) { label = 'あまつゆ'; fn = () => this.milk(c); }
       consider(c.x, c.y, label, fn, 20 + d.r * 1.6, 30 + d.r);
+    }
+    for (const pet of G.pets) {
+      const r = 20 + CRITTERS[pet.type].r * 1.6, h = 30 + CRITTERS[pet.type].r * (pet.type === 'golem' ? 3 : 1);
+      if (pet.home) { if (G.map.kind === 'over') consider(pet.x, pet.y, 'はなす', () => this.ranchTalk(pet), r, h); }
+      else if (this.inRanch(p.x, p.y)) consider(pet.x, pet.y, '牧場で まってて', () => this.leaveHome(pet), r, h);
     }
   },
   hearts(x, y) { FX.burst(x, y, '#ff8ab0', 6, 40, 0.8, -40); FX.icon(x, y - 10, '💗'); },
@@ -164,34 +180,70 @@ const Critters = {
     this.hearts(c.x, c.y - 24);
     toast('アブラムシが あまつゆを わけてくれた！', 'good');
   },
+  /* 好物を あげる。あげるたびに なかよくなりやすくなる */
+  feed(c) {
+    const G = Game.G, d = CRITTERS[c.type], food = ITEMS[d.food];
+    if (!Game.count(d.food)) { toast(`${d.name}の 好物は ${food.icon}${food.name}。もっていないみたい`); this.pat(c); return; }
+    if (G.pets.length >= PET_MAX) { toast(`なかまが いっぱい（${PET_MAX}ひき）。これ以上は つれていけない`); return; }
+    Game.remove(d.food, 1);
+    c.fed = (c.fed || 0) + 1; c.flee = 0; c.leave = 0;
+    FX.icon(c.x, c.y - d.r * 2 - 14, food.icon);
+    Sfx.pickup();
+    if (Math.random() < d.tame + 0.2 * (c.fed - 1)) { this.tame(c); return; }
+    FX.burst(c.x, c.y - d.r, '#d8d0c0', 5, 30, 0.6, -30);
+    toast(`${d.name}は ${food.name}を 食べた。まだ ようすを 見ている……`);
+  },
   tame(c) {
-    const G = Game.G;
-    if (G.pet && G.pet.type === c.type) { this.pat(c); return; }
-    if (!Game.count('seed')) { toast(`${CRITTERS[c.type].name}は おなかがすいているみたい。ひまわりのタネを あげよう`); this.pat(c); return; }
-    Game.remove('seed', 1);
-    this.setPet(c);
-    toast(`${CRITTERS[c.type].name}が なかまになった！ ついてきて いっしょに戦ってくれる`, 'good');
-  },
-  catchIt(c) {
-    if (Math.random() < 0.55) {
-      this.setPet(c);
-      Game.give('silk', 2, c.x, c.y);
-      toast('クモを つかまえた！ なかまになって 糸をはいて戦ってくれる', 'good');
-    } else {
-      c.flee = 1.4;
-      Sfx.error();
-      toast('にげられた！ そっと近づいて もう一度');
-    }
-  },
-  setPet(c) {
-    const G = Game.G;
-    if (G.pet) toast(`${CRITTERS[G.pet.type].name}は 森へ かえっていった`);
+    const G = Game.G, d = CRITTERS[c.type];
     c.gone = true;
-    G.pet = { type: c.type, x: c.x, y: c.y, vx: 0, face: c.face, t: 0, atkT: 0, giftT: 0 };
-    G.flags.pet = c.type;
+    const home = this.followers().length >= PET_FOLLOW;
+    const pet = this.newPet(c.type, c.x, c.y, home);
+    G.pets.push(pet);
     this.hearts(c.x, c.y - 24);
     Sfx.fanfare();
-    Game.save();
+    toast(home ? `${d.name}が なかまになった！ ついてくる なかまが いっぱいなので 牧場で まっている`
+      : `${d.name}が なかまになった！ ついてきて いっしょに戦ってくれる`, 'good');
+    this.savePets();
+  },
+  /* 「つくる」で ゴーレムを 目ざめさせる */
+  makeAlly(type) {
+    const G = Game.G, p = G.p;
+    const home = this.followers().length >= PET_FOLLOW;
+    const pet = this.newPet(type, p.x + 34, p.y + 6, home);
+    G.pets.push(pet);
+    FX.ring(pet.x, pet.y - 20, '#9fe8ff', 16, 80);
+    FX.rise(pet.x, pet.y - 20, '#b8ff8a', 12);
+    Sfx.fanfare(); R.shake = 4;
+    toast(home ? `${ALLIES[type].name}が 目をさました！ ついてくる なかまが いっぱいなので 牧場で まっている`
+      : `${ALLIES[type].name}が 目をさました！ ついてきて 魔物を なぐってくれる`, 'good');
+    this.savePets();
+  },
+  allyCount(type) { return Game.G.pets.filter((p) => p.type === type).length; },
+  takeOut(pet) {
+    if (this.followers().length >= PET_FOLLOW) { toast(`ついてこられるのは ${PET_FOLLOW}ひきまで。だれかを 牧場で またせよう`); return; }
+    pet.home = false;
+    this.hearts(pet.x, pet.y - 24); Sfx.pickup();
+    toast(`${CRITTERS[pet.type].name}が ついてくる！`, 'good');
+    this.savePets();
+  },
+  /* 牧場で まっている なかま: つれていくか、野に かえす */
+  ranchTalk(pet) {
+    const d = CRITTERS[pet.type];
+    UI.ask(d.name, `${d.name}は 牧場で まっている。`, [['つれていく', () => this.takeOut(pet)], [pet.type === 'golem' ? '石にもどす' : '野にかえす', () => this.release(pet)], ['やめる', null]]);
+  },
+  release(pet) {
+    const G = Game.G, d = CRITTERS[pet.type];
+    G.pets = G.pets.filter((p) => p !== pet);
+    if (pet.type === 'golem') { Game.give('stone', 20, pet.x, pet.y); toast(`${d.name}は しずかに ねむり、石にもどった`); }
+    else { G.critters.push(this.make(pet.type, pet.x, pet.y, { flee: 1.5 })); toast(`${d.name}は 野に かえっていった。またね！`); }
+    this.hearts(pet.x, pet.y - 20);
+    this.savePets();
+  },
+  leaveHome(pet) {
+    pet.home = true; this.homeSpot(pet);
+    Sfx.pickup();
+    toast(`${CRITTERS[pet.type].name}は 牧場で まっている`);
+    this.savePets();
   },
 
   /* ------------------------------ のる ------------------------------ */
@@ -227,57 +279,114 @@ const Critters = {
     }
   },
 
-  /* ------------------------------ 相棒 ------------------------------ */
-  placePet() {
-    const G = Game.G;
-    G.pet.x = G.p.x - 26; G.pet.y = G.p.y + 6;
+  /* ------------------------------ なかま ------------------------------ */
+  newPet(type, x, y, home) {
+    const pet = { id: CRITTER_ID++, type, x, y, vx: 0, face: 1, t: rand(0, 5), atkT: 0, giftT: 0, home: !!home };
+    if (home) this.homeSpot(pet);
+    return pet;
   },
-  loadPet() {
-    const G = Game.G;
-    G.pet = G.flags.pet && CRITTERS[G.flags.pet] ? { type: G.flags.pet, x: G.p.x - 26, y: G.p.y + 6, vx: 0, face: 1, t: 0, atkT: 0, giftT: 0 } : null;
+  followers() { return Game.G.pets.filter((p) => !p.home); },
+  inRanch(x, y) { return x > (RANCH.x - 2) * TILE && x < (RANCH.x + RANCH.w + 2) * TILE && y > (RANCH.y - 2) * TILE && y < (RANCH.y + RANCH.h + 2) * TILE; },
+  homeSpot(pet) {
+    pet.x = (RANCH.x + rand(0.8, RANCH.w - 0.8)) * TILE; pet.y = (RANCH.y + rand(1, RANCH.h - 0.2)) * TILE;
+    pet.goal = null;
   },
-  updatePet(dt) {
-    const G = Game.G, p = G.p, pet = G.pet;
-    if (!pet) return;
+  savePets() {
+    const G = Game.G;
+    G.flags.pets = G.pets.map((p) => ({ type: p.type, home: p.home }));
+    delete G.flags.pet;
+    Game.save();
+  },
+  loadPets() {
+    const G = Game.G;
+    let list = G.flags.pets || (G.flags.pet ? [{ type: G.flags.pet, home: false }] : []);
+    list = list.filter((p) => CRITTERS[p.type]);
+    G.pets = list.map((p) => this.newPet(p.type, G.p.x, G.p.y, p.home));
+    this.placePets();
+  },
+  /* ついてくる なかまの 立ち位置 (ネズミのうしろに ならぶ) */
+  slot(i, pet) {
+    const p = Game.G.p, side = p.face === 'left' ? 1 : -1, k = pet.type === 'golem' ? 1.35 : 1;
+    const S = [[30, 10], [-30, 14], [4, 34], [54, -6]][i % 4];
+    return { x: p.x + side * S[0] * k, y: p.y + S[1] * k };
+  },
+  placePets() {
+    const G = Game.G;
+    this.followers().forEach((pet, i) => { const s = this.slot(i, pet); pet.x = s.x; pet.y = s.y; });
+  },
+  updatePets(dt) {
+    const G = Game.G, p = G.p;
+    let i = 0;
+    for (const pet of G.pets) {
+      pet.t += dt; pet.atkT = Math.max(0, pet.atkT - dt); pet.bite = Math.max(0, (pet.bite || 0) - dt);
+      if (pet.home) { if (G.map.kind === 'over') this.wanderHome(pet, dt); continue; }
+      this.updateFollower(pet, i++, dt);
+    }
+  },
+  wanderHome(pet, dt) {
     const d = CRITTERS[pet.type];
-    pet.t += dt; pet.atkT = Math.max(0, pet.atkT - dt); pet.giftT += dt;
+    if (!pet.goal || pet.t > pet.goalT) {
+      pet.goal = { x: (RANCH.x + rand(0.8, RANCH.w - 0.8)) * TILE, y: (RANCH.y + rand(1, RANCH.h - 0.2)) * TILE };
+      pet.goalT = pet.t + rand(3, 7);
+    }
+    const dx = pet.goal.x - pet.x, dy = pet.goal.y - pet.y, dd = Math.hypot(dx, dy);
+    if (dd > 4) {
+      const v = d.spd * 0.3, ox = pet.x;
+      pet.x += (dx / dd) * v * dt; pet.y += (dy / dd) * v * dt;
+      pet.vx = (pet.x - ox) / Math.max(dt, 0.001);
+      if (Math.abs(pet.vx) > 3) pet.face = pet.vx > 0 ? 1 : -1;
+      pet.moving = true;
+    } else { pet.moving = false; pet.vx = 0; }
+  },
+  updateFollower(pet, idx, dt) {
+    const G = Game.G, p = G.p, d = CRITTERS[pet.type];
+    pet.giftT += dt;
     /* 近くの魔物をさがす */
     let foe = null, fd = 150;
     const list = G.boss && !G.boss.dead ? [...G.mobs, G.boss] : G.mobs;
     for (const e of list) { const dd = dist(e.x, e.y, p.x, p.y); if (dd < fd + 60 && dist(e.x, e.y, pet.x, pet.y) < fd + 40) { foe = e; fd = dd; } }
-    let tx, ty, sp = d.spd;
+    let tx, ty;
     if (foe && !p.high) {
-      const want = pet.type === 'spider' ? 90 : foe.r + 14;
-      const a = Math.atan2(pet.y - foe.y, pet.x - foe.x);
+      const want = d.shooter ? 90 : foe.r + (d.golem ? 22 : 14);
+      const a = Math.atan2(pet.y - foe.y, pet.x - foe.x) + idx * 0.7;
       tx = foe.x + Math.cos(a) * want; ty = foe.y + Math.sin(a) * want;
       if (pet.atkT <= 0) {
         const fdist = dist(pet.x, pet.y, foe.x, foe.y);
         const atk = Game.atk();
-        if (pet.type === 'spider' && fdist < 170) {
+        if (d.shooter && fdist < 170) {
           const aa = Math.atan2(foe.y - 10 - (pet.y - 14), foe.x - pet.x);
           G.shots.push({ x: pet.x, y: pet.y - 14, vx: Math.cos(aa) * 220, vy: Math.sin(aa) * 220, kind: 'web', from: 'p', life: 1, r: 7, dmg: Math.max(3, Math.round(atk * 0.7)), slowMob: 1.6, hit: new Set() });
           pet.atkT = 1.7; Sfx.shoot();
-        } else if (fdist < foe.r + 26) {
+        } else if (d.golem && fdist < foe.r + 40) {
+          /* ゴーレムは 両うでで たたきつける。まわりの魔物にも とどく */
+          const ga = Math.atan2(foe.y - pet.y, foe.x - pet.x);
+          for (const e of list) {
+            if (e.dead || dist(e.x, e.y, foe.x, foe.y) > 40 + e.r) continue;
+            Mobs.damage(e, Math.max(8, Math.round(atk * 1.5)), Math.cos(ga) * 220, Math.sin(ga) * 220);
+          }
+          G.zaps.push({ kind: 'ring', x: foe.x, y: foe.y, r: 46, t: 0.35, max: 0.35, col: '#d8d0b8' });
+          pet.atkT = 1.4; pet.bite = 0.35; R.shake = Math.max(R.shake || 0, 3); Sfx.boom();
+        } else if (!d.golem && fdist < foe.r + 26) {
           Mobs.damage(foe, Math.max(3, Math.round(atk * 0.8)), Math.cos(-a) * 120, Math.sin(-a) * 120);
           pet.atkT = 0.8; pet.bite = 0.2; Sfx.hit();
         }
       }
     } else {
-      const side = p.face === 'left' ? 1 : -1;
-      tx = p.x + side * 30; ty = p.y + 8;
+      const s = this.slot(idx, pet); tx = s.x; ty = s.y;
     }
-    pet.bite = Math.max(0, (pet.bite || 0) - dt);
     const dx = tx - pet.x, dy = ty - pet.y, dd = Math.hypot(dx, dy);
-    if (dist(pet.x, pet.y, p.x, p.y) > 420) this.placePet();
+    if (dist(pet.x, pet.y, p.x, p.y) > 420) { const s = this.slot(idx, pet); pet.x = s.x; pet.y = s.y; }
     else if (dd > 6) {
       const k = Math.min(1, dd / 40);
-      const v = Math.min(sp * (dd > 120 ? 2.2 : 1.2), dd / dt) * k;
+      const v = Math.min(d.spd * (dd > 120 ? 2.2 : 1.2), dd / dt) * k;
       const ox = pet.x;
-      World.move(G.map, pet, (dx / dd) * v * dt, (dy / dd) * v * dt, 7);
+      if (d.bird) { pet.x += (dx / dd) * v * dt; pet.y += (dy / dd) * v * dt; }
+      else World.move(G.map, pet, (dx / dd) * v * dt, (dy / dd) * v * dt, 7);
       pet.vx = (pet.x - ox) / Math.max(dt, 0.001);
       if (Math.abs(pet.vx) > 3) pet.face = pet.vx > 0 ? 1 : -1;
       pet.moving = true;
     } else { pet.moving = false; pet.vx = 0; }
+    if (d.bird) pet.z = 16 + Math.sin(pet.t * 3) * 3;
     if (d.gift && pet.giftT > d.gift[1]) {
       pet.giftT = 0;
       Game.drop(pet.x, pet.y, d.gift[0], 1);
@@ -316,6 +425,7 @@ function drawCritter(g, c, t, o = {}) {
       break;
     }
     case 'rabbit': drawRabbit(g, c, t, fx, hop, o); break;
+    case 'golem': drawAllyGolem(g, c, t, fx, moving); break;
     case 'gecko': drawGecko(g, c, t, fx, moving, o); break;
     case 'aphid': drawAphid(g, c, t, fx, moving); break;
     case 'squirrel': {
@@ -364,11 +474,75 @@ function drawCritter(g, c, t, o = {}) {
     }
   }
   if (sc) g.restore();
+  /* なかまの しるしに 赤いスカーフ */
+  if (o.pet && (c.type === 'squirrel' || c.type === 'frog' || c.type === 'bird')) {
+    const sx = c.x + (c.type === 'squirrel' ? 4 : c.type === 'bird' ? 1.5 : 1) * fx, sy = c.y - (c.type === 'bird' ? 5.5 + (c.z || 0) : c.type === 'squirrel' ? 8 : 7.5);
+    poly(g, [sx - 1.5 * fx, sy, sx - 4 * fx, sy + 3, sx - 1 * fx, sy + 2.4], '#e0405a', INK, 0.5);
+    ell(g, sx, sy, 2.8, 1.1, '#e0405a', INK, 0.5);
+  }
   if (o.heart) {
     const k = Math.sin(t * 5) * 2;
     g.fillStyle = '#ff6a9a'; g.font = '13px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('♥', c.x, c.y - d.r * 2.6 - 12 + k);
   }
+}
+
+/* 小石のゴーレム: ネズミの世界の ゴーレム。小石を 小枝の関節と 草のひもで つないである。
+   胸に 大魔法石、頭に 生命の力の 芽。背たけは ネズミの 1.6ばいくらい */
+function drawAllyGolem(g, c, t, fx, moving) {
+  const w = moving ? Math.sin(t * 9 + c.id) : 0;
+  const slam = (c.bite || 0) > 0 ? c.bite / 0.35 : 0;
+  const bob = moving ? Math.abs(w) * 1.4 : Math.sin(t * 2 + c.id) * 0.5;
+  const ST = '#a39c8f', ST2 = '#878074', ST3 = '#bdb5a5', TW = '#7a5230', TWD = '#5a3a20';
+  g.save(); g.translate(c.x, c.y); shadow(g, 0, 0, 15, 4.5); g.scale(fx, 1);
+  const twig = (x1, y1, x2, y2) => { line(g, x1, y1, x2, y2, INK, 3.6); line(g, x1, y1, x2, y2, TW, 2.2); };
+  const knot = (x, y) => { circ(g, x, y, 1.7, TWD, INK, 0.8); line(g, x, y, x + 2, y - 2.6, '#6aa84a', 1); };
+  /* 足: 小枝のすね と 平たい小石の足 */
+  for (const s of [1, -1]) {
+    const k = w * 4 * s, lx = s * 4.5;
+    twig(lx, -15 - bob, lx + k * 0.4, -8);
+    knot(lx + k * 0.4, -8);
+    twig(lx + k * 0.4, -8, lx + k * 0.7, -3);
+    ell(g, lx + k * 0.7 + 1.5, -2.2, 4.6, 2.6, ST2, INK, 1.2);
+  }
+  g.translate(slam * 2, -bob + slam * 1.5);
+  const arm = (sx, sy, a, back) => {
+    g.save(); g.translate(sx, sy); g.rotate(-a);
+    twig(0, 0, 0, 7); knot(0, 7.5);
+    twig(0, 7.5, 0, 11);
+    ell(g, 0, 13, 3, 3.8, back ? ST2 : ST, INK, 1.2);
+    ell(g, 0, 18, 3.8, 3.4, back ? ST2 : ST3, INK, 1.3);
+    g.restore();
+  };
+  const aim = slam > 0 ? 1.4 - (1 - slam) * 0.8 : null;
+  arm(-3, -27, aim ?? (0.2 - w * 0.6), true);
+  /* 胴: でこぼこの大きな小石を 草のひもで しばってある */
+  g.beginPath();
+  g.moveTo(-9, -16); g.bezierCurveTo(-12, -22, -11, -30, -4, -31.5); g.bezierCurveTo(3, -33, 10, -30, 10.5, -23);
+  g.bezierCurveTo(11, -17, 7, -14.5, 0, -14.5); g.bezierCurveTo(-4, -14.5, -7, -14.8, -9, -16); g.closePath();
+  g.fillStyle = ST; g.fill(); g.strokeStyle = INK; g.lineWidth = 1.6; g.stroke();
+  ell(g, -4, -27, 4, 2.2, 'rgba(255,255,255,.22)');
+  ell(g, -7, -18.5, 3.2, 2.4, ST3, INK, 1); ell(g, 8, -28, 2.8, 2, ST2, INK, 1);
+  line(g, -9, -26, 9, -19, '#c8a060', 1.4); line(g, -8, -18, 8, -28.5, '#c8a060', 1.4);
+  /* 大魔法石の心臓 */
+  const pulse = 0.5 + Math.sin(t * 3 + c.id) * 0.3;
+  g.globalAlpha = pulse * 0.5; circ(g, 2, -23, 6, '#7ac8ff'); g.globalAlpha = 1;
+  poly(g, [2, -27.5, 5, -23, 2, -18.5, -1, -23], '#3a8ae8', '#1a3a7a', 1);
+  poly(g, [1.5, -26, 2.8, -23.5, 1.5, -21], 'rgba(230,245,255,.8)');
+  /* こけ */
+  for (const [x, y, r] of [[-6, -30.5, 3], [-2, -32, 2.2], [9, -24, 1.8]]) ell(g, x, y, r, r * 0.55, '#6aa84a');
+  /* 首と頭 */
+  twig(1, -31, 2, -34.5);
+  ell(g, 3, -38.5, 7, 5.4, ST3, INK, 1.4);
+  ell(g, 1, -41, 2.6, 1.2, 'rgba(255,255,255,.3)');
+  g.globalAlpha = 0.45 + pulse * 0.4; circ(g, 3.2, -38.5, 2.6, '#9fe8ff'); circ(g, 7.4, -38.5, 2.4, '#9fe8ff'); g.globalAlpha = 1;
+  ell(g, 3.2, -38.5, 1.1, 1.5, '#e8fbff'); ell(g, 7.4, -38.5, 1, 1.4, '#e8fbff');
+  /* 生命の力の 芽 */
+  line(g, 2.5, -43.6, 2.8, -48, '#4a8a2e', 1.2);
+  g.save(); g.translate(2.8, -48); g.rotate(-0.6 + Math.sin(t * 2.4 + c.id) * 0.15); ell(g, 2.6, 0, 2.8, 1.3, '#7ad04a', '#3e7a2a', 0.7); g.restore();
+  g.save(); g.translate(2.8, -48); g.rotate(-2.5 - Math.sin(t * 2.4 + c.id) * 0.15); ell(g, 2.2, 0, 2.3, 1.1, '#8ae05a', '#3e7a2a', 0.7); g.restore();
+  arm(4, -27, aim ?? (0.2 + w * 0.6), false);
+  g.restore();
 }
 
 function collar(g, x, y) {

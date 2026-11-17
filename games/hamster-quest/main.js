@@ -1,5 +1,5 @@
 /* =========================================================================
-   ハムスターの冒険 ― ゲーム本体
+   ネズミの冒険 ― ゲーム本体
    歩く / たたく / 集める / つくる / 売り買い / 塔 / 冒険のすすみぐあい
    ========================================================================= */
 'use strict';
@@ -17,7 +17,11 @@ const CHEST_LOOT = {
   valleyN: { items: [['goldseed', 1], ['ether', 2], ['crystal', 2]] },
   valleyS: { coins: 200, items: [['crystal', 3]] },
   moonSE: { coins: 300, items: [['goldseed', 2], ['moon', 2]] },
+  plainsW: { coins: 60, items: [['honeydew', 3], ['acorn', 4]] },
+  quarryE: { coins: 160, items: [['stone', 20], ['iron', 3]] },
 };
+/* 命の大樹が 生命の力を わけてくれる間かく (秒) */
+const LIFETREE_WAIT = 240;
 
 const needExp = (lv) => Math.round(10 + 5 * Math.pow(lv, 1.7));
 
@@ -119,7 +123,7 @@ const Game = {
 
       map: null, tower: null,
       p: this.freshPlayer(),
-      mobs: [], boss: null, shots: [], zaps: [], marks: [], drops: [], npcs: [], critters: [], pet: null, ride: null, raidT: 0,
+      mobs: [], boss: null, shots: [], zaps: [], marks: [], drops: [], npcs: [], critters: [], pets: [], ride: null, raidT: 0,
       builds: [], bitems: [], bedAt: null, grave: null, fur: 'gold', keepInv: false,
       near: null, target: null, region: 'forest', coldT: 0, regenT: 0, calmT: 0, mpT: 0,
       floorOpen: false, objective: '',
@@ -175,7 +179,7 @@ const Game = {
     const r = World.rests[G.rest] && !World.rests[G.rest].map ? World.rests[G.rest] : World.rests.home;
     G.p.x = pos ? pos.x : r.x * TILE + 16; G.p.y = pos ? pos.y : r.y * TILE + 20;
     G.hp = clamp(G.hp, 1, this.maxHp()); G.mp = clamp(G.mp, 0, this.maxMp());
-    Critters.loadPet();
+    Critters.loadPets();
     this.placeGraveStruct();
     this.buildNpcs();
     this.start();
@@ -375,6 +379,13 @@ const Game = {
   craft(r) {
     const G = this.G;
     if (!this.hasAll(r.need)) { Sfx.error(); return false; }
+    if (r.ally) {
+      if (Critters.allyCount(r.out) >= ALLIES[r.out].max) { toast(`${ALLIES[r.out].name}は ${ALLIES[r.out].max}たいまで`); Sfx.error(); return false; }
+      for (const k in r.need) this.remove(k, r.need[k]);
+      Critters.makeAlly(r.out);
+      this.refreshObjective();
+      return true;
+    }
     const isGear = !!GEAR[r.out];
     if (isGear && G.owned.has(r.out)) { toast('もう もっているよ'); return false; }
     for (const k in r.need) this.remove(k, r.need[k]);
@@ -959,6 +970,7 @@ const Game = {
       case 'exit': return { label: 'そとへ', fn: () => this.exitTower() };
       case 'boat': return { label: 'ふねにのる', fn: () => this.takeBoat() };
       case 'grave': return { label: 'ひろう', fn: () => this.pickGrave() };
+      case 'lifetree': return { label: 'ふれる', fn: () => this.touchLifeTree(s) };
     }
     if (s.kind === 'board') return { label: 'よむ', fn: () => UI.openBoard() };
     return null;
@@ -972,6 +984,19 @@ const Game = {
     FX.rise(G.p.x, G.p.y - 10, '#7aff9a', 10);
     this.save();
     toast(`ぐっすり休んだ！ HP と MP がまんたんになった（セーブしました）`, 'good');
+  },
+
+  touchLifeTree(s) {
+    const G = this.G;
+    const left = Math.ceil((G.flags.lifeT || -LIFETREE_WAIT) + LIFETREE_WAIT - G.time);
+    if (left > 0) { UI.talk('命の大樹', [`大樹は しずかに ねむっている。あと ${Math.ceil(left / 60)}分くらいで また 光をわけてくれそうだ。`]); return; }
+    G.flags.lifeT = G.time;
+    const x = (s.x + 1.5) * TILE, y = (s.y + s.h) * TILE + 12;
+    this.give('life', 1, x, y);
+    FX.rise(x, y - 30, '#b8ff8a', 14);
+    Sfx.heal();
+    UI.talk('命の大樹', ['大樹の 根もとが あたたかく光り、💚 生命の力 を わけてくれた！', '石50こと 大魔法石が あれば、カバンの「つくる」で ゴーレムを 目ざめさせられる。']);
+    this.save();
   },
 
   chestOpened(id) { return !!this.G.flags.chests[id]; },

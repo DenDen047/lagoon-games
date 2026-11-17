@@ -1,5 +1,5 @@
 /* =========================================================================
-   ハムスターの冒険 ― 世界
+   ネズミの冒険 ― 世界
    大地図 (森・町・山・谷・月の野原) と 塔の各階 をつくる。当たり判定もここ。
    ========================================================================= */
 'use strict';
@@ -29,6 +29,7 @@ const NODE_DEFS = {
   iron:       { hp: 4, solid: 12, tool: 1, drops: [['iron', 1, 1, 1], ['stone', 1, 1, 0.4]], regrow: 130, sfx: 'clink', chip: '#c08a6a' },
   crystal:    { hp: 5, solid: 11, tool: 2, drops: [['crystal', 1, 1, 1]], regrow: 160, sfx: 'clink', chip: '#9fe8ff' },
   moonrock:   { hp: 5, solid: 12, tool: 2, drops: [['moon', 1, 1, 1], ['stone', 1, 1, 0.5]], regrow: 160, sfx: 'clink', chip: '#d8c8ff' },
+  magicore:   { hp: 7, solid: 12, tool: 2, drops: [['bigstone', 1, 1, 1], ['stone', 2, 3, 1]], regrow: 240, sfx: 'clink', chip: '#5ab0ff' },
   thorns:     { hp: 1, solid: 15, fireOnly: true, tileSolid: true, chip: '#4a6a2a' },
 };
 
@@ -44,13 +45,13 @@ const FOREST_ROWS = [
   'FFgggFFFFFFFgg', 'FFFFFFFFFFFFgg', 'FFFFFFggFFFggg', 'FFFFFggg~~Fggg', 'FFFFFggg~~gggg',
   'FFgggFFFggggFg', 'FgggggFFFggggg', 'FFgggFFFFFgggg', 'FFFFFFFFggggFF', 'FFgggFFFggggFF',
   'FggHgggggggggg', 'FgggggyyyggFFF', 'FgggggyyyggFFF', 'FFgggyyyyggFFF', 'FFFFggggggFFFF',
-  '###FFFFFFFF###', '##############',
+  '##ggFFFFFFFF##', '##gg##########',
 ];
 const LAKE_ROWS = [
   '~~~~~~^', 'b~~~~b^', 'b~~~~~^', 'b~~~~~^', 'bb~~~~^', 'Fb~~~b^', 'Fb~~~b^', 'Fb~~~b^',
   'Fbb~~b^', 'FFb~bb^', 'FFbbbg^', 'gggggg^', 'gggggg^', 'gggggg^',
   'TTTTTT^', 'TTTTTT^', 'TTTTTT^', 'TTTTTT^', 'TTTTTT^', 'TTTTTT^', 'TTTTTTg', 'TTTTTTg', 'TTTTTTg',
-  'TTTTTT^', 'TTTTTT^', 'gggggg^', 'gggggg^', 'gggggg^', 'gggggg^', 'gggggg^', 'FFgggF^', '######^',
+  'TTTTTT^', 'TTTTTT^', 'gggggg^', 'gggggg^', 'gggggg^', 'gggggg^', 'gggggg^', 'FFgggF^', '#gggg#^',
 ];
 const MOUNT_ROWS = [
   '^^^^^AAAA^^^', '^^^^AAAAAA^^', '^^^AAAAAAA^^', '^^^AAS2SAA^^', '^^^ASSSSSA^^', '^^^ASSSSSS^^',
@@ -73,15 +74,31 @@ function valleyW(y) {
   if (y === 12) return 'vcv';
   return 'vvv';
 }
+/* 南の新しい土地 (家と町の南)。 p 平原  o 池  q 石切り場 */
+const PLAINS_ROWS = [
+  'FFFggggFFFFFFggggggFFFFF', 'FFggppppppppFFFppppppgFF', 'Fgpppppppppppppppppppppg', 'Fpppppoopppppppppppppppp',
+  'Fppppooooppppp#ppppppppp', 'Fppppoooopppp###pppppppp', 'Fpppppoopppppp#ppppppppp', 'Fppppppppppppppppppooppp',
+  'FFppppppppppppppppoooopp', 'F#pppppppFFppppppppooppp', 'F##pppppFFFFpppppppppppp', 'F#ppppppFFFFppppppppppp^',
+  'Fpppppppppppppppppppppp^', 'FFpppppppppppppppppppp^^', 'FFFpppppFFFpppppppppp^^^', '########################',
+];
+const QUARRY_ROWS = [
+  '^^^^^^^^^^^^^^^^^^^^^^', 'pp^^^^^^^^^^^^^^^^^^^^', 'ppp^^^qqqqqqqq^^^^^^^^', 'pppp^qqqqqqqqqqq^^^^^^',
+  'ppppqqqqqqqqqqqqqq^^^^', 'pppqqqqqqqqqqqqqqqq^^^', 'ppqqqqqqqqqqqqqqqqq^^^', 'ppqqqq^^qqqqqqqqqqqq^^',
+  'pqqqqq^^qqqqqqqqqqqq^^', 'pqqqqqqqqqqqq^^qqqqq^^', 'ppqqqqqqqqqqq^^qqqq^^^', '^pqqqqqqqqqqqqqqqqq^^^',
+  '^^qqqqqqqqqqqqqqqq^^^^', '^^^qqqqqqqqqqqqqq^^^^^', '^^^^^qqqqqqqqqq^^^^^^^', '^^^^^^^^^^^^^^^^^^^^^^',
+];
+const NORTH_H = 32;
 const COARSE = [];
-for (let y = 0; y < 32; y++) {
-  const row = '#' + FOREST_ROWS[y] + LAKE_ROWS[y] + MOUNT_ROWS[y] + valleyW(y) +
-    (y === 16 ? 'BB' : 'CC') + (y === 0 || y === 31 ? '##' : 'vv') + MOON_ROWS[y] + '#';
+for (let y = 0; y < NORTH_H + PLAINS_ROWS.length; y++) {
+  const row = y < NORTH_H
+    ? '#' + FOREST_ROWS[y] + LAKE_ROWS[y] + MOUNT_ROWS[y] + valleyW(y) +
+      (y === 16 ? 'BB' : 'CC') + (y === 0 || y === 31 ? '##' : 'vv') + MOON_ROWS[y] + '#'
+    : '#' + PLAINS_ROWS[y - NORTH_H] + QUARRY_ROWS[y - NORTH_H] + '#';
   if (row.length !== 48) throw new Error('大地図の行の長さがちがう: ' + y + ' ' + row.length);
   COARSE.push(row);
 }
-const CW = 48, CH = 32, CELL = 4;
-const OW = CW * CELL, OH = CH * CELL;   /* 192 x 128 タイル */
+const CW = 48, CH = COARSE.length, CELL = 4;
+const OW = CW * CELL, OH = CH * CELL;   /* 192 x 192 タイル */
 
 /* 位置をずらさない (形をくずさない) 文字。山道や町はかっちりさせる。 */
 const HARD = new Set(['#', 'T', '^', 'm', 'G', 'h', 'K', 'S', 'A', '2', 'C', 'B']);
@@ -90,11 +107,13 @@ const CHAR_TILE = {
   '#': T.DENSE, F: T.FOREST, g: T.MEADOW, y: T.FIELD, H: T.MEADOW, 1: T.MEADOW, '~': T.WATER, b: T.SAND,
   T: T.TOWN, '^': T.CLIFF, m: T.ROCKY, G: T.ROCKY, h: T.ROCKY, K: T.SNOW, S: T.SNOW, A: T.SNOWCLIFF,
   2: T.SNOW, v: T.VALLEY, c: T.VALLEY, C: T.CHASM, B: T.CHASM, n: T.MOON, 3: T.MOON,
+  p: T.GRASS, o: T.WATER, q: T.ROCKY,
 };
 
 const REGION_KEYS = Object.keys(REGIONS);
 function coarseRegion(cx, cy) {
   const c = COARSE[cy][cx];
+  if (cy >= NORTH_H) return cx >= 25 ? 'quarry' : 'plains';
   if ('^mGh'.includes(c)) return 'mountain';
   if ('SAK2'.includes(c)) return 'snow';
   if (cx >= 41) return 'moon';
@@ -178,6 +197,9 @@ const World = {
       [[113, 30], [122, 32], [130, 36], [134, 41], [138, 42], [141, 52], [146, 65], [147, 66]],
       [[156, 66], [166, 50], [174, 32], [178, 20]],
       [[71, 56], [70, 48]],                                            /* 町 → 湖 */
+      [[71, 99], [71, 118], [68, 132], [60, 146], [56, 152]],          /* 町の南門 → 命の大樹 */
+      [[18, 102], [14, 116], [14, 130], [26, 146], [50, 153]],         /* 家 → 平原 */
+      [[60, 154], [80, 158], [98, 158], [108, 156], [124, 154], [146, 152]],   /* 平原 → 石切り場 */
     ];
     for (const line of ROADS) {
       for (let i = 0; i < line.length - 1; i++) {
@@ -241,7 +263,7 @@ const World = {
     const t = CHAR_TILE[this.baseChar(tx, ty)];
     if (!tileSolid(t)) return t;
     const reg = coarseRegion(clamp(Math.floor(tx / CELL), 0, CW - 1), clamp(Math.floor(ty / CELL), 0, CH - 1));
-    return { forest: T.FOREST, deepwood: T.FOREST, town: T.TOWN, mountain: T.ROCKY, snow: T.SNOW, valley: T.VALLEY, moon: T.MOON }[reg] || T.MEADOW;
+    return { forest: T.FOREST, deepwood: T.FOREST, town: T.TOWN, mountain: T.ROCKY, snow: T.SNOW, valley: T.VALLEY, moon: T.MOON, plains: T.GRASS, quarry: T.ROCKY }[reg] || T.MEADOW;
   },
   door(s) { return { x: s.x + Math.floor(s.w / 2), y: s.y + s.h }; },
 
@@ -322,6 +344,15 @@ const World = {
     const C = (id, x, y) => S({ kind: 'chest', id, x, y, act: 'chest' });
     C('forestNE', 52, 22); C('forestSW', 8, 60); C('lakeIsle', 82, 46); C('mtPocket', 112, 74);
     C('snowPeak', 124, 24); C('valleyS', 140, 112); C('valleyN', 141, 8); C('moonSE', 184, 116);
+    C('plainsW', 10, 168); C('quarryE', 170, 160);
+
+    /* 南の ひだまり平原と 古い石切り場 */
+    S({ kind: 'lifetree', x: 55, y: 147, w: 3, h: 2, act: 'lifetree', label: '命の大樹' });
+    S({ kind: 'sign', x: 52, y: 152, act: 'sign', sign: 'plains' });
+    S({ kind: 'sign', x: 108, y: 154, act: 'sign', sign: 'quarry' });
+    S({ kind: 'ruin', x: 146, y: 147, w: 4, h: 3, label: '古い石切り場' });
+    W('plains', 61, 151, '命の大樹');
+    W('quarry', 112, 158, '古い石切り場');
   },
 
   /* --------------------------- 素材ノード --------------------------- */
@@ -343,6 +374,10 @@ const World = {
         if (reserved[i]) continue;
         let list = table[m.tiles[i]];
         if (m.tiles[i] === T.DENSE && tx >= 164) list = [['deadtree', 0.22], ['moonrock', 0.02], ['bush', 0.04]];
+        if (ty >= NORTH_H * CELL) {
+          if (m.tiles[i] === T.GRASS) list = [['tree', 0.03], ['bush', 0.06], ['sunflower', 0.02], ['mushroom', 0.004]];
+          else if (m.tiles[i] === T.ROCKY) list = [['rock', 0.12], ['iron', 0.04], ['magicore', 0.006], ['crystal', 0.006], ['pine', 0.015]];
+        }
         if (!list) continue;
         let r = hash2(tx, ty, 99);
         for (const [type, p] of list) {

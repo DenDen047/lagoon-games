@@ -71,12 +71,12 @@ const GAMES = [
   {
     slug: 'hamster-quest', genre: 'rpg', players: '1P', date: '2026-10-20',
     ja: {
-      title: 'ハムスターの冒険 ― HAMSTER QUEST',
-      desc: '木や草で道具をつくり、水車とベルトコンベアで木の工場を建て、ウサギやイモムシに乗って冒険する、終わりのないハムスターのくらしRPG。スマホ対応。',
+      title: 'ネズミの冒険 ― MOUSE QUEST',
+      desc: '森の小さなネズミが 道具をつくり、水車の工場を建て、好物をあげて動物を仲間にし、小石のゴーレムと いっしょに冒険する、終わりのないくらしRPG。スマホ対応。',
     },
     en: {
-      title: 'Hamster Quest',
-      desc: 'Craft tools from wood and grass, build a wooden factory with waterwheels and conveyor belts, and ride rabbits and caterpillars in an endless hamster life RPG. Plays on phones.',
+      title: 'Mouse Quest',
+      desc: 'A little mouse crafts tools, builds a waterwheel factory, befriends animals with their favorite foods, and adventures with a pebble golem in an endless life RPG. Plays on phones.',
     },
   },
   {

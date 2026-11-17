@@ -1,5 +1,5 @@
 /* =========================================================================
-   ハムスターの冒険 ― 絵
+   ネズミの冒険 ― 絵
    すべてプログラムで描く。ハムスター / 魔物 / ボス / 木や岩 / 建物 / 地面
    ========================================================================= */
 'use strict';
@@ -262,6 +262,14 @@ function drawHamster(g, x, y, o) {
       circ(g, Math.cos(o.aim) * r, BODY_Y + 4 + Math.sin(o.aim) * r, 3.2, '#f2a6a6', INK, 1);
       return;
     }
+    /* 兵士は やりを まっすぐ立てて持つ */
+    if (o.soldier && o.weapon && GEAR[o.weapon].kind === 'spear') {
+      const sx = view === 'back' ? -7 : view === 'side' ? 6 * flip : 8.5;
+      line(g, sx, 1, sx, -38, INK, 3); line(g, sx, 1, sx, -38, '#8a5a32', 1.8);
+      poly(g, [sx - 2.6, -37, sx, -45, sx + 2.6, -37], '#d8dde4', INK, 1);
+      if (view !== 'back') poly(g, [sx, -36, sx + 5 * (view === 'side' ? flip : 1), -34, sx, -32], o.soldier === 'captain' ? '#c8364a' : '#2d5aa0');
+      return;
+    }
     /* しまっている武器 */
     if (o.weapon && o.weapon !== 'paw') {
       g.save();
@@ -472,9 +480,11 @@ function drawMouseBody(g, o, view, fur, belly, furD) {
     ell(g, 0, BY, RX, RY, furGrad(g, 0, BY, RX, fur, furD), INK, 1.3);
     ell(g, 0, BY + 1.5, 4.6, 5.4, belly);
     drawClothes(g, o.body, view, RX, RY, BY);
+    if (o.soldier) soldierTabard(g, view, RX, RY, BY, o.soldier);
     if (o.apron) { g.save(); g.beginPath(); g.ellipse(0, BY, RX, RY, 0, 0, TAU); g.clip(); rrect(g, -4.5, -8, 9, 8, 2, o.apron); g.restore(); }
     if (pouch >= 0) mousePouch(g, 5.5, -3.2, pouch);
     mouseHand(g, -6, -6.5); mouseHand(g, 6, -6.5);
+    if (o.soldier) soldierShield(g, -7.6, -8.5, 1, o.soldier);
     /* 耳 (頭のうしろ) */
     mouseEar(g, -6.9, -22.6, 5.2, fur, furD, true);
     mouseEar(g, 6.9, -22.6, 5.2, fur, furD, true);
@@ -501,6 +511,7 @@ function drawMouseBody(g, o, view, fur, belly, furD) {
     mouseWhiskers(g, 1.4, -12.6, 1, 10);
     ell(g, 0, -12, 1.35, 1, M_NOSE, INK, 0.6);
     circ(g, -0.4, -12.3, 0.35, 'rgba(255,255,255,.7)');
+    if (o.soldier) soldierHelmet(g, 0, view, o.soldier);
   } else if (view === 'back') {
     mouseEar(g, -6.9, -22.6, 5.2, fur, furD, false);
     mouseEar(g, 6.9, -22.6, 5.2, fur, furD, false);
@@ -508,10 +519,12 @@ function drawMouseBody(g, o, view, fur, belly, furD) {
     ell(g, 0, BY, RX, RY, furGrad(g, 0, BY, RX, fur, furD), INK, 1.3);
     g.globalAlpha = 0.35; ell(g, 0, BY - 1, 2.6, 6, furD); g.globalAlpha = 1;
     drawClothes(g, o.body, view, RX, RY, BY);
+    if (o.soldier) soldierTabard(g, view, RX, RY, BY, o.soldier);
     /* 頭のうしろ。ひげの先が左右にのぞく */
     mouseWhiskers(g, -5.5, -14.5, -1, 6);
     mouseWhiskers(g, 5.5, -14.5, 1, 6);
     ell(g, 0, -17.4, 6.9, 5.9, furGrad(g, 0, -17.4, 6.9, fur, furD), INK, 1.3);
+    if (o.soldier) { soldierHelmet(g, 0, view, o.soldier); soldierShield(g, 0, -8, 1.15, o.soldier, true); }
     if (pouch >= 0) mousePouch(g, -5.8, -3.4, pouch);
     drawBag(g, o.bag === 'cheek' ? null : o.bag, 'back');
     /* しっぽは いちばん手前 */
@@ -524,6 +537,7 @@ function drawMouseBody(g, o, view, fur, belly, furD) {
     ell(g, 0, BY, RX - 0.4, RY, furGrad(g, 0, BY, RX, fur, furD), INK, 1.3);
     ell(g, 2.6, BY + 1.6, 3.8, 5, belly);
     drawClothes(g, o.body, view, RX - 0.4, RY, BY);
+    if (o.soldier) soldierTabard(g, view, RX - 0.4, RY, BY, o.soldier);
     if (o.apron) { g.save(); g.beginPath(); g.ellipse(0, BY, RX - 0.4, RY, 0, 0, TAU); g.clip(); rrect(g, 0, -8, 7, 8, 2, o.apron); g.restore(); }
     if (pouch >= 0) mousePouch(g, -3.6, -3.4, pouch);
     /* 頭: 丸い後頭部から、とがった鼻先へ */
@@ -545,8 +559,72 @@ function drawMouseBody(g, o, view, fur, belly, furD) {
     mouseWhiskers(g, 11, -14, 1, 9);
     mouseWhiskers(g, 10.4, -14.2, -1, 4);
     ell(g, 12.7, -14.3, 1.25, 1.05, M_NOSE, INK, 0.6);
+    if (o.soldier) soldierHelmet(g, 3.6, view, o.soldier);
     mouseHand(g, 5.6, -7.2);
+    if (o.soldier) soldierShield(g, -0.5, -8.5, 1, o.soldier);
   }
+}
+
+/* ---------------------------- 王国の兵士 ----------------------------
+   湖の王国ミナモの ネズミの兵士。くさりかたびらの上に 青い陣羽織 (波のもん)、
+   ふちのある鉄かぶとに 羽かざり、波のもんの盾。隊長は 赤いマントと 赤い羽。 */
+const SOLDIER_BLUE = '#2d5aa0', SOLDIER_RED = '#b8303e', SOLDIER_GOLD = '#e0b84a', STEEL = '#c2c9d3', STEEL_D = '#8a929e';
+function waveMark(g, x, y, k) {
+  g.beginPath(); g.moveTo(x - 2.6 * k, y);
+  g.quadraticCurveTo(x - 1.3 * k, y - 1.8 * k, x, y); g.quadraticCurveTo(x + 1.3 * k, y + 1.8 * k, x + 2.6 * k, y);
+  g.strokeStyle = '#f4f8ff'; g.lineWidth = 0.9 * k; g.lineCap = 'round'; g.stroke();
+}
+function soldierTabard(g, view, rx, ry, cy, rank) {
+  const col = rank === 'captain' ? SOLDIER_RED : SOLDIER_BLUE;
+  if (rank === 'captain' && view !== 'front') {
+    poly(g, [-rx + 0.5, cy - 5, rx - 0.5, cy - 5, rx + 2.5, cy + ry + 1, -rx - 2.5, cy + ry + 1], SOLDIER_RED, INK, 1.1);
+    line(g, -rx + 0.5, cy - 5, rx - 0.5, cy - 5, SOLDIER_GOLD, 1.4);
+  }
+  g.save();
+  g.beginPath(); g.ellipse(0, cy, rx, ry, 0, 0, TAU); g.clip();
+  /* くさりかたびら */
+  g.fillStyle = '#9aa2ae'; g.fillRect(-rx, cy - ry, rx * 2, ry * 2);
+  g.fillStyle = 'rgba(60,66,78,.45)';
+  for (let y = cy - ry; y < cy + ry; y += 1.6) for (let x = -rx + ((y * 1.25) % 1.6); x < rx; x += 1.6) g.fillRect(x, y, 0.7, 0.7);
+  /* 陣羽織 */
+  const x0 = view === 'side' ? -rx * 0.6 : -rx * 0.66, x1 = view === 'side' ? rx * 0.9 : rx * 0.66;
+  g.fillStyle = col; g.fillRect(x0, cy - ry * 0.55, x1 - x0, ry * 2);
+  g.fillStyle = SOLDIER_GOLD; g.fillRect(x0, cy - ry * 0.55, 0.9, ry * 2); g.fillRect(x1 - 0.9, cy - ry * 0.55, 0.9, ry * 2);
+  /* ベルト */
+  g.fillStyle = '#5a3a20'; g.fillRect(-rx, cy + 2.4, rx * 2, 1.7);
+  g.restore();
+  if (view !== 'back') { waveMark(g, view === 'side' ? 2.2 : 0, cy - 0.5, 1); rrect(g, (view === 'side' ? 2.2 : 0) - 1, cy + 2.3, 2, 1.9, 0.4, SOLDIER_GOLD, INK, 0.4); }
+  /* 肩あて */
+  if (view === 'side') ell(g, 1, cy - 5, 3.4, 2.4, STEEL, INK, 1);
+  else for (const s of [-1, 1]) ell(g, s * 6.2, cy - 5.2, 3.2, 2.3, STEEL, INK, 1);
+}
+function soldierHelmet(g, x, view, rank) {
+  const plume = rank === 'captain' ? SOLDIER_RED : '#f4f4f8';
+  const by = view === 'side' ? -19.6 : -19.8;
+  /* 羽かざり (うしろへ なびく) */
+  g.save(); g.translate(x - (view === 'side' ? 1.5 : 0), by - 6.2);
+  if (view === 'side') g.rotate(-0.5);
+  ell(g, 0, -2.6, 1.9, 3.8, plume, INK, 0.8);
+  if (rank !== 'captain') ell(g, 0, -2.6, 0.8, 3, '#9fc0e8');
+  g.restore();
+  g.beginPath(); g.ellipse(x, by, 6.3, 5.4, 0, Math.PI, TAU); g.closePath();
+  g.fillStyle = STEEL; g.fill(); g.strokeStyle = INK; g.lineWidth = 1.1; g.stroke();
+  ell(g, x - 2, by - 3, 1.8, 1, 'rgba(255,255,255,.7)');
+  if (view !== 'back') line(g, x, by - 5.2, x, by, STEEL_D, 0.9);
+  ell(g, x + (view === 'side' ? 0.6 : 0), by + 0.4, 8.4, 1.7, STEEL, INK, 1);
+  line(g, x - 7.5, by + 0.3, x + 7.5, by + 0.3, rank === 'captain' ? SOLDIER_GOLD : STEEL_D, 0.7);
+}
+function soldierShield(g, x, y, k, rank, round) {
+  const col = rank === 'captain' ? SOLDIER_RED : SOLDIER_BLUE;
+  g.save(); g.translate(x, y); g.scale(k, k);
+  if (round) {
+    circ(g, 0, 0, 5.4, col, INK, 1.1); circ(g, 0, 0, 4.4, null, SOLDIER_GOLD, 0.8); circ(g, 0, 0, 1.3, STEEL, INK, 0.6);
+  } else {
+    poly(g, [-3.6, -4.6, 3.6, -4.6, 3.6, 0.6, 0, 5, -3.6, 0.6], col, INK, 1.1);
+    poly(g, [-2.7, -3.8, 2.7, -3.8, 2.7, 0.3, 0, 3.8, -2.7, 0.3], null, SOLDIER_GOLD, 0.7);
+    waveMark(g, 0, -0.6, 0.8);
+  }
+  g.restore();
 }
 
 /* ころがって よけるとき: しっぽを体にまいた 毛玉 */
@@ -752,16 +830,69 @@ function drawMob(g, m, t) {
       break;
     }
     case 'golem': {
+      /* 悪魔のゴーレム: 黒い岩の体に 溶岩のひび。ねじれた角、赤い目、きば、かぎ爪、とがったしっぽ */
       const sw = Math.sin(t * 4 + m.id) * (Math.abs(m.vx) > 2 ? 3 : 0);
-      rrect(g, -16, -18 + sw * 0.4, 12, 18, 3, '#7a7268', INK, 1.6); rrect(g, 4, -18 - sw * 0.4, 12, 18, 3, '#7a7268', INK, 1.6);
-      rrect(g, -24, -56, 48, 40, 8, '#9a9286', INK, 2.2);
-      for (const [x, y] of [[-14, -46], [6, -40], [-4, -28], [14, -50]]) line(g, x, y, x + 6, y + 6, 'rgba(0,0,0,.3)', 1.4);
-      g.globalAlpha = 0.5 + Math.sin(t * 3) * 0.3; circ(g, 0, -38, 6, '#9fe8ff'); g.globalAlpha = 1;
-      circ(g, 0, -38, 3.5, '#d8f6ff', INK, 1);
-      rrect(g, -14, -76, 28, 22, 6, '#a8a094', INK, 2);
-      rrect(g, -9, -69, 6, 4, 1, '#ffd84a'); rrect(g, 3, -69, 6, 4, 1, '#ffd84a');
-      rrect(g, -36, -54 - sw, 14, 30, 5, '#8a8276', INK, 1.8); rrect(g, 22, -54 + sw, 14, 30, 5, '#8a8276', INK, 1.8);
-      g.fillStyle = '#6aa84a'; for (const [x, y] of [[-10, -76], [6, -77], [-20, -56]]) ell(g, x, y, 5, 2, '#6aa84a');
+      const pulse = 0.6 + Math.sin(t * 5 + m.id) * 0.3;
+      const B = '#3e3540', B2 = '#2a2330', B3 = '#554858', LAVA = '#ff5a2a', HOT = '#ffd05a', BONE = '#e2d6c4';
+      /* しっぽ */
+      g.beginPath(); g.moveTo(-12, -22); g.quadraticCurveTo(-38, -16 + sw, -42, -36 + sw);
+      g.strokeStyle = INK; g.lineWidth = 8; g.lineCap = 'round'; g.stroke(); g.strokeStyle = B2; g.lineWidth = 5.5; g.stroke();
+      poly(g, [-42, -44 + sw, -36, -34 + sw, -48, -32 + sw], '#5a1e2a', INK, 1.4);
+      /* 足とかぎ爪 */
+      for (const [lx, k] of [[-18, 1], [5, -1]]) {
+        rrect(g, lx, -22 + sw * 0.4 * k, 13, 22, 3, B2, INK, 1.8);
+        for (const cx2 of [2, 6.5, 11]) poly(g, [lx + cx2 - 2, 0, lx + cx2 + 2, 0, lx + cx2 + 1, 3], BONE, INK, 0.8);
+      }
+      /* 胴: 肩が はった 逆三角 */
+      poly(g, [-27, -60, 27, -60, 20, -18, -20, -18], B, INK, 2.2);
+      poly(g, [-22, -57, 4, -57, -2, -46, -18, -44], 'rgba(255,255,255,.07)');
+      /* 溶岩のひび */
+      const cracks = [[-18, -54, -10, -46, -14, -36, -6, -26], [16, -56, 10, -48, 15, -40, 8, -30], [-4, -24, 2, -20, -2, -18]];
+      for (const pass of [0, 1]) {
+        g.globalAlpha = pass ? 1 : pulse * 0.6;
+        for (const c of cracks) {
+          g.beginPath(); g.moveTo(c[0], c[1]); for (let i = 2; i < c.length; i += 2) g.lineTo(c[i], c[i + 1]);
+          g.strokeStyle = pass ? HOT : LAVA; g.lineWidth = pass ? 1 : 3.4; g.lineJoin = 'round'; g.stroke();
+        }
+      }
+      g.globalAlpha = 1;
+      /* 胸の 魔法陣のコア */
+      circ(g, 0, -40, 8.5, '#1a1018', INK, 1.4);
+      g.globalAlpha = pulse * 0.55; circ(g, 0, -40, 12, LAVA); g.globalAlpha = 1;
+      g.beginPath();
+      for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * (TAU * 2 / 5); g[i ? 'lineTo' : 'moveTo'](Math.cos(a) * 6, -40 + Math.sin(a) * 6); }
+      g.closePath(); g.strokeStyle = HOT; g.lineWidth = 1.2; g.stroke();
+      /* 肩のとげ */
+      for (const s2 of [-1, 1]) {
+        poly(g, [s2 * 18, -60, s2 * 22, -72, s2 * 26, -60], B3, INK, 1.4);
+        poly(g, [s2 * 24, -60, s2 * 31, -68, s2 * 29, -56], B3, INK, 1.4);
+      }
+      /* うで と かぎ爪の手 */
+      for (const [ax, k] of [[-41, -1], [26, 1]]) {
+        rrect(g, ax, -58 + sw * k, 15, 32, 5, B3, INK, 1.8);
+        line(g, ax + 4, -50 + sw * k, ax + 9, -42 + sw * k, LAVA, 1.6);
+        for (const cx2 of [2, 7.5, 13]) poly(g, [ax + cx2 - 2.2, -27 + sw * k, ax + cx2 + 2.2, -27 + sw * k, ax + cx2 + 0.5, -20 + sw * k], BONE, INK, 0.9);
+      }
+      /* 頭: 肩に うまった 小さな頭と ねじれた角 */
+      for (const s2 of [-1, 1]) {
+        g.beginPath(); g.moveTo(s2 * 9, -74);
+        g.quadraticCurveTo(s2 * 28, -80, s2 * 24, -100);
+        g.quadraticCurveTo(s2 * 19, -86, s2 * 4, -78); g.closePath();
+        g.fillStyle = BONE; g.fill(); g.strokeStyle = INK; g.lineWidth = 1.6; g.stroke();
+        line(g, s2 * 17, -80, s2 * 21, -84, 'rgba(90,60,40,.4)', 1); line(g, s2 * 21, -87, s2 * 24, -90, 'rgba(90,60,40,.4)', 1);
+      }
+      rrect(g, -13, -78, 26, 21, 6, B3, INK, 2);
+      poly(g, [-11, -72, -2, -68, -2, -66, -11, -68], B2); poly(g, [11, -72, 2, -68, 2, -66, 11, -68], B2);
+      g.globalAlpha = pulse * 0.6; circ(g, -6, -66, 5, LAVA); circ(g, 6, -66, 5, LAVA); g.globalAlpha = 1;
+      poly(g, [-10, -67.5, -3, -65.5, -4, -63.5, -9, -64.5], '#ff3a2a'); poly(g, [10, -67.5, 3, -65.5, 4, -63.5, 9, -64.5], '#ff3a2a');
+      poly(g, [-8, -60, 8, -60, 6, -58.5, -6, -58.5], '#1a1018');
+      poly(g, [-6, -60, -4.5, -60, -5.2, -56.5], BONE); poly(g, [4.5, -60, 6, -60, 5.2, -56.5], BONE);
+      /* 火の粉 */
+      for (let i = 0; i < 4; i++) {
+        const k = (t * 0.7 + i * 0.25 + m.id * 0.13) % 1;
+        g.globalAlpha = 1 - k; circ(g, Math.sin(i * 2.3 + t) * 22, -40 - k * 60, 1.6, i % 2 ? HOT : LAVA);
+      }
+      g.globalAlpha = 1;
       break;
     }
     case 'catsol': case 'catmage': case 'catknight': {
@@ -950,6 +1081,16 @@ function nodeSprite(type, v, dead) {
         if (type === 'moonrock') { g.fillStyle = '#fff6b0'; g.font = '10px sans-serif'; g.textAlign = 'center'; g.fillText('☾', 0, -5); }
         break;
       }
+      case 'magicore': {
+        /* 大魔法石の岩: 黒い岩に 青い石が 埋まって光る */
+        shadow(g, 0, 0, 16, 5);
+        poly(g, [-16, 0, -14, -14, -6, -22, 6, -21, 14, -12, 16, 0], '#4a4858', INK, 1.6);
+        poly(g, [-11, -12, -5, -19, 4, -18, 0, -11], '#6a6878');
+        poly(g, [-4, -4, -6, -14, 0, -20, 6, -13, 4, -4], '#3a8ae8', '#1a3a7a', 1.2);
+        poly(g, [-2, -6, -3, -13, 0, -17, 1, -12], 'rgba(220,240,255,.75)');
+        circ(g, 9, -6, 2.4, '#5ab0ff', '#1a3a7a', 0.8); circ(g, -10, -4, 1.8, '#5ab0ff', '#1a3a7a', 0.8);
+        break;
+      }
       case 'crystal': {
         shadow(g, 0, 0, 12, 4);
         for (const [x, h, w, a] of [[-6, 16, 5, -0.25], [5, 14, 5, 0.25], [0, 22, 6, 0]]) {
@@ -983,7 +1124,7 @@ function drawDeadNode(g, type, v) {
     rrect(g, -7, -4, 14, 5, 2, type === 'deadtree' ? '#5a4a5e' : '#8a5a32', INK, 1.2);
     ell(g, 0, -4, 6, 2.4, '#d8b07a');
     if (type === 'snowpine') ell(g, 0, -5, 5, 2, '#f4f8ff');
-  } else if (type === 'rock' || type === 'iron' || type === 'moonrock' || type === 'crystal') {
+  } else if (type === 'rock' || type === 'iron' || type === 'moonrock' || type === 'crystal' || type === 'magicore') {
     const c = type === 'crystal' ? '#8ad8f0' : '#9a968e';
     circ(g, -4, -2, 3, c, INK, 1); circ(g, 4, -1.5, 2.4, c, INK, 1); circ(g, 0, -4, 2, c, INK, 1);
   } else if (type === 'bush' || type === 'sunflower') {
@@ -1163,6 +1304,34 @@ function drawStruct(g, s, t, st) {
       poly(g, [cx - 12, by, cx + 12, by, cx, by - 30], '#3a2418', INK, 1.4);
       rrect(g, x + w - 6, by - 16, 22, 16, 2, '#a8743f', INK, 1.4);
       g.font = '12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('🧺', x + w + 5, by - 22);
+      break;
+    }
+    case 'lifetree': {
+      /* 命の大樹: 平原のまん中の 大きな木。根もとが ほんのり みどりに光る */
+      const glow = 0.25 + Math.sin(t * 2) * 0.12;
+      shadow(g, cx, by, w * 0.9, 14);
+      g.globalAlpha = glow; circ(g, cx, by - 8, 46, '#b8ff8a'); g.globalAlpha = 1;
+      for (const s2 of [-1, 1]) { g.beginPath(); g.moveTo(cx + s2 * 8, by - 20); g.quadraticCurveTo(cx + s2 * 24, by - 6, cx + s2 * 34, by + 2); g.lineTo(cx + s2 * 22, by + 2); g.quadraticCurveTo(cx + s2 * 14, by - 6, cx + s2 * 4, by - 10); g.closePath(); g.fillStyle = '#7a5434'; g.fill(); g.strokeStyle = INK; g.lineWidth = 1.6; g.stroke(); }
+      rrect(g, cx - 14, by - 110, 28, 108, 10, '#8a6040', INK, 2);
+      for (let i = 0; i < 4; i++) line(g, cx - 8 + i * 5, by - 100, cx - 9 + i * 5, by - 12, 'rgba(60,30,10,.3)', 1.6);
+      line(g, cx, by - 90, cx - 34, by - 128, '#7a5434', 8); line(g, cx, by - 96, cx + 30, by - 136, '#7a5434', 7);
+      for (const [dx, dy, r, c] of [[-46, -132, 30, '#4e9a3a'], [44, -138, 30, '#4e9a3a'], [0, -150, 40, '#5aaa42'], [-26, -168, 26, '#6aba4a'], [26, -170, 26, '#6aba4a'], [0, -186, 22, '#78c856']]) circ(g, cx + dx, by + dy, r, c, INK, 1.6);
+      for (let i = 0; i < 7; i++) { const a = t * 0.6 + i * 0.9; g.globalAlpha = 0.5 + Math.sin(t * 3 + i) * 0.4; circ(g, cx + Math.cos(a) * 40, by - 120 - ((t * 16 + i * 30) % 90), 2.2, '#e8ffb0'); }
+      g.globalAlpha = 1;
+      g.beginPath(); g.ellipse(cx, by - 26, 7, 11, 0, 0, TAU); g.fillStyle = '#3a2414'; g.fill();
+      g.globalAlpha = 0.6 + Math.sin(t * 3) * 0.3; circ(g, cx, by - 26, 4, '#b8ff8a'); g.globalAlpha = 1;
+      break;
+    }
+    case 'ruin': {
+      /* 古い石切り場の あと: くずれた石の柱と 切りだした石 */
+      shadow(g, cx, by, w * 0.6, 10);
+      for (const [dx, hh] of [[-44, 70], [-14, 92], [18, 54], [46, 78]]) {
+        rrect(g, cx + dx - 10, by - hh, 20, hh, 3, '#8a8478', INK, 1.6);
+        for (let k = 14; k < hh; k += 16) line(g, cx + dx - 10, by - k, cx + dx + 10, by - k, 'rgba(0,0,0,.22)', 1);
+        poly(g, [cx + dx - 10, by - hh, cx + dx - 4, by - hh - 6, cx + dx + 6, by - hh - 2, cx + dx + 10, by - hh], '#9a9488', INK, 1.2);
+      }
+      rrect(g, cx - 30, by - 14, 24, 14, 2, '#a09a8c', INK, 1.4); rrect(g, cx + 8, by - 12, 30, 12, 2, '#a09a8c', INK, 1.4);
+      for (const [dx, dy] of [[-40, -40], [20, -28], [-10, -64]]) ell(g, cx + dx, by + dy, 6, 2.5, '#6a9a4a');
       break;
     }
     case 'campfire': {

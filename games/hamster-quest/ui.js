@@ -1,5 +1,5 @@
 /* =========================================================================
-   ハムスターの冒険 ― 画面の部品
+   ネズミの冒険 ― 画面の部品
    HUD / カバン (もちもの・つくる・そうび・まほう) / 店 / 地図 / メニュー / 会話
    ========================================================================= */
 'use strict';
@@ -214,8 +214,8 @@ const UI = {
     if (this.tab === 'craft') {
       let h = '<p class="hint">集めた材料で つくろう。いつでも どこでも つくれます。</p><div class="list">';
       const rows = RECIPES.map((r) => {
-        const gear = GEAR[r.out], item = ITEMS[r.out];
-        const owned = gear && G.owned.has(r.out);
+        const gear = GEAR[r.out], item = r.ally ? ALLIES[r.out] : ITEMS[r.out];
+        const owned = (gear && G.owned.has(r.out)) || (r.ally && Critters.allyCount(r.out) >= ALLIES[r.out].max);
         const ok = Game.hasAll(r.need);
         return { r, gear, item, owned, ok };
       });
@@ -226,8 +226,9 @@ const UI = {
           const have = Game.count(k);
           return `<span class="${have >= v ? 'ok' : 'ng'}">${ITEMS[k].icon}${esc(ITEMS[k].name)} ${Math.min(have, v)}/${v}</span>`;
         }).join('');
-        h += `<div class="card ${owned ? 'done' : ok ? 'ready' : ''}"><div class="cicon">${icon}</div><div class="cmain"><div class="cname">${esc(name)} <small>${this.statText(r.out)}</small></div><div class="need">${need}</div></div>` +
-          (owned ? '<span class="tag">もってる</span>' : `<button class="btn ${ok ? 'primary' : 'ghost'}" data-craft="${RECIPES.indexOf(r)}" ${ok ? '' : 'disabled'}>つくる</button>`) + '</div>';
+        const sub = r.ally ? `なかま ${Critters.allyCount(r.out)}/${item.max}` : this.statText(r.out);
+        h += `<div class="card ${owned ? 'done' : ok ? 'ready' : ''}"><div class="cicon">${icon}</div><div class="cmain"><div class="cname">${esc(name)} <small>${sub}</small></div><div class="need">${need}</div></div>` +
+          (owned ? `<span class="tag">${r.ally ? 'いっぱい' : 'もってる'}</span>` : `<button class="btn ${ok ? 'primary' : 'ghost'}" data-craft="${RECIPES.indexOf(r)}" ${ok ? '' : 'disabled'}>つくる</button>`) + '</div>';
       }
       return h + '</div>';
     }
@@ -430,7 +431,7 @@ const UI = {
     }
     g.fillStyle = '#fff'; g.font = 'bold 11px "Hiragino Maru Gothic ProN", sans-serif';
     const name = (x, y, s) => { if (!G.reveal[Math.floor(y / CELL) * CW + Math.floor(x / CELL)]) return; g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 3; g.strokeText(s, x * sc, y * sc); g.fillText(s, x * sc, y * sc); };
-    name(28, 60, 'ひまわりの森'); name(72, 70, 'ほおぶくろタウン'); name(72, 22, 'かがみ湖'); name(74, 34, '→ 湖の王国'); name(112, 64, 'ゴツゴツ山'); name(141, 90, 'きりの谷'); name(176, 80, '月の野原');
+    name(28, 60, 'ひまわりの森'); name(72, 70, 'ほおぶくろタウン'); name(72, 22, 'かがみ湖'); name(74, 34, '→ 湖の王国'); name(112, 64, 'ゴツゴツ山'); name(141, 90, 'きりの谷'); name(176, 80, '月の野原'); name(50, 166, 'ひだまり平原'); name(150, 168, '古い石切り場');
     if (G.target && G.target.map === 'over') { g.fillStyle = '#ffd84a'; lab(G.target.x / TILE, G.target.y / TILE, '★', 16); }
     const px = G.p.x / TILE * sc, py = G.p.y / TILE * sc;
     g.fillStyle = '#ff5a5a'; g.strokeStyle = '#fff'; g.lineWidth = 2;

@@ -1,5 +1,5 @@
 /* =========================================================================
-   ハムスターの冒険 ― 画面に描く
+   ネズミの冒険 ― 画面に描く
    カメラ / 地面のかたまり (チャンク) / 奥行きの順 / 天気 / 地図の絵
    ========================================================================= */
 'use strict';
@@ -133,7 +133,7 @@ const R = {
     for (const n of G.npcs) if (n.map === m.id) list.push({ y: n.y, k: 3, o: n });
     for (const e of G.mobs) list.push({ y: e.y, k: 4, o: e });
     for (const c of G.critters || []) list.push({ y: c.y, k: 7, o: c });
-    if (G.pet) list.push({ y: G.pet.y, k: 8, o: G.pet });
+    for (const pet of G.pets) if (!pet.home || m.kind === 'over') list.push({ y: pet.y, k: 8, o: pet });
     if (G.boss) list.push({ y: G.boss.y, k: 5, o: G.boss });
     list.push({ y: G.p.y, k: 6, o: G.p });
     list.sort((a, b) => a.y - b.y);
@@ -148,7 +148,7 @@ const R = {
         case 6: this.drawPlayer(g, G); break;
         case 7: {
           const c = it.o, d = CRITTERS[c.type];
-          const friend = d.ride || d.pet === 'tame' || d.milk;
+          const friend = d.ride || d.food || d.milk;
           drawCritter(g, c, this.t, { heart: friend && !G.ride && dist(c.x, c.y, G.p.x, G.p.y) < 70 });
           break;
         }
@@ -238,6 +238,14 @@ const R = {
   },
 
   drawNpc(g, n) {
+    if (n.role === 'knight') {
+      /* 王国の兵士は 主人公と同じ ネズミ。陣羽織と かぶとと 盾で 兵士らしく */
+      drawMouse(g, n.x, n.y, {
+        face: n.face, t: this.t + n.seed, moving: n.moving, furKey: n.fur, bag: 'none', weapon: n.weapon, soldier: n.id === 'garde' ? 'captain' : 'guard',
+        swing: n.swing >= 0 ? n.swing : -1, aim: n.aim || 0, roll: -1, cheek: 0, seed: n.seed, scale: 1.12,
+      });
+      return;
+    }
     const f = FURS[n.fur] || FURS.cream;
     drawHamster(g, n.x, n.y, {
       face: n.face, t: this.t + n.seed, moving: n.moving, fur: f[0], belly: f[1], body: n.body, hat: n.hat,
