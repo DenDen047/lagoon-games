@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>MECH FRONTIER ― ロボと くらす みらいの まち</title>
-<meta name="description" content="ちょっと未来の街でロボットに乗って自由にくらす 3D ゲーム。素材を集めて自分でメカを組み立て、50 種類のメカやぶきをそろえ、しごとでかせいで家や基地を建て、飛行機で空も飛べる。終わりはなし。">
+<title>MECH FRONTIER ― ロボと暮らす未来の街</title>
+<meta name="description" content="近未来の街でロボットに乗って自由に暮らす 3D ゲーム。素材を集めてメカを自作し、50 種類のメカと武器をそろえ、仕事で稼いで家を買い、服を着替え、車や飛行機に乗る。家に忍び込めば警察に追われる。終わりはない。">
 <link rel="stylesheet" href="style.css" />
+<script type="importmap">{ "imports": { "three": "./lib/three/three.module.js" } }</script>
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -14,60 +15,68 @@
 <!-- ============ タイトル ============ -->
 <div id="title">
   <h1><span>MECH</span> FRONTIER</h1>
-  <p class="sub">ロボと くらす みらいの まち</p>
+  <p class="sub">ロボと暮らす未来の街</p>
   <div class="tBtns">
-    <button id="btnCont" class="btn big hidden">つづきから</button>
+    <button id="btnCont" class="btn big hidden">続きから</button>
     <button id="btnNew" class="btn big">はじめる</button>
   </div>
-  <p class="tHelp">W A S D で うごく ・ マウスで みる ・ E で のる / はなす ・ Esc で あそびかた<br>セーブは じどう。データは この たんまつの ブラウザにだけ のこります。</p>
+  <p class="tHelp"><kbd>W A S D</kbd> 移動　<kbd>マウス</kbd> 視点　<kbd>E</kbd> 乗る・使う　<kbd>Esc</kbd> メニュー</p>
 </div>
 
-<!-- ============ あそんでいる ときの 画面 ============ -->
+<!-- ============ 遊んでいる ときの 画面 ============ -->
 <div id="hud" class="hidden">
   <div id="vig"></div>
   <div id="cross"></div>
   <div id="labels"></div>
   <div id="topL">
     <div class="pill" data-ic="money"><b id="money">0</b></div>
-    <div class="pill mats"><span data-ic="scrap"><b id="m_scrap">0</b></span><span data-ic="iron"><b id="m_iron">0</b></span><span data-ic="core"><b id="m_core">0</b></span><span data-ic="rare"><b id="m_rare">0</b></span><span data-ic="kit"><b id="kits">0</b></span></div>
-    <div class="pill" data-ic="star">ランク <b id="rank">1</b><div class="bar xp"><i id="xpBar"></i></div></div>
+    <div class="pill mats"><span data-ic="scrap"><b id="m_scrap">0</b></span><span data-ic="iron"><b id="m_iron">0</b></span><span data-ic="core"><b id="m_core">0</b></span><span data-ic="rare"><b id="m_rare">0</b></span></div>
+    <div class="pill" data-ic="star"><b id="rank">1</b><div class="bar xp"><i id="xpBar"></i></div></div>
+    <div class="pill hidden" id="lootRow" data-ic="bag"><b id="loot">0</b></div>
   </div>
-  <div id="quest" class="hidden"><span id="qText"></span><span id="qNav"><i id="qArrow"></i><b id="qDist"></b></span></div>
-  <div id="lock" class="hidden"><b id="lockName"></b><div class="bar en"><i id="lockBar"></i></div></div>
-  <div id="topR"><canvas id="map" width="170" height="170"></canvas><div id="clock"></div><button id="btnPause" class="btn small">メニュー (Esc)</button></div>
+  <div id="topC">
+    <div id="quest" class="hidden"><span id="qText"></span><span id="qNav"><i id="qArrow"></i><b id="qDist"></b></span></div>
+    <div id="wanted" class="hidden"></div>
+    <div id="lock" class="hidden"><b id="lockName"></b><div class="bar en"><i id="lockBar"></i></div></div>
+    <div id="sus" class="hidden" data-ic="eye"><div class="bar su"><i id="susBar"></i></div></div>
+  </div>
+  <div id="topR"><canvas id="map" width="170" height="170"></canvas><div id="clock"></div><button id="btnPause" class="btn small">メニュー</button></div>
   <div id="toasts"></div>
   <div id="gains"></div>
   <div id="prompt" class="hidden"></div>
-  <div id="clickHint" class="hidden">がめんを クリックすると そうさ できる</div>
+  <div id="clickHint" class="hidden">クリックで操作開始</div>
   <div id="botL">
     <div id="vehRow" class="hidden"><small id="vehName"></small><div class="bar veh"><i id="vhBar"></i></div></div>
-    <div><small data-ic="heart">パイロット</small><div class="bar hp"><i id="hpBar"></i></div></div>
+    <div class="stat" data-ic="heart"><div class="bar hp"><i id="hpBar"></i></div></div>
+    <div class="stat" id="fdRow" data-ic="food"><div class="bar fd"><i id="fdBar"></i></div></div>
+    <div class="stat" id="enRow" data-ic="bolt"><div class="bar eg"><i id="enBar"></i></div></div>
     <div id="weap"></div>
   </div>
   <div id="buildbar" class="hidden"></div>
   <div id="touch" class="hidden">
     <div id="stick"><i></i></div>
     <div id="tbtns">
-      <button data-k="KeyE" class="tb">E</button><button data-k="KeyR" class="tb">へんけい</button><button data-k="KeyC" class="tb">よぶ</button>
-      <button data-k="KeyQ" class="tb">かいてん</button><button data-k="ShiftLeft" class="tb">ダッシュ</button><button data-k="KeyF" class="tb">きる</button>
-      <button data-k="sub" class="tb">サブ</button><button data-k="Space" class="tb">ジャンプ</button><button data-k="fire" class="tb big">うつ</button>
+      <button data-k="KeyE" class="tb">E</button><button data-k="KeyR" class="tb">変形</button><button data-k="KeyC" class="tb">呼ぶ</button>
+      <button data-k="KeyQ" class="tb">回転</button><button data-k="ShiftLeft" class="tb">ダッシュ</button><button data-k="KeyF" class="tb">近接</button>
+      <button data-k="sub" class="tb">サブ</button><button data-k="Space" class="tb">ジャンプ</button><button data-k="fire" class="tb big">射撃</button>
     </div>
   </div>
 </div>
 
 <!-- ============ メニュー ============ -->
 <div id="menu" class="hidden">
-  <header><h2 id="mTitle"></h2><div id="mWallet"></div><button id="mClose" class="btn small">とじる (Esc)</button></header>
+  <header><h2 id="mTitle"></h2><div id="mWallet"></div><button id="mClose" class="btn small">閉じる</button></header>
   <nav id="mTabs"></nav>
   <main id="mBody"></main>
 </div>
 
-<script src="gl.js"></script>
 <script src="data.js"></script>
 <script src="world.js"></script>
 <script src="models.js"></script>
 <script src="game.js"></script>
+<script src="life.js"></script>
 <script src="ui.js"></script>
 <script src="main.js"></script>
+<script type="module" src="gl.js"></script>
 </body>
 </html>

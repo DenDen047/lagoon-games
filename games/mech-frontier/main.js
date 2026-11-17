@@ -1,22 +1,23 @@
-/* MECH FRONTIER の入口: 入力・メインループ・タイトル・自動の画質調整 */
+/* MECH FRONTIER の入口: 入力・メインループ・タイトル・自動の画質調整。
+   描画エンジン (gl.js、ES モジュール) が 読みこまれたあとに boot() を 呼ぶ。 */
 'use strict';
-(() => {
+function fail(msg) { const e = document.getElementById('err'); e.textContent = msg; e.classList.remove('hidden'); }
+window.addEventListener('error', (e) => fail('エラー: ' + (e.message || '読みこみに失敗') + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
+function boot() {
   const $ = (id) => document.getElementById(id);
   const cv = $('game');
   const touch = 'ontouchstart' in window && navigator.maxTouchPoints > 0;
   let demo = [];
 
-  function fail(msg) { $('err').textContent = msg; $('err').classList.remove('hidden'); }
-  window.addEventListener('error', (e) => fail('エラー: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
 
-  if (!R.init(cv)) { $('title').querySelector('.tBtns').classList.add('hidden'); fail('この ブラウザは WebGL2 に たいおうしていないため あそべません。あたらしい Chrome / Safari / Edge で ひらいてください。'); return; }
+  if (!R.init(cv)) { $('title').querySelector('.tBtns').classList.add('hidden'); fail('このブラウザは WebGL2 に対応していないため遊べません。新しい Chrome / Safari / Edge で開いてください。'); return; }
   const had = load();
   R.shadowQ = SV.q.shadow;
   W.build(); UI.init();
   startGame(); G.running = false; G.title = true; P.human.hidden = true;
   [[45, 0, 0], [12, -6, 3], [2, 6, 2], [22, -1, 7], [27, 3, -6]].forEach(([f, x, z], i) => { const m = mkMech(FRAMES[f], 2, x, z); m.parked = true; m.citizen = true; m.yaw = m.aimYaw = i * 1.3; m.load = { main: 'mg', sub: i === 1 ? 'tower' : null, melee: 'sword' }; ents.push(m); demo.push(m); });
   $('btnCont').classList.toggle('hidden', !had);
-  $('btnNew').textContent = had ? 'さいしょから' : 'はじめる';
+  $('btnNew').textContent = had ? '最初から' : 'はじめる';
 
   function begin(fresh) {
     for (const p of SV.pieces) if (p.boxes) for (const b of p.boxes) W.removeBox(b);
@@ -26,9 +27,9 @@
     $('title').classList.add('hidden'); $('hud').classList.remove('hidden'); if (touch) $('touch').classList.remove('hidden');
     try { sfx('ui'); if (AC && AC.state === 'suspended') AC.resume(); } catch (e) { /* 音なしで つづける */ }
     if (!touch && cv.requestPointerLock) cv.requestPointerLock();
-    if (!had || fresh) UI.toast('ようこそ！ まずは きたの スクラップおきばへ。きいろい ひかりが めじるし');
+    if (!had || fresh) UI.toast('黄色い光が次の目標');
   }
-  $('btnNew').onclick = function () { if (had && !this.dataset.sure) { this.dataset.sure = 1; this.textContent = 'ほんとうに さいしょから (データは きえる)'; return; } begin(true); };
+  $('btnNew').onclick = function () { if (had && !this.dataset.sure) { this.dataset.sure = 1; this.textContent = '本当に最初から (データは消える)'; return; } begin(true); };
   $('btnCont').onclick = () => begin(false);
   $('btnPause').onclick = () => UI.open('pause');
 
@@ -134,14 +135,20 @@
       G.build.on = true; UI.buildBar();
     } else if (name === 'alley') { spawnGroup(true); const a = G.groups[0].alley; h.x = a.x; h.z = a.z + 12; cam.yaw = Math.PI; cam.pitch = -.05; SV.time = .5; }
     else if (name.startsWith('menu')) { give(11); UI.open(name.split('-')[1] || 'workshop'); if (name.split('-')[2]) { UI.tab = name.split('-')[2]; UI.redraw(); } }
-    else if (name === 'city') { cam.yaw = 2.2; cam.pitch = .12; }
+    else if (name === 'city') { h.x = 30; h.z = 26; cam.yaw = 2.6; cam.pitch = .05; }
+    else if (name === 'town') { h.x = 320; h.z = -420; cam.yaw = .6; cam.pitch = -.05; }
+    else if (name === 'house') { const hs = W.houses[0]; h.x = hs.x - 3.5; h.z = hs.z + 2.5 * hs.f; h.y = .15; cam.yaw = hs.f > 0 ? 2.6 : .5; cam.pitch = -.25; }
+    else if (name === 'car') { h.x = 31; h.z = 40; enterCar(mkCar(31, 44, Math.PI, false)); cam.yaw = Math.PI; cam.pitch = -.12; }
+    else if (name === 'beach') { h.x = 780; h.z = 200; h.y = .5; cam.yaw = 2.4; cam.pitch = -.1; }
+    else if (name === 'farm') { h.x = -430; h.z = -330; cam.yaw = 3.4; cam.pitch = -.15; }
+    else if (name === 'wanted') { h.x = 30; h.z = 26; cam.yaw = 2.6; addWanted(2); for (let i = 0; i < 6; i++) spawnPolice(); }
     for (let i = 0; i < 40; i++) step(.016);
   }
   function selfTest() {
     const log = []; const run = (label, fn) => { try { fn(); log.push('OK   ' + label); } catch (e) { log.push('FAIL ' + label + ': ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n')); } };
     const sim = (n, keys) => { for (let i = 0; i < n; i++) { IN.k = {}; for (const k of keys) IN.k[k] = true; if (i % 37 === 0) for (const k of ['Space', 'ShiftLeft', 'KeyQ', 'KeyF', 'KeyR']) IN.hit[k] = true; IN.fire = i % 50 < 30; IN.sub = i % 80 < 20; IN.mdx = Math.sin(i * .05) * 6; step(.016); } };
     run('あるく・うつ', () => { debugSetup('city'); sim(400, ['KeyW']); });
-    run('ざいりょうを ほる', () => { const n = W.nodes[0]; P.human.x = n.x + 1; P.human.z = n.z; const s0 = SV.mats.scrap; for (let i = 0; i < 6; i++) { melee(P.human, false); P.human.mcd = 0; } if (SV.mats.scrap <= s0) throw new Error('スクラップが ふえない'); });
+    run('ざいりょうを ほる', () => { const n = W.nodes.find(q => q.type === 'scrap'); P.human.x = n.x + 1; P.human.z = n.z; const s0 = SV.mats.scrap; for (let i = 0; i < 6; i++) { melee(P.human, false); P.human.mcd = 0; } if (SV.mats.scrap <= s0) throw new Error('スクラップが ふえない'); });
     for (let i = 0; i < FRAMES.length; i++) run('メカ ' + FRAMES[i].name, () => {
       debugSetup('city'); const f = FRAMES[i]; SV.mechs.push(Object.assign({ fid: f.id }, f)); SV.active = 0; P.human.x = 0; P.human.z = 330; spawnPlayerMech(4, 330); enterMech();
       SV.load.main = WLIST.filter(w => w.kind === 'gun')[i % 12].id; SV.load.sub = i % 3 ? WLIST.filter(w => w.kind !== 'melee')[i % 15].id : null; if (SV.load.sub === SV.load.main) SV.load.sub = 'shield'; SV.load.melee = WLIST.filter(w => w.kind === 'melee')[i % 6].id;
@@ -150,10 +157,38 @@
     run('ひこうき', () => { debugSetup('plane'); sim(500, ['KeyW']); exitVehicle(false); sim(200, []); if (!isFinite(P.human.y)) throw new Error('位置が こわれた'); });
     run('りりく', () => { debugSetup('city'); const p = G.planes[0]; enterPlane(p); for (let i = 0; i < 900; i++) { IN.k = { KeyW: true }; IN.mdy = i > 400 ? -1 : 0; step(.016); } if (p.y < 5) throw new Error('とびたてない y=' + p.y.toFixed(1) + ' v=' + p.speed.toFixed(1)); });
     run('たてる', () => { debugSetup('base'); sim(120, ['KeyS']); const p = SV.pieces[0]; removePiece(p); });
-    run('しごと', () => { debugSetup('city'); SV.mechs.push(Object.assign({}, FRAMES[0])); for (const j of ['deliver', 'bounty', 'dealer']) { startJob(j); sim(60, ['KeyW']); if (!G.job) throw new Error(j + ' が はじまらない'); if (j === 'deliver') { P.human.x = G.job.a.x; P.human.z = G.job.a.z; sim(5, []); P.human.x = G.job.b.x; P.human.z = G.job.b.z; sim(5, []); if (G.job) throw new Error('はいたつが おわらない'); } else if (j === 'bounty') { hurt(G.job.target, 1e9, P.human); if (G.job) throw new Error('たいじが おわらない'); } else { for (const m of G.job.group.members.slice()) hurt(m, 1e9, P.human); if (G.job) throw new Error('やみしょうにんが おわらない'); } } });
+    run('仕事', () => {
+      debugSetup('city'); SV.mechs.push(Object.assign({}, FRAMES[0]));
+      for (const j of JOBS) {
+        startJob(j.id); if (!G.job) throw new Error(j.id + ' が始まらない');
+        if (j.id === 'taxi') enterCar(mkCar(P.human.x + 3, P.human.z, 0, false));
+        if (G.job.pts) { for (let k = 0; k < 12 && G.job; k++) { const p = jobPoints()[0]; const b = body(); b.x = p.x; b.z = p.z; sim(3, []); } }
+        else if (G.job.farm) { for (const n of W.nodes) if (n.type === 'crop' && G.job) mine(n, 1); }
+        else if (G.job.target) hurt(G.job.target, 1e9, P.human);
+        else for (const e of G.job.group.members.slice()) hurt(e, 1e9, P.human);
+        if (G.job) throw new Error(j.id + ' が終わらない');
+        if (P.state !== 'foot') exitVehicle(false);
+      }
+    });
+    run('車', () => { debugSetup('car'); sim(500, ['KeyW', 'KeyD']); if (!isFinite(P.car.x + P.car.z)) throw new Error('位置が壊れた'); exitVehicle(false); sim(60, []); for (let i = 0; i < 1500; i++) step(.033); const t = G.cars.filter(c => c.traffic); if (t.length < 8) throw new Error('交通が少ない ' + t.length); for (const c of t) if (Math.abs(c.x) > 205 || Math.abs(c.z) > 205) throw new Error('車が街の外へ出た'); });
+    run('住人と手配', () => {
+      debugSetup('city'); for (let i = 0; i < 200; i++) step(.033);
+      const cs = ents.filter(e => e.citizen && !e.resident && Math.hypot(e.x - P.human.x, e.z - P.human.z) < 200); if (cs.length < 20) throw new Error('近くの住人が少ない ' + cs.length);
+      const x0 = cs[0].x, z0 = cs[0].z; for (let i = 0; i < 120; i++) step(.033); if (!cs.some(c => Math.hypot(c.x - x0, c.z - z0) > .5 || c !== cs[0])) throw new Error('歩いていない');
+      hurt(cs[1], 10, P.human); if (G.wanted !== 1) throw new Error('攻撃で手配されない'); hurt(cs[1], 999, P.human); if (!cs[1].down || G.wanted < 2) throw new Error('倒れない');
+      for (let i = 0; i < 300; i++) step(.033); if (!ents.some(e => e.police)) throw new Error('警察が来ない');
+      hurt(P.human, 1e9, null); sim(260, []); if (G.wanted || ents.some(e => e.police)) throw new Error('逮捕後も手配が残る');
+    });
+    run('家と泥棒', () => {
+      debugSetup('house'); const hs = W.houseAt(P.human.x, P.human.z); if (!hs) throw new Error('家の中にいない');
+      sim(30, []); const l = hs.loot[0]; if (l) { P.human.x = l.x; P.human.z = l.z + .8; sim(2, []); steal(hs, l); if (!SV.loot) throw new Error('盗めない'); }
+      SV.time = .9; for (let i = 0; i < 60; i++) step(.033); const h2 = W.houses.find(h => h.res && !h.sale); if (!h2) throw new Error('夜に住人がいない');
+      P.human.x = h2.res.x + 1; P.human.z = h2.res.z; h2.res.asleep = false; for (let i = 0; i < 200 && !G.wanted; i++) step(.033); if (!G.wanted) throw new Error('見つからない');
+      const s = W.houses.find(h => h.sale); buyHouse(s); if (SV.home !== s.id) throw new Error('家が買えない'); sleep({ x: s.bed.x, y: .15, z: s.bed.z });
+    });
     run('やられる・ふっかつ', () => { debugSetup('city'); hurt(P.human, 1e9, null); sim(260, []); if (P.human.dead || P.human.hp <= 0) throw new Error('ふっかつ しない'); });
     run('メカが こわれる', () => { debugSetup('mech'); hurt(P.mech, 1e9, null); if (P.state !== 'foot') throw new Error('だっしゅつ しない'); for (let i = 0; i < 2700; i++) step(.016); if (P.mech.dead) throw new Error('しゅうり されない'); });
-    run('メニュー', () => { debugSetup('city'); for (const id of ['workshop', 'mechshop', 'weapons', 'jobs', 'factory', 'food', 'mats', 'airport', 'pause']) { UI.open(id); document.querySelectorAll('#mTabs .tab').forEach(t => t.click()); document.querySelectorAll('#mBody .opt').forEach((b, i) => { if (i < 6) b.click(); }); UI.close(); } });
+    run('メニュー', () => { debugSetup('city'); for (const id of ['workshop', 'mechshop', 'weapons', 'jobs', 'factory', 'food', 'mats', 'clothes', 'wardrobe', 'fence', 'pier', 'airport', 'bag', 'pause']) { UI.open(id); const n = document.querySelectorAll('#mTabs .tab').length; for (let t = 0; t < Math.max(1, n); t++) { if (n) document.querySelectorAll('#mTabs .tab')[t].click(); const k = document.querySelectorAll('#mBody .opt').length; for (let i = 0; i < Math.min(k, 40); i++) { const b = document.querySelectorAll('#mBody .opt')[i]; if (b) b.click(); } document.querySelectorAll('#mBody .sw button').forEach((b, i) => { if (i % 7 === 0) b.click(); }); } UI.close(); } });
     run('じさく', () => { debugSetup('city'); SV.mechs = []; UI.open('workshop'); UI.tab = 'custom'; UI.redraw(); document.querySelector('#mBody .btn.big').click(); if (SV.mechs.length !== 1 || !P.mech) throw new Error('メカが できない'); UI.close(); });
     run('よる・ながい じかん', () => { debugSetup('mech'); for (let i = 0; i < 3000; i++) { IN.k = { KeyW: true }; IN.fire = true; step(.033); } });
     const pre = document.createElement('pre'); pre.id = 'testOut'; pre.textContent = log.filter(l => l.startsWith('FAIL')).length + ' FAIL / ' + log.length + '\n' + log.filter(l => l.startsWith('FAIL')).join('\n'); document.body.appendChild(pre);
@@ -163,4 +198,4 @@
   if (qs.get('dbg')) { const d = document.createElement('div'); d.id = 'dbg'; document.body.appendChild(d); }
   step(.016);   // 読みこみ直後にも 1 コマ 描いておく (サムネイル用)
   requestAnimationFrame(frame);
-})();
+}

@@ -4,7 +4,7 @@
 
 **▶ [一覧ページを開く](https://denden047.github.io/lagoon-games/)**
 
-すべて素の HTML + Canvas + JavaScript で書かれていて、ビルド工程も外部ライブラリもありません。セーブデータは各端末のブラウザ (localStorage) にだけ残り、サーバーには送られません。
+素の HTML + Canvas + JavaScript で書かれていて、ビルド工程はありません。外部ライブラリを使うゲームは一部だけで、使っているものは [CREDITS.md](CREDITS.md) に載せ、ファイルごとリポジトリに同梱しています。セーブデータは各端末のブラウザ (localStorage) にだけ残り、サーバーには送られません。
 
 ## ローカルで動かす
 

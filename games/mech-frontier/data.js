@@ -11,7 +11,7 @@ const seeded = (a) => () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a
 // ざいりょう
 const MATS = {
   scrap: { name: 'スクラップ', icon: '[scrap]', sell: 6, buy: 20 },
-  iron: { name: 'てっこう', icon: '[iron]', sell: 18, buy: 55 },
+  iron: { name: '鉄鉱', icon: '[iron]', sell: 18, buy: 55 },
   core: { name: 'エネルギーコア', icon: '[core]', sell: 70, buy: 220 },
   rare: { name: 'レアパーツ', icon: '[rare]', sell: 300, buy: 0 },
 };
@@ -21,19 +21,19 @@ const costText = (c) => MAT_KEYS.filter(k => c[k]).map(k => MATS[k].icon + c[k])
 // メカの色
 const PAL = [0xd8dde6, 0x39414f, 0xe04a3a, 0xf28c28, 0xf2d13a, 0x58c44e, 0x2fa98c, 0x3fa7e8, 0x3558d6, 0x8a55e0,
   0xe060b8, 0x8b5a3c, 0x9aa7b5, 0x1d2026, 0xf6f6f2, 0x7fe0e8];
-const PAL_NAMES = ['しろ', 'グレー', 'あか', 'オレンジ', 'きいろ', 'みどり', 'ふかみどり', 'みずいろ', 'あお', 'むらさき', 'ピンク', 'ちゃいろ', 'ぎんいろ', 'くろ', 'ミルク', 'ひかりいろ'];
+const PAL_NAMES = ['白', 'グレー', '赤', 'オレンジ', '黄', '緑', '深緑', '水色', '青', '紫', 'ピンク', '茶', '銀', '黒', 'ミルク', 'シアン'];
 
 /* パーツ。じさくメカは この 4 しゅるいを くみあわせる。
    spd: はやさ(m/秒) / jump: ジャンプ力 / hp: たいりょく / cost: つくる ざいりょう */
 const PARTS = {
   legs: [
-    { name: 'にそくあし', hp: 90, spd: 11, jump: 13, turn: 5, cost: { scrap: 6 } },
-    { name: 'ぎゃくかんせつ', hp: 70, spd: 14, jump: 18, turn: 6, cost: { scrap: 14, iron: 4 } },
-    { name: 'よんきゃく', hp: 120, spd: 10, jump: 11, turn: 5, cost: { scrap: 16, iron: 6 } },
+    { name: '二足', hp: 90, spd: 11, jump: 13, turn: 5, cost: { scrap: 6 } },
+    { name: '逆関節', hp: 70, spd: 14, jump: 18, turn: 6, cost: { scrap: 14, iron: 4 } },
+    { name: '四脚', hp: 120, spd: 10, jump: 11, turn: 5, cost: { scrap: 16, iron: 6 } },
     { name: 'キャタピラ', hp: 190, spd: 8, jump: 6, turn: 2.6, cost: { scrap: 20, iron: 10 } },
     { name: 'ホバー', hp: 60, spd: 15, jump: 12, turn: 6, cost: { scrap: 16, iron: 6, core: 3 } },
-    { name: 'クモあし', hp: 100, spd: 13, jump: 15, turn: 7, cost: { scrap: 22, iron: 8, core: 1 } },
-    { name: 'じゅうそうあし', hp: 220, spd: 7.5, jump: 9, turn: 3, cost: { scrap: 30, iron: 16, core: 2 } },
+    { name: 'クモ脚', hp: 100, spd: 13, jump: 15, turn: 7, cost: { scrap: 22, iron: 8, core: 1 } },
+    { name: '重装脚', hp: 220, spd: 7.5, jump: 9, turn: 3, cost: { scrap: 30, iron: 16, core: 2 } },
     { name: 'タイヤ', hp: 80, spd: 18, jump: 8, turn: 4, cost: { scrap: 14, iron: 8 } },
   ],
   body: [
@@ -51,7 +51,7 @@ const PARTS = {
     { name: 'ドーム', hp: 40, cost: { scrap: 8, iron: 2 } },
     { name: 'モノアイ', hp: 30, cost: { scrap: 8, iron: 2 } },
     { name: 'センサー', hp: 25, cost: { scrap: 8, core: 1 } },
-    { name: 'ツノつき', hp: 45, cost: { scrap: 12, iron: 4 } },
+    { name: 'ツノ付き', hp: 45, cost: { scrap: 12, iron: 4 } },
     { name: 'キャノピー', hp: 35, cost: { scrap: 10, iron: 3, core: 1 } },
   ],
   arms: [
@@ -64,7 +64,7 @@ const PARTS = {
   ],
 };
 const PART_KEYS = ['head', 'body', 'arms', 'legs'];
-const PART_LABEL = { head: 'コックピット', body: 'からだ', arms: 'うで', legs: 'あし' };
+const PART_LABEL = { head: 'コックピット', body: '胴体', arms: '腕', legs: '脚' };
 
 /* メカ 50 種: [なまえ, あし, からだ, あたま, うで, 大きさ, 色1, 色2, ねだん] */
 const FRAMES = [
@@ -101,7 +101,7 @@ const FRAMES = [
 ].map((r, i) => ({ id: i, name: r[0], legs: r[1], body: r[2], head: r[3], arms: r[4], size: r[5], c1: r[6], c2: r[7], price: r[8] }));
 
 const mechKind = (s) => s.body === 4 ? 'titan' : (s.body === 3 && s.legs === 2) ? 'ball' : '';
-const BALL_MODES = ['あるく', 'ころがる', 'ほうだい', 'コマ'];
+const BALL_MODES = ['歩行', '回転', '砲台', 'コマ'];
 function mechStats(s) {
   const L = PARTS.legs[s.legs], B = PARTS.body[s.body], H = PARTS.head[s.head], A = PARTS.arms[s.arms], z = s.size;
   return {
@@ -129,17 +129,17 @@ const WLIST = [
   { id: 'grenade', name: 'グレネード', kind: 'gun', dmg: 55, rate: .9, spd: 42, spread: .01, range: 90, proj: 'grenade', aoe: 7, price: 2600, cost: { scrap: 20, iron: 8, core: 2 } },
   { id: 'rocket', name: 'ロケット', kind: 'gun', dmg: 90, rate: 1.3, spd: 62, spread: .005, range: 170, proj: 'rocket', aoe: 8, price: 5200, cost: { scrap: 24, iron: 16, core: 4 } },
   { id: 'missile', name: 'ホーミングミサイル', kind: 'gun', dmg: 38, rate: .55, spd: 55, spread: .12, range: 160, proj: 'missile', aoe: 5, price: 8800, cost: { scrap: 30, iron: 18, core: 6, rare: 1 } },
-  { id: 'flame', name: 'かえんほうしゃ', kind: 'gun', dmg: 5, rate: .04, spd: 34, spread: .09, range: 26, proj: 'flame', price: 3400, cost: { scrap: 18, iron: 10, core: 3 } },
+  { id: 'flame', name: '火炎放射', kind: 'gun', dmg: 5, rate: .04, spd: 34, spread: .09, range: 26, proj: 'flame', price: 3400, cost: { scrap: 18, iron: 10, core: 3 } },
   { id: 'laser', name: 'レーザー', kind: 'gun', dmg: 13, rate: .1, spd: 0, spread: 0, range: 150, proj: 'laser', price: 9500, cost: { scrap: 20, iron: 14, core: 10 } },
-  { id: 'plasma', name: 'プラズマほう', kind: 'gun', dmg: 130, rate: 1.6, spd: 75, spread: .004, range: 160, proj: 'plasma', aoe: 10, price: 16000, cost: { iron: 30, core: 14, rare: 2 } },
+  { id: 'plasma', name: 'プラズマ砲', kind: 'gun', dmg: 130, rate: 1.6, spd: 75, spread: .004, range: 160, proj: 'plasma', aoe: 10, price: 16000, cost: { iron: 30, core: 14, rare: 2 } },
   { id: 'rail', name: 'レールガン', kind: 'gun', dmg: 240, rate: 2.4, spd: 0, spread: 0, range: 300, proj: 'laser', big: 1, price: 24000, cost: { iron: 40, core: 18, rare: 4 } },
-  { id: 'pipe', name: 'てつパイプ', kind: 'melee', dmg: 26, reach: 2.4, cd: .5, shape: 'pipe', col: 0x8a8f98, price: 0, cost: {} },
+  { id: 'pipe', name: '鉄パイプ', kind: 'melee', dmg: 26, reach: 2.4, cd: .5, shape: 'pipe', col: 0x8a8f98, price: 0, cost: {} },
   { id: 'sword', name: 'メカソード', kind: 'melee', dmg: 55, reach: 3.0, cd: .55, shape: 'sword', col: 0xd0d6e0, price: 900, cost: { scrap: 12, iron: 8 } },
   { id: 'hammer', name: 'ハンマー', kind: 'melee', dmg: 110, reach: 2.8, cd: 1.1, shape: 'hammer', col: 0x6c7078, price: 2400, cost: { scrap: 20, iron: 18 } },
   { id: 'lance', name: 'ランス', kind: 'melee', dmg: 80, reach: 4.6, cd: .8, shape: 'lance', col: 0xc8b070, price: 3200, cost: { scrap: 16, iron: 14, core: 1 } },
   { id: 'saber', name: 'ビームセイバー', kind: 'melee', dmg: 95, reach: 3.6, cd: .4, shape: 'saber', col: 0x5ff0ff, glow: 1, price: 9000, cost: { iron: 16, core: 10 } },
   { id: 'gigaaxe', name: 'ギガアックス', kind: 'melee', dmg: 190, reach: 3.6, cd: 1.3, shape: 'axe', col: 0xff7a3a, glow: 1, price: 18000, cost: { iron: 30, core: 12, rare: 3 } },
-  { id: 'shield', name: 'てつのたて', kind: 'shield', block: .6, col: 0x8a93a3, price: 800, cost: { scrap: 14, iron: 6 } },
+  { id: 'shield', name: '鉄の盾', kind: 'shield', block: .6, col: 0x8a93a3, price: 800, cost: { scrap: 14, iron: 6 } },
   { id: 'tower', name: 'タワーシールド', kind: 'shield', block: .8, big: 1, col: 0x4a6ea8, price: 3800, cost: { scrap: 24, iron: 22 } },
   { id: 'eshield', name: 'エネルギーシールド', kind: 'shield', block: .92, glow: 1, col: 0x60e8ff, price: 11000, cost: { iron: 16, core: 12, rare: 1 } },
 ];
@@ -150,25 +150,58 @@ const WEAPONS = {}; for (const w of WLIST) WEAPONS[w.id] = w;
 const BUILD_COLS = [0xcfd4dc, 0x8a6a4a, 0xd8c8a0, 0x6f8fb0, 0xc05848, 0x4a5058, 0x7fb070, 0xf0f0ea];
 const STAIRS = []; for (let i = 0; i < 6; i++) STAIRS.push([0, .25 * (i + 1), 1.667 - i * .667, 2.4, .5 * (i + 1), .667, 0, 1]);
 const PIECES = [
-  { id: 'floor', name: 'ゆか', icon: '[floor]', cost: { scrap: 2 }, boxes: [[0, .15, 0, 4, .3, 4, 0, 1]] },
-  { id: 'wall', name: 'かべ', icon: '[mats]', cost: { scrap: 3 }, boxes: [[0, 1.5, -1.8, 4, 3, .4, 0, 1]] },
-  { id: 'door', name: 'ドアのかべ', icon: '[door]', cost: { scrap: 3 }, boxes: [[-1.4, 1.5, -1.8, 1.2, 3, .4, 0, 1], [1.4, 1.5, -1.8, 1.2, 3, .4, 0, 1], [0, 2.65, -1.8, 1.6, .7, .4, 0, 1]] },
-  { id: 'window', name: 'まどのかべ', icon: '[window]', cost: { scrap: 3, iron: 1 }, boxes: [[0, .5, -1.8, 4, 1, .4, 0, 1], [0, 2.6, -1.8, 4, .8, .4, 0, 1], [-1.6, 1.6, -1.8, .8, 1.2, .4, 0, 1], [1.6, 1.6, -1.8, .8, 1.2, .4, 0, 1], [0, 1.6, -1.8, 2.4, 1.2, .08, 9, 1]] },
-  { id: 'bigwall', name: 'メカようの かべ', icon: '[bigwall]', cost: { scrap: 6, iron: 2 }, boxes: [[0, 3, -1.8, 4, 6, .4, 0, 1]] },
-  { id: 'roof', name: 'やね', icon: '[roof]', cost: { scrap: 3 }, boxes: [[0, .2, 0, 4.4, .4, 4.4, 0, 1]] },
-  { id: 'stairs', name: 'かいだん', icon: '[stairs]', cost: { scrap: 5 }, boxes: STAIRS },
+  { id: 'floor', name: '床', icon: '[floor]', cost: { scrap: 2 }, boxes: [[0, .15, 0, 4, .3, 4, 0, 1]] },
+  { id: 'wall', name: '壁', icon: '[mats]', cost: { scrap: 3 }, boxes: [[0, 1.5, -1.8, 4, 3, .4, 0, 1]] },
+  { id: 'door', name: 'ドアの壁', icon: '[door]', cost: { scrap: 3 }, boxes: [[-1.4, 1.5, -1.8, 1.2, 3, .4, 0, 1], [1.4, 1.5, -1.8, 1.2, 3, .4, 0, 1], [0, 2.65, -1.8, 1.6, .7, .4, 0, 1]] },
+  { id: 'window', name: '窓の壁', icon: '[window]', cost: { scrap: 3, iron: 1 }, boxes: [[0, .5, -1.8, 4, 1, .4, 0, 1], [0, 2.6, -1.8, 4, .8, .4, 0, 1], [-1.6, 1.6, -1.8, .8, 1.2, .4, 0, 1], [1.6, 1.6, -1.8, .8, 1.2, .4, 0, 1], [0, 1.6, -1.8, 2.4, 1.2, .08, 9, 1]] },
+  { id: 'bigwall', name: 'メカ用の壁', icon: '[bigwall]', cost: { scrap: 6, iron: 2 }, boxes: [[0, 3, -1.8, 4, 6, .4, 0, 1]] },
+  { id: 'roof', name: '屋根', icon: '[roof]', cost: { scrap: 3 }, boxes: [[0, .2, 0, 4.4, .4, 4.4, 0, 1]] },
+  { id: 'stairs', name: '階段', icon: '[stairs]', cost: { scrap: 5 }, boxes: STAIRS },
   { id: 'bed', name: 'ベッド', icon: '[bed]', cost: { scrap: 8 }, use: 'bed', boxes: [[0, .3, 0, 1.5, .6, 2.8, 10, 1], [0, .7, -.9, 1.3, .25, .7, 11, 0], [0, .62, .35, 1.5, .1, 1.9, 12, 0]] },
   { id: 'lamp', name: 'ライト', icon: '[lamp]', cost: { scrap: 3, core: 1 }, boxes: [[0, 1.4, 0, .18, 2.8, .18, 13, 1], [0, 2.95, 0, .6, .4, .6, 14, 0]] },
   { id: 'turret', name: 'タレット', icon: '[turret]', cost: { scrap: 20, iron: 10, core: 2 }, use: 'turret', boxes: [[0, .5, 0, 1.6, 1, 1.6, 13, 1]] },
-  { id: 'pad', name: 'メカだい (こうぼう)', icon: '[wrench]', cost: { scrap: 15, iron: 8, core: 1 }, use: 'pad', boxes: [[0, .1, 0, 3.8, .2, 3.8, 13, 1], [0, .22, 0, 3, .06, 3, 15, 0]] },
+  { id: 'pad', name: 'メカ台 (工房)', icon: '[wrench]', cost: { scrap: 15, iron: 8, core: 1 }, use: 'pad', boxes: [[0, .1, 0, 3.8, .2, 3.8, 13, 1], [0, .22, 0, 3, .06, 3, 15, 0]] },
 ];
 const PIECE_FIX = { 9: 0x9fd8f0, 10: 0x7a5a40, 11: 0xf4f4f0, 12: 0x4a78c8, 13: 0x4a4f58, 14: 0xfff0b0, 15: 0xffa030 };
 
 const FOODS = [
-  { name: 'ハンバーガー', icon: '[food]', price: 60, heal: 1, text: 'たいりょくが ぜんぶ もどる' },
-  { name: 'リペアキット', icon: '[kit]', price: 150, kit: 1, text: 'もちあるける。H で じぶんか メカを なおす' },
+  { name: 'ハンバーガー', icon: '[food]', price: 60, heal: 1, hunger: 60, text: '体力が全回復、満腹度 +60' },
+  { name: 'リペアキット', icon: '[kit]', price: 150, kit: 1, text: 'H キーで使う。体力を半分回復' },
 ];
-const HUMAN_LOOKS = [
+const HUMAN_LOOKS_OLD = [
   [0x3a66c8, 0x2b2f3a, 0x3a2a1a], [0xc84a4a, 0x39414f, 0x1a1a1a], [0x4aa86a, 0x5a4a3a, 0x6a4a2a], [0xe0b040, 0x2b3550, 0x202020],
   [0x9a5ad0, 0x30303a, 0xd0b060], [0xe8e8e8, 0x3a4a6a, 0x4a3020],
 ];
+
+// ---------- 服 ----------
+/* 服は 型 (スタイル) を買い、色は自由に変えられる。[名前, 値段] */
+const CLOTHES = {
+  top: [['Tシャツ', 0], ['パーカー', 300], ['ジャケット', 600], ['スーツ', 1500], ['つなぎ', 400], ['タンクトップ', 150]],
+  bottom: [['長ズボン', 0], ['短パン', 150], ['スカート', 300]],
+  hat: [['なし', 0], ['キャップ', 200], ['ハット', 400], ['ヘルメット', 500], ['ニット帽', 250]],
+  hair: [['ショート', 0], ['ロング', 0], ['ツンツン', 0], ['坊主', 0]],
+  face: [['なし', 0], ['メガネ', 300], ['サングラス', 500]],
+};
+const CLOTH_SLOTS = [['top', 'トップス', 'topC'], ['bottom', 'ボトムス', 'botC'], ['hat', '帽子', 'hatC'], ['hair', '髪型', 'hairC'], ['face', '顔まわり', null]];
+const CLOTH_COLS = [0xf4f4f0, 0x1d2026, 0x6a7078, 0xc84a4a, 0xf28c28, 0xf2d13a, 0x4aa86a, 0x2fa98c, 0x3a66c8, 0x2b3550, 0x8a55e0, 0xe060b8, 0x8b5a3c, 0xd8c8a0, 0x3a2a1a, 0xd0b060];
+const SKINS = [0xf6d2b0, 0xf0c8a0, 0xd8a878, 0xa87850, 0x7a5236];
+const baseOutfit = () => ({ skin: SKINS[1], top: 0, topC: 0x3a66c8, bottom: 0, botC: 0x2b3550, hat: 0, hatC: 0xc84a4a, hair: 0, hairC: 0x3a2a1a, face: 0, shoeC: 0x2a2a2e });
+function rndOutfit() {
+  return { skin: pick(SKINS), top: pick([0, 0, 1, 1, 2, 3, 5]), topC: pick(CLOTH_COLS), bottom: pick([0, 0, 0, 1, 2]), botC: pick([0x1d2026, 0x2b3550, 0x6a7078, 0x8b5a3c, 0xd8c8a0, 0x3a66c8]),
+    hat: pick([0, 0, 0, 0, 1, 2, 4]), hatC: pick(CLOTH_COLS), hair: pick([0, 1, 2, 3]), hairC: pick([0x1d2026, 0x3a2a1a, 0x8b5a3c, 0xd0b060, 0x6a7078]), face: pick([0, 0, 0, 1, 2]), shoeC: pick([0x2a2a2e, 0xf4f4f0, 0x8b5a3c]) };
+}
+const OUTFIT_POLICE = { skin: SKINS[1], top: 2, topC: 0x1c2c58, bottom: 0, botC: 0x16203c, hat: 1, hatC: 0x1c2c58, hair: 0, hairC: 0x1d2026, face: 0, shoeC: 0x101014, badge: 1 };
+const OUTFIT_DEALER = { skin: SKINS[2], top: 3, topC: 0x18181c, bottom: 0, botC: 0x18181c, hat: 2, hatC: 0x18181c, hair: 0, hairC: 0x101010, face: 2, shoeC: 0x101014 };
+
+// ---------- 仕事 ----------
+const JOBS = [
+  { id: 'deliver', icon: '[box]', name: '配達', text: '荷物を受け取って街の中へ届ける', pay: 200 },
+  { id: 'pizza', icon: '[food]', name: 'ピザの宅配', text: '食堂で受け取り、住宅街の 3 軒に配る', pay: 420 },
+  { id: 'taxi', icon: '[car]', name: 'タクシー', text: '車で客を迎えに行き、目的地まで送る', pay: 350, car: 1 },
+  { id: 'trash', icon: '[mats]', name: 'ごみ収集', text: '街の 8 か所を回ってごみを集める', pay: 380 },
+  { id: 'patrol', icon: '[shield]', name: '警備員', text: '決められた順に街を巡回する (夜は 2 倍)', pay: 300 },
+  { id: 'farm', icon: '[veg]', name: '農場の手伝い', text: '北西の農場で野菜を 10 個収穫する (F)', pay: 400 },
+  { id: 'bounty', icon: '[target]', name: 'お尋ね者退治', text: '南の荒野にいる大型メカを倒す', pay: 0, mech: 1 },
+  { id: 'dealer', icon: '[dealer]', name: '闇商人退治', text: 'マンション裏の闇商人を倒す', pay: 0 },
+];
+const TALK = ['こんにちは！', '今日はいい天気だね', '最近、荒野のメカが増えてるらしいよ', '住宅街の家、売りに出てたよ', '釣りなら東の桟橋がおすすめ', 'そのメカ、かっこいいね', '夜は物騒だから気をつけて', '農場の野菜はおいしいよ', '服屋に新しい服が入ったって'];

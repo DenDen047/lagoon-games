@@ -16,8 +16,8 @@ function drawLegs(type, w, c1, c2, e) {
     for (const sx of [-1, 1]) {
       const a = sw * sx * .55;
       R.push(); R.translate(sx * .55 * (type === 6 ? 1.2 : 1), 2, 0); R.rotX(a);
-      B(0, -.5, 0, .5 * t, 1.1, .6 * t, c1);
-      R.translate(0, -1, 0); R.rotX(Math.max(0, a) * .9 + .1);
+      B(0, -.5, 0, .5 * t, 1.1, .6 * t, c1); S(0, 0, 0, .62 * t, .62 * t, .62 * t, DK); B(0, -.45, .32 * t, .3 * t, .6, .08, c2);
+      R.translate(0, -1, 0); S(0, 0, 0, .56 * t, .56 * t, .56 * t, c2); R.rotX(Math.max(0, a) * .9 + .1); B(0, -.5, -.3 * t, .12, .7, .12, MID);
       B(0, -.5, 0, .42 * t, 1, .5 * t, DK); B(0, -.93, .15, .6 * t, .22, t, c2);
       R.pop();
     }
@@ -188,6 +188,16 @@ function drawMech(e) {
   if (st.kind === 'ball' && e.mode === 1) hip = .25;
   R.translate(0, hip, 0); R.rotY(angDiff(e.aimYaw, e.yaw));
   const m = drawBody(sp.body, c1, c2, e);
+  const bk = [.9, .62, 1.1, 0, 1.25, 0, 0, .95][sp.body];
+  if (bk) {
+    for (const s of [-1, 1]) {
+      R.push(); R.translate(s * .36, m.sy - .55, -bk); R.rotX(Math.PI / 2); C(0, -.12, 0, .42, .5, .42, DK); C(0, -.4, 0, .5, .12, .5, MID); if (e.thrust > 0) { R.glow(1); K(0, -1.1, 0, .44, -1.3, .44, 0x60c0ff, .7); R.glow(0); } R.pop();
+      S(s * (m.sh - .15), m.sy + .42, .2, .16, .16, .16, 0xffe060, 1); B(s * .5, -.1, .48, .44, .5, .1, c2); B(s * .5, -.1, -.48, .44, .5, .1, c2);
+      B(s * (m.sh - .5), m.sy - .2, bk * .62, .34, .1, .04, DK); B(s * (m.sh - .5), m.sy - .38, bk * .62, .34, .1, .04, DK);
+    }
+    B(m.sh * .55, m.top + .5, -bk * .6, .05, 1.1, .05, MID); S(m.sh * .55, m.top + 1.06, -bk * .6, .1, .1, .1, 0xff4040, 1);
+    B(0, m.sy - .75, bk * .64, .5, .06, .04, DK);
+  }
   if (!(st.kind === 'ball' && e.mode === 1)) {
     R.push(); R.translate(0, m.top, m.hz); drawHead(sp.head, c1, c2); R.pop();
     drawArm(sp.arms, 1, m, e, c1, c2, 1); drawArm(sp.arms, -1, m, e, c1, c2, 1);
@@ -209,30 +219,86 @@ function drawMech(e) {
 }
 
 function drawHuman(e) {
-  const lk = e.look || HUMAN_LOOKS[0], sw = Math.sin(e.walk) * .7, L = e.load || {};
+  const o = e.fit || baseOutfit(), sw = Math.sin(e.walk) * .7, L = e.load || {}, tc = o.topC, hc = o.hairC;
   R.flash = e.flash > 0 ? Math.min(1, e.flash * 6) : 0;
-  R.push(); R.translate(e.x, e.y, e.z); R.rotY(e.yaw + (e.spinA || 0));
+  R.push(); R.translate(e.x, e.y, e.z); R.rotY(e.yaw + (e.spinA || 0)); if (e.sc) R.scale(e.sc, e.sc, e.sc);
+  if (e.down) { R.translate(0, .22, 0); R.rotX(-Math.PI / 2); }
   if (e.rollA) { R.translate(0, .9, 0); R.rotX(e.rollA); R.translate(0, -.9, 0); }
-  for (const s of [-1, 1]) { R.push(); R.translate(s * .14, .85, 0); R.rotX(sw * s); B(0, -.42, 0, .22, .85, .25, lk[1]); R.pop(); }
-  B(0, 1.2, 0, .55, .68, .3, lk[0]); B(0, 1.72, 0, .34, .34, .34, 0xf0c8a0); B(0, 1.88, -.03, .38, .14, .4, lk[2]);
-  if (e.boss) B(0, 2.0, 0, .5, .08, .5, 0x202020);
+  const bare = o.bottom > 0;
+  for (const s of [-1, 1]) {                                  // 脚とくつ
+    R.push(); R.translate(s * .13, .88, 0); R.rotX(e.down ? 0 : sw * s);
+    B(0, -.2, 0, .2, .44, .23, o.botC); R.translate(0, -.42, 0); R.rotX(Math.max(0, sw * s) * .7);
+    B(0, -.2, 0, .17, .4, .2, bare ? o.skin : o.botC); B(0, -.42, .05, .2, .1, .32, o.shoeC); R.pop();
+  }
+  if (o.bottom === 2) B(0, .8, 0, .52, .34, .38, o.botC);
+  B(0, .93, 0, .47, .1, .27, o.top === 4 ? tc : 0x2a2a2e); B(0, .93, .14, .08, .07, .02, 0xc8b060);       // ベルト
+  B(0, 1.24, 0, .5, .54, .28, tc); B(0, 1.47, 0, .56, .1, .3, tc);                                        // 胴と肩
+  if (o.top === 1) { B(0, 1.58, -.15, .36, .22, .13, tc); B(-.06, 1.38, .145, .02, .18, .02, 0xf4f4f0); B(.06, 1.38, .145, .02, .18, .02, 0xf4f4f0); B(0, 1.08, .145, .3, .13, .02, 0x00000 + (tc >> 1 & 0x7f7f7f)); }
+  else if (o.top === 2) { B(0, 1.25, .143, .13, .5, .02, 0xf4f4f0); B(-.1, 1.45, .15, .08, .1, .02, tc); B(.1, 1.45, .15, .08, .1, .02, tc); }
+  else if (o.top === 3) { B(0, 1.27, .143, .12, .46, .02, 0xf4f4f0); B(0, 1.26, .156, .045, .36, .02, 0xc03030); B(-.09, 1.42, .152, .1, .16, .02, tc); B(.09, 1.42, .152, .1, .16, .02, tc); }
+  else if (o.top === 4) { B(0, 1.16, .145, .3, .36, .02, o.botC); B(-.12, 1.42, .145, .05, .2, .02, o.botC); B(.12, 1.42, .145, .05, .2, .02, o.botC); }
+  if (o.badge) B(-.14, 1.38, .15, .07, .08, .02, 0xffd24a, .5);
+  B(0, 1.56, 0, .14, .1, .14, o.skin); B(0, 1.76, 0, .32, .34, .32, o.skin);                                // 首と頭
+  B(-.08, 1.79, .162, .05, .05, .012, 0x202020); B(.08, 1.79, .162, .05, .05, .012, 0x202020); B(0, 1.68, .162, .1, .02, .012, 0x9a5a50);
+  B(-.17, 1.76, 0, .03, .1, .08, o.skin); B(.17, 1.76, 0, .03, .1, .08, o.skin);
+  if (o.face === 1) { B(-.08, 1.79, .17, .11, .09, .012, 0x9fd8f0, .1); B(.08, 1.79, .17, .11, .09, .012, 0x9fd8f0, .1); B(0, 1.8, .172, .32, .02, .012, 0x202020); }
+  else if (o.face === 2) { B(-.08, 1.79, .17, .13, .08, .014, 0x101014); B(.08, 1.79, .17, .13, .08, .014, 0x101014); B(0, 1.81, .172, .33, .02, .012, 0x101014); }
+  if (o.hat !== 3) {
+    if (o.hair === 3) B(0, 1.94, 0, .33, .03, .33, hc);
+    else { B(0, 1.95, -.02, .35, .1, .36, hc); B(0, 1.82, -.16, .35, .22, .05, hc); B(-.17, 1.86, -.04, .03, .14, .26, hc); B(.17, 1.86, -.04, .03, .14, .26, hc); }
+    if (o.hair === 1) { B(0, 1.6, -.17, .36, .34, .07, hc); B(-.18, 1.66, -.06, .04, .3, .2, hc); B(.18, 1.66, -.06, .04, .3, .2, hc); }
+    else if (o.hair === 2 && !o.hat) for (let k = 0; k < 5; k++) K(-.12 + k * .06, 2.06, -.1 + (k % 2) * .12, .1, .2, .1, hc);
+  }
+  if (o.hat === 1) { B(0, 1.98, 0, .37, .12, .37, o.hatC); B(0, 1.94, .25, .3, .03, .2, o.hatC); }
+  else if (o.hat === 2) { C(0, 1.96, 0, .64, .03, .64, o.hatC); C(0, 2.05, 0, .35, .17, .35, o.hatC); C(0, 1.99, 0, .36, .04, .36, 0x202020); }
+  else if (o.hat === 3) { S(0, 1.84, 0, .46, .46, .46, o.hatC); B(0, 1.8, .2, .3, .12, .06, 0x60f0ff, .3); }
+  else if (o.hat === 4) { S(0, 1.94, 0, .38, .26, .38, o.hatC); B(0, 1.9, 0, .37, .06, .37, o.hatC); }
+  const sl = o.top === 5 ? o.skin : tc, fore = o.top === 0 || o.top === 5 ? o.skin : tc;
+  const arm = () => { B(0, 0, .15, .15, .15, .34, sl); B(0, 0, .44, .13, .13, .28, fore); B(0, 0, .62, .13, .13, .1, o.skin); R.translate(0, 0, .64); };
   const sw2 = e.swingT > 0 ? 1 - e.swingT / .3 : -1;
-  R.push(); R.translate(-.36, 1.42, 0);
-  if (sw2 >= 0) { R.rotY(1.3 - sw2 * 2.6); R.rotX(-.2); } else R.rotX(-(e.aimPitch || 0) + (L.main ? 0 : 1.2 - sw * .5));
-  B(0, 0, .28, .16, .16, .6, lk[0]); R.translate(0, 0, .6);
+  R.push(); R.translate(-.34, 1.44, 0);
+  if (sw2 >= 0) { R.rotY(1.3 - sw2 * 2.6); R.rotX(-.2); } else R.rotX(-(e.aimPitch || 0) + (L.main ? 0 : 1.35 - sw * .5));
+  arm();
   if (sw2 >= 0 && L.melee) drawMelee(WEAPONS[L.melee], .45);
   else if (L.main) { const ml = drawGun(WEAPONS[L.main], .42); if (e.fireFlash > 0) glowS(0, 0, ml + .1, .4, 0xffd070, .8); }
   R.pop();
-  R.push(); R.translate(.36, 1.42, 0);
+  R.push(); R.translate(.34, 1.44, 0);
   const sub = L.sub ? WEAPONS[L.sub] : null;
-  if (sub && sub.kind === 'shield' && e.blocking) { R.rotY(-.6); R.rotX(-.1); } else R.rotX(sub ? -(e.aimPitch || 0) : 1.2 + sw * .5);
-  B(0, 0, .28, .16, .16, .6, lk[0]); R.translate(0, 0, .6);
+  if (sub && sub.kind === 'shield' && e.blocking) { R.rotY(-.6); R.rotX(-.1); } else R.rotX(sub ? -(e.aimPitch || 0) : 1.35 + sw * .5);
+  arm();
   if (sub && sub.kind === 'gun') drawGun(sub, .42); else if (sub) drawShield(sub, .5, e.blocking);
   R.pop();
-  if (e.chute) { R.translate(0, 3.6, 0); S(0, 0, 0, 3, 1.4, 3, 0xff8040); }
+  if (e.chute) { R.translate(0, 3.6, 0); S(0, 0, 0, 3, 1.4, 3, 0xff8040); for (const s of [-1, 1]) B(s * .7, -1, 0, .03, 2, .03, 0xf0f0f0); }
   R.pop(); R.flash = 0;
 }
 
+let NIGHT = 0;
+function drawCar(c) {
+  const col = c.col, t = c.type | 0, gl = 0x1c2a38;
+  R.flash = c.flash > 0 ? Math.min(1, c.flash * 6) : 0;
+  R.push(); R.translate(c.x, c.y, c.z); R.rotY(c.yaw);
+  B(0, .58, 0, 1.9, .5, 4.3, col); B(0, .34, 0, 1.94, .14, 4.36, 0x1a1c20); B(0, .82, 1.5, 1.8, .06, 1.2, col);
+  if (t === 1) { B(0, 1.28, -.2, 1.84, .9, 3.6, col); B(0, 1.36, -.2, 1.88, .46, 3.3, gl); B(0, 1.36, 1.62, 1.6, .46, .06, gl); }
+  else if (t === 2) { B(0, 1.22, .9, 1.84, .8, 1.5, col); B(0, 1.32, .9, 1.88, .4, 1.2, gl); B(0, 1.32, 1.67, 1.6, .4, .06, gl); B(0, .98, -1.1, 1.9, .3, 2.1, col); B(0, 1, -1.1, 1.66, .3, 1.9, 0x30343c); }
+  else { B(0, 1.1, -.25, 1.7, .52, 2.2, col); B(0, 1.13, -.25, 1.74, .34, 1.9, gl); B(0, 1.13, .87, 1.5, .34, .06, gl); B(0, 1.13, -1.37, 1.5, .34, .06, gl); B(0, 1.37, -.25, 1.6, .04, 2, col); }
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) { R.push(); R.translate(sx * .95, .37, sz * 1.38); R.rotZ(Math.PI / 2); R.rotY(c.wheel || 0); C(0, 0, 0, .74, .3, .74, 0x18181a); C(0, sx * .02, 0, .42, .32, .42, 0xb0b4ba); B(0, sx * .03, 0, .1, .3, .36, 0x60646c); R.pop(); }
+    S(sx * .65, .62, 2.14, .34, .2, .12, 0xfff4c0, 1); B(sx * .68, .62, -2.16, .36, .16, .06, 0xff3030, 1); B(sx * 1, .98, .75, .16, .1, .12, col); B(sx * .97, .8, .3, .03, .04, .16, 0xc8ccd2);
+  }
+  B(0, .52, 2.17, .9, .18, .04, 0x202020); B(0, .4, 2.2, 1.9, .16, .1, 0x30343c); B(0, .4, -2.2, 1.9, .16, .1, 0x30343c); B(0, .56, -2.17, .5, .14, .03, 0xf4f4f0);
+  if (c.taxi) B(0, 1.48, -.25, .5, .16, .24, 0xffe040, 1);
+  if (NIGHT) { R.glow(1); for (const sx of [-1, 1]) S(sx * .65, .6, 3.4, 1.4, .8, 2.6, 0xfff0b0, .18); R.glow(0); }
+  R.pop(); R.flash = 0;
+}
+function drawLoot(l, t) {
+  const y = l.y;
+  if (l.kind === 'tv') { B(l.x, y + .42, l.z, 1.3, .76, .08, 0x101014); B(l.x, y + .42, l.z, 1.2, .66, .1, 0x3060a0, .5); B(l.x, y + .03, l.z, .4, .06, .2, 0x101014); }
+  else if (l.kind === 'gem') { B(l.x, y + .1, l.z, .34, .2, .24, 0x8a2a4a); B(l.x, y + .22, l.z, .36, .05, .26, 0xd0b060, .3); }
+  else if (l.kind === 'cash') { B(l.x, y + .04, l.z, .3, .08, .16, 0x5aa86a); B(l.x + .2, y + .04, l.z + .1, .3, .08, .16, 0x5aa86a); }
+  else if (l.kind === 'pc') { B(l.x, y + .02, l.z, .5, .03, .34, 0xb0b4ba); B(l.x, y + .18, l.z - .17, .5, .32, .03, 0x4080c0, .4); }
+  else { B(l.x, y + .03, l.z, .14, .05, .14, 0xd0b060, .3); }
+  glowS(l.x, y + .3, l.z, .5 + Math.sin(t * 4) * .1, 0xffe080, .25);
+}
 function drawPlane(p) {
   const jet = p.jet, c1 = jet ? 0x5a6478 : 0xe8e8e0, c2 = jet ? 0xff6030 : 0x3070d0;
   R.flash = p.flash > 0 ? Math.min(1, p.flash * 6) : 0;
@@ -261,7 +327,8 @@ function drawTurret(t) {
 function drawNode(n) {
   const r = seeded(n.seed * 77 + n.type.length), k = .5 + .5 * n.hp / n.max;
   R.push(); R.translate(n.x, 0, n.z); R.scale(k, k, k);
-  if (n.type === 'scrap') { for (let i = 0; i < 5; i++) { R.push(); R.rotY(r() * 6); B(r() * 1.4 - .7, .3 + i * .3, r() * 1.4 - .7, .8 + r() * 1.4, .4 + r() * .5, .6 + r(), [0x8a5a3a, 0x70757c, 0xa06a3a, 0x5a6068][i % 4]); R.pop(); } B(.3, 1.9, 0, .15, 1.2, .15, 0xb0b4ba); }
+  if (n.type === 'crop') { B(0, .35, 0, .12, .7, .12, 0x3f8a3a); for (let i = 0; i < 4; i++) { R.push(); R.rotY(i * 1.57 + .4); R.rotX(.7); B(0, .6, .25, .35, .04, .6, 0x4aa84a); R.pop(); } S(0, .3, 0, .5, .45, .5, [0xe07030, 0xd03a30, 0xe8c040][n.seed % 3]); }
+  else if (n.type === 'scrap') { for (let i = 0; i < 5; i++) { R.push(); R.rotY(r() * 6); B(r() * 1.4 - .7, .3 + i * .3, r() * 1.4 - .7, .8 + r() * 1.4, .4 + r() * .5, .6 + r(), [0x8a5a3a, 0x70757c, 0xa06a3a, 0x5a6068][i % 4]); R.pop(); } B(.3, 1.9, 0, .15, 1.2, .15, 0xb0b4ba); }
   else if (n.type === 'iron') { S(0, .7, 0, 2.6, 1.8, 2.2, 0x6a6e74); S(.8, .5, .6, 1.3, 1.1, 1.2, 0x7c8088); for (let i = 0; i < 4; i++) B(r() * 1.6 - .8, .9 + r() * .5, r() * 1.6 - .8, .35, .35, .35, 0xd09060, .25); }
   else { for (let i = 0; i < 4; i++) { R.push(); R.translate(r() * 1.4 - .7, 0, r() * 1.4 - .7); R.rotZ(r() * .6 - .3); K(0, .9 + r() * .6, 0, .7, 2 + r() * 1.4, .7, 0x50e0ff, .7); R.pop(); } glowS(0, 1.2, 0, 3, 0x40c0ff, .09); }
   R.pop();

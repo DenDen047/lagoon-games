@@ -5,18 +5,20 @@ const IN = { k: {}, hit: {}, mdx: 0, mdy: 0, fire: false, sub: false, sx: 0, sy:
 const cam = { yaw: 0, pitch: -.15, ex: 0, ey: 5, ez: -10, tx: 0, ty: 2, tz: 0, fov: 1.05, shadowR: 90 };
 let SV = null;
 let ents = [], shots = [], fx = [], beams = [];
-const P = { human: null, mech: null, plane: null, state: 'foot' };
+const P = { human: null, mech: null, plane: null, car: null, state: 'foot' };
 const G = {
   t: 0, running: false, menu: false, preview: null, pvAng: 0, aim: { x: 0, y: 0, z: 0 }, lock: null, lockT: 0, prompt: null,
   job: null, groups: [], turrets: [], usePieces: [], build: { on: false, t: 0, rot: 0, lvl: 0, col: 0, ghost: null, ok: false },
-  beacons: [], hitT: 0, lastHurt: -99, deadT: 0, callCd: 0, spawnT: 0, raidT: 240, groupT: 5, planes: [], kills: 0,
+  beacons: [], hitT: 0, lastHurt: -99, deadT: 0, callCd: 0, spawnT: 0, raidT: 240, groupT: 5, planes: [], kills: 0, cars: [], wanted: 0, wantedT: 0, polT: 0, sus: 0, crimeT: -99, stoleT: -999, inHouse: null, dayN: 0,
 };
-const body = () => P.state === 'mech' ? P.mech : P.state === 'plane' ? P.plane : P.human;
+const body = () => P.state === 'mech' ? P.mech : P.state === 'plane' ? P.plane : P.state === 'car' ? P.car : P.human;
 
 // ---------- セーブ ----------
 function freshSave() {
   return { money: 200, mats: { scrap: 0, iron: 0, core: 0, rare: 0 }, mechs: [], active: 0, own: { pistol: 1, pipe: 1 }, load: { main: 'pistol', sub: null, melee: 'pipe' },
-    pieces: [], rank: 1, xp: 0, quest: 0, kits: 1, time: .4, jet: 0, bed: null, jobs: 0, q: { shadow: 2, auto: 1 } };
+    pieces: [], rank: 1, xp: 0, quest: 0, kits: 1, time: .4, jet: 0, bed: null, jobs: 0, q: { shadow: 2, auto: 1 },
+    hunger: 100, energy: 100, loot: 0, bag: { veg: 0, fish: 0 }, outfit: baseOutfit(), home: null, jobLv: {},
+    closet: { top: { 0: 1 }, bottom: { 0: 1 }, hat: { 0: 1 }, hair: { 0: 1, 1: 1, 2: 1, 3: 1 }, face: { 0: 1 } } };
 }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SV)); } catch (e) { /* ほぞんできない たんまつ */ } }
 function load() {
@@ -28,7 +30,7 @@ function pay(c) { for (const k of MAT_KEYS) SV.mats[k] -= c[k] || 0; }
 function gainMat(k, n) { SV.mats[k] += n; UI.gain(MATS[k].icon + '+' + n); }
 function addXp(n) {
   SV.xp += n;
-  while (SV.xp >= SV.rank * 120) { SV.xp -= SV.rank * 120; SV.rank++; UI.toast('[star] ランク ' + SV.rank + ' に なった！ てきも つよくなるぞ'); sfx('coin'); }
+  while (SV.xp >= SV.rank * 120) { SV.xp -= SV.rank * 120; SV.rank++; UI.toast('[star] ランク ' + SV.rank); sfx('coin'); }
 }
 
 // ---------- 作る ----------
@@ -42,7 +44,7 @@ function baseEnt(kind, team, x, z) {
 function mkHuman(team, x, z, look) {
   const e = baseEnt('human', team, x, z);
   e.st = { spd: 8, jump: 8, turn: 14, dmg: .4, melee: .5, r: .4, h: 1.8, kind: '' };
-  e.r = .4; e.h = 1.8; e.hp = e.maxhp = 100; e.look = look || HUMAN_LOOKS[0];
+  e.r = .4; e.h = 1.8; e.hp = e.maxhp = 100; e.fit = look || baseOutfit();
   return e;
 }
 function mkMech(spec, team, x, z) {
@@ -61,7 +63,7 @@ function spawnEnemyMech(x, z, tier, boss) {
   e.load = { main: pick(GUNS_BY_TIER[Math.min(6, tier)]), sub: tier >= 2 && Math.random() < .3 ? 'shield' : null, melee: MELEE_BY_TIER[Math.min(6, tier)] };
   const w = WEAPONS[e.load.main];
   e.ai = mkAi(tier, clamp(w.range * .4, 10, 45), 75); e.tier = tier; e.boss = !!boss;
-  e.name = (boss ? 'おたずねもの ' : 'ならずもの ') + spec.name; e.yaw = rnd(6.28);
+  e.name = (boss ? 'お尋ね者 ' : 'ならず者 ') + spec.name; e.yaw = rnd(6.28);
   ents.push(e); return e;
 }
 function spawnDrone(x, z, tier) {
@@ -70,21 +72,17 @@ function spawnDrone(x, z, tier) {
   ents.push(e); return e;
 }
 function spawnThug(x, z, tier, dealer, group) {
-  const e = mkHuman(1, x, z, dealer ? [0x2a2a30, 0x18181c, 0x101010] : pick(HUMAN_LOOKS.slice(1)));
+  const e = mkHuman(1, x, z, dealer ? OUTFIT_DEALER : rndOutfit());
   e.hp = e.maxhp = dealer ? 120 + tier * 40 : 50 + tier * 20; e.dmgMul = .45 + .12 * tier; e.tier = tier; e.boss = dealer;
   e.load = { main: dealer ? 'shotgun' : pick(['pistol', 'mg']), sub: null, melee: 'pipe' };
-  e.ai = mkAi(tier, dealer ? 8 : 12, 10); e.ai.guard = true; e.ai.shout = dealer ? '「なんだ おまえは！ やっちまえ！」' : null; e.group = group;
-  e.name = dealer ? 'やみしょうにん' : 'ようじんぼう'; e.yaw = rnd(6.28);
+  e.ai = mkAi(tier, dealer ? 8 : 12, 10); e.ai.guard = true; e.ai.shout = dealer ? '「何だお前は！ やっちまえ！」' : null; e.group = group;
+  e.name = dealer ? '闇商人' : '用心棒'; e.yaw = rnd(6.28);
   ents.push(e); return e;
-}
-function spawnCitizen() {
-  const c = pick(W.corners), e = mkHuman(2, c.x, c.z, pick(HUMAN_LOOKS)); e.y = .2; e.corner = c; e.st.spd = 1.6 + rnd(1); e.citizen = true;
-  ents.push(e);
 }
 function mkPlane(spot, jet) {
   const p = baseEnt('plane', 0, spot.x, spot.z); p.yaw = spot.yaw; p.pitch = 0; p.roll = 0; p.speed = 0; p.thr = 0; p.jet = jet; p.prop = 0;
   p.r = 3; p.h = 2.6; p.hp = p.maxhp = jet ? 400 : 250; p.parked = true; p.spot = spot; p.rollT = 0; p.bcd = 0; p.st = { kind: '' };
-  p.name = jet ? 'ジェットき' : 'プロペラき';
+  p.name = jet ? 'ジェット機' : 'プロペラ機';
   ents.push(p); G.planes.push(p); return p;
 }
 function spawnPlayerMech(x, z, y) {
@@ -128,14 +126,15 @@ function collide(e) {
 function physics(e, dt) {
   e.vy -= 30 * dt;
   e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
-  e.x = clamp(e.x, -W.size, W.size); e.z = clamp(e.z, -W.size, W.size);
+  e.x = clamp(e.x, -W.size, W.maxX); e.z = clamp(e.z, -W.size, W.size);
   const g = collide(e);
   if (e.y <= g) { e.y = g; if (e.vy < 0) e.vy = 0; e.onGround = true; e.chute = false; } else e.onGround = false;
 }
 
 // ---------- ダメージ ----------
 function hurt(e, dmg, src) {
-  if (e.dead || e.parked || e.citizen) return;
+  if (e.dead || e.parked) return;
+  if (e.citizen) { if (e.kind === 'human') citizenHurt(e, dmg, src); return; }
   if (src && (e.blocking || (e.st.kind === 'titan' && e.mode === 1))) {
     const front = Math.sin(e.aimYaw) * (src.x - e.x) + Math.cos(e.aimYaw) * (src.z - e.z) > 0;
     if (e.st.kind === 'titan' && e.mode === 1) dmg *= front ? .1 : .6;
@@ -151,7 +150,7 @@ function hurt(e, dmg, src) {
 function explode(x, y, z, r, dmg, team, src) {
   boom(x, y, z, r);
   for (const e of ents) {
-    if (e.team === team || e.team === 2 || e.dead || e.hidden) continue;
+    if (e.team === team || (e.team === 2 && (e.kind !== 'human' || e.down)) || e.dead || e.hidden) continue;
     const d = Math.hypot(e.x - x, e.y + e.h * .5 - y, e.z - z) - e.r;
     if (d < r) hurt(e, dmg * (1 - .6 * Math.max(0, d) / r), src);
   }
@@ -160,17 +159,19 @@ function explode(x, y, z, r, dmg, team, src) {
 function kill(e) {
   e.dead = true;
   boom(e.x, e.y + e.h * .5, e.z, e.kind === 'mech' ? 4 * e.spec.size : e.kind === 'human' ? 1 : 3);
-  if (e === P.human) { G.deadT = 3; P.human.hidden = true; UI.toast('[boom] やられた… ひろばに もどるよ'); return; }
+  if (e === P.human) { G.deadT = 3; P.human.hidden = true; UI.toast(G.wanted ? '[police] 逮捕された…' : '[boom] やられた…'); return; }
   if (e === P.mech) {
     if (P.state === 'mech') exitVehicle(true);
-    e.hidden = true; e.broken = 40; UI.toast('[boom] メカが こわれた！ 40びょうで しゅうり できる'); return;
+    e.hidden = true; e.broken = 40; UI.toast('[boom] メカ大破　修理まで 40 秒'); return;
   }
+  if (e.kind === 'car') { if (P.car === e) exitVehicle(true); removeCar(e); return; }
   if (e === P.plane || e.kind === 'plane') {
     if (P.plane === e) exitVehicle(true);
     e.hidden = true; e.broken = 30; return;
   }
   const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1);
   if (e.team !== 1) return;
+  if (e.police) { addWanted(1, '警察を倒した'); return; }
   const t = e.tier || 0; G.kills++;
   if (e.kind === 'mech') {
     const m = (60 + 50 * t) * (e.boss ? 6 : 1); SV.money += m; addXp((20 + 15 * t) * (e.boss ? 4 : 1));
@@ -178,16 +179,21 @@ function kill(e) {
     if (e.boss || Math.random() < .04 + t * .01) gainMat('rare', e.boss ? 2 : 1);
     UI.gain('[money]+' + m);
   } else if (e.kind === 'drone') { SV.money += 25 + 10 * t; gainMat('scrap', 2); addXp(10); }
-  else if (e.boss) { const m = 500 + 150 * SV.rank; SV.money += m; gainMat('rare', 1); gainMat('core', 2); addXp(60); UI.toast('[dealer] やみしょうにんを やっつけた！ [money]+' + m); }
+  else if (e.boss) { const m = 500 + 150 * SV.rank; SV.money += m; gainMat('rare', 1); gainMat('core', 2); addXp(60); UI.toast('[dealer] 闇商人を倒した　[money]+' + m); }
   else { SV.money += 60; addXp(15); UI.gain('[money]+60'); }
   if (e.group) {
     e.group.members = e.group.members.filter(m => m !== e);
-    if (!e.group.members.length) { G.groups = G.groups.filter(g => g !== e.group); G.groupT = 60; if (G.job && G.job.group === e.group) jobDone(G.job.pay, 'やみしょうにん たいじ'); }
+    if (!e.group.members.length) { G.groups = G.groups.filter(g => g !== e.group); G.groupT = 60; if (G.job && G.job.group === e.group) jobDone(G.job.pay, '闇商人退治'); }
   }
-  if (G.job && G.job.target === e) jobDone(G.job.pay, 'おたずねもの たいじ');
+  if (G.job && G.job.target === e) jobDone(G.job.pay, 'お尋ね者退治');
 }
 function mine(n, amt) {
   if (n.hp <= 0) return; amt = Math.min(amt, n.hp); n.hp -= amt;
+  if (n.type === 'crop') {
+    SV.bag.veg++; UI.gain('[veg]+1'); sfx('hit'); n.t = 60;
+    const j = G.job; if (j && j.farm && ++j.got >= j.need) jobDone(j.pay, j.name);
+    return;
+  }
   gainMat(n.type, n.type === 'scrap' ? amt * 2 : amt);
   spark(n.x, 1.2, n.z, 4, n.type === 'core' ? 0x60e0ff : 0xc0a080, 5, .2); sfx('hit');
   if (n.hp <= 0) n.t = 75;
@@ -197,7 +203,7 @@ function mine(n, amt) {
 function rayEnts(ox, oy, oz, dx, dy, dz, max, team) {
   let best = null, bt = max;
   for (const e of ents) {
-    if (e.team === team || e.team === 2 || e.hidden || e.dead || e.parked) continue;
+    if (e.team === team || (e.team === 2 && (e.kind !== 'human' || e.down)) || e.hidden || e.dead || e.parked) continue;
     const cx = e.x - ox, cy = e.y + e.h * .5 - oy, cz = e.z - oz, tca = cx * dx + cy * dy + cz * dz;
     if (tca < 0 || tca > bt + 6) continue;
     const rad = Math.max(e.r, e.h * .45), d2 = cx * cx + cy * cy + cz * cz - tca * tca;
@@ -259,7 +265,7 @@ function melee(e, spin) {
     return spin || d < e.r + r || Math.abs(angDiff(Math.atan2(dx, dz), e.aimYaw)) < 1.15;
   };
   for (const o of ents.slice()) {
-    if (o.team === e.team || o.team === 2 || o.dead || o.hidden) continue;
+    if (o.team === e.team || (o.team === 2 && (o.kind !== 'human' || o.down)) || o.dead || o.hidden) continue;
     if (Math.abs(o.y - e.y) > Math.max(e.h, o.h) || !hitOk(o.x, o.z, o.r)) continue;
     hurt(o, dmg, e); spark(o.x, o.y + o.h * .5, o.z, 5, 0xffe0a0, 6, .2);
     const d = Math.hypot(o.x - e.x, o.z - e.z) || 1; o.vx += (o.x - e.x) / d * 8; o.vz += (o.z - e.z) / d * 8;
@@ -274,8 +280,8 @@ function control(e, inp, dt) {
   for (const k of TIMERS) if (e[k] > 0) e[k] -= dt;
   if (inp.mode && mech) {
     if (kind === 'ball') { e.mode = (e.mode + 1) % 4; if (me) UI.toast('[gear] モード: ' + BALL_MODES[e.mode]); }
-    else if (kind === 'titan') { e.mode = e.mode ? 0 : 1; if (me) UI.toast(e.mode ? '[shield] たてモード！ まえからの こうげきを ほとんど ふせぐ' : '[gear] こうげきモード'); }
-    else if (me) UI.toast('この メカに とくべつな モードは ないよ');
+    else if (kind === 'titan') { e.mode = e.mode ? 0 : 1; if (me) UI.toast(e.mode ? '[shield] 盾モード' : '[gear] 攻撃モード'); }
+    else if (me) UI.toast('このメカは変形できない');
     if (me) sfx('ui');
   }
   let spd = st.spd;
@@ -384,18 +390,6 @@ function updDrone(e, dt) {
   const want = Math.max(8, (a.aggro ? t.y : 0) + 8) + Math.sin(G.t * 1.3 + e.x) * 1.2; e.y += (want - e.y) * Math.min(1, dt);
   if (W.pointIn(e.x, e.y, e.z)) e.y += 12 * dt;
 }
-function updCitizen(e, dt) {
-  const c = e.corner, dx = c.x - e.x, dz = c.z - e.z, d = Math.hypot(dx, dz);
-  if (d < .6) {
-    let n;
-    if (Math.random() < .55) { const ax = Math.random() < .5; n = W.corners.find(q => q.i === c.i && q.j === c.j && q.sx === (ax ? -c.sx : c.sx) && q.sz === (ax ? c.sz : -c.sz)); }
-    else { const ax = Math.random() < .5; n = W.corners.find(q => q.i === c.i + (ax ? c.sx : 0) && q.j === c.j + (ax ? 0 : c.sz) && q.sx === (ax ? -c.sx : c.sx) && q.sz === (ax ? c.sz : -c.sz)); }
-    if (n) e.corner = n; return;
-  }
-  e.yaw = Math.atan2(dx, dz); e.x += dx / d * e.st.spd * dt; e.z += dz / d * e.st.spd * dt; e.walk += e.st.spd * dt * 2.2;
-  const g = collide(e); e.y = g;
-}
-
 // ---------- ひこうき ----------
 function updPlane(p, dt) {
   for (const k of ['fcd', 'bcd', 'flash', 'rollT']) if (p[k] > 0) p[k] -= dt;
@@ -422,7 +416,7 @@ function updPlane(p, dt) {
   p.vx = fx_ * p.speed; p.vz = fz * p.speed; p.prop += p.speed * dt * 2 + p.thr * dt * 20;
   if (p.y <= 0) { if (vy < -16 || p.pitch < -.55) hurt(p, 60 + -vy * 2, null); p.y = 0; if (p.pitch < 0) p.pitch *= .5; }
   if (p.y > 420) { p.y = 420; if (p.pitch > 0) p.pitch *= .9; }
-  if (Math.abs(p.x) > 950 || Math.abs(p.z) > 950) { p.x = clamp(p.x, -950, 950); p.z = clamp(p.z, -950, 950); p.yaw += dt * 1.5; if (piloted && G.t % 3 < dt) UI.toast('ここから さきは いけない。ひきかえそう'); }
+  if (Math.abs(p.x) > 950 || Math.abs(p.z) > 950) { p.x = clamp(p.x, -950, 950); p.z = clamp(p.z, -950, 950); p.yaw += dt * 1.5; if (piloted && G.t % 3 < dt) UI.toast('これ以上は進めない'); }
   if (p.speed > 3 && W.pointIn(p.x + fx_ * 3, p.y + 1.3, p.z + fz * 3)) { hurt(p, 70 + p.speed, null); p.x -= fx_ * 5; p.z -= fz * 5; p.speed = -4; boom(p.x + fx_ * 4, p.y + 1, p.z + fz * 4, 3); }
   if (!piloted || p.dead) return;
   if (IN.fire && p.fcd <= 0) {
@@ -437,25 +431,25 @@ function updPlane(p, dt) {
 }
 
 // ---------- のりおり ----------
-function enterMech() { const m = P.mech; P.state = 'mech'; P.human.hidden = true; m.parked = false; m.aimYaw = cam.yaw; sfx('ui'); if (SV.quest === 2) SV.quest = 3; UI.toast('[mech] ' + m.name + ' に のった'); }
-function enterPlane(p) { P.plane = p; P.state = 'plane'; P.human.hidden = true; p.parked = false; cam.yaw = p.yaw; sfx('ui'); UI.toast('[plane] W で スピードアップ、マウスを うえに うごかすと とびたつ'); }
+function enterMech() { const m = P.mech; P.state = 'mech'; P.human.hidden = true; m.parked = false; m.aimYaw = cam.yaw; sfx('ui'); if (SV.quest === 2) SV.quest = 3;  }
+function enterPlane(p) { P.plane = p; P.state = 'plane'; P.human.hidden = true; p.parked = false; cam.yaw = p.yaw; sfx('ui'); UI.toast('[plane] W で加速、マウスを上へ動かすと離陸'); }
 function exitVehicle(forced) {
   const b = body(), h = P.human; if (b === h) return;
   const off = b.r + 1; h.x = b.x - Math.cos(b.yaw) * off; h.z = b.z + Math.sin(b.yaw) * off; h.y = b.y; h.vx = h.vz = h.vy = 0; h.yaw = b.yaw;
   h.hidden = false; h.chute = b.y > 4 || !b.onGround && P.state === 'plane';
   if (P.state === 'plane') { if (!forced) b.thr = 0; }
-  b.parked = true; b.mode = 0; b.blocking = false;
+  b.parked = true; b.mode = 0; b.blocking = false; if (b.kind === 'car') { b.team = 2; b.speed = 0; }
   P.state = 'foot'; if (!forced) sfx('ui');
 }
 function callMech() {
   if (P.state !== 'foot') return;
   const m = P.mech;
-  if (!m) return UI.toast('まだ メカを もっていない。[wrench]こうぼうで つくろう');
-  if (m.broken > 0) return UI.toast('メカは しゅうりちゅう… あと ' + Math.ceil(m.broken) + 'びょう');
-  if (G.callCd > 0) return UI.toast('よびだしは あと ' + Math.ceil(G.callCd) + 'びょう まってね');
+  if (!m) return UI.toast('メカを持っていない');
+  if (m.broken > 0) return UI.toast('修理中　あと ' + Math.ceil(m.broken) + ' 秒');
+  if (G.callCd > 0) return UI.toast('呼び出しまで あと ' + Math.ceil(G.callCd) + ' 秒');
   if (P.human.y > 1 && W.pointIn(P.human.x, P.human.y - .5, P.human.z)) { /* たてものの 上でも よべる */ }
   G.callCd = 15; m.x = P.human.x + Math.sin(cam.yaw) * 7; m.z = P.human.z + Math.cos(cam.yaw) * 7; m.y = P.human.y + 45; m.vx = m.vz = m.vy = 0;
-  UI.toast('[call] メカを よんだ！ そらから おりてくる'); sfx('launch', 0);
+  UI.toast('[call] メカを呼んだ'); sfx('launch', 0);
 }
 
 // ---------- たてる ----------
@@ -482,7 +476,7 @@ function removePiece(p) {
 const edgePiece = (t) => ['wall', 'door', 'window', 'bigwall'].includes(PIECES[t].id);
 function updBuild() {
   const B_ = G.build, b = body();
-  if (IN.hit.KeyB && P.state !== 'plane') { B_.on = !B_.on; UI.buildBar(); sfx('ui'); if (B_.on && W.inCity(b.x, b.z, 6)) UI.toast('まちの なかには たてられない。まちの そとへ 出よう'); }
+  if (IN.hit.KeyB && P.state !== 'plane') { B_.on = !B_.on; UI.buildBar(); sfx('ui'); if (B_.on && W.inCity(b.x, b.z, 6)) UI.toast('街の中には建てられない'); }
   if (!B_.on) { B_.ghost = null; return; }
   if (IN.wheel) { B_.t = (B_.t + (IN.wheel > 0 ? 1 : -1) + PIECES.length) % PIECES.length; UI.buildBar(); }
   if (IN.hit.KeyR) { B_.rot = (B_.rot + 1) % 4; }
@@ -494,11 +488,11 @@ function updBuild() {
   const g = { t: B_.t, gx: Math.round((cam.ex + dx * t) / 4), gy: B_.lvl, gz: Math.round((cam.ez + dz * t) / 4), rot: B_.rot, col: B_.col };
   const same = SV.pieces.find(p => p.gx === g.gx && p.gy === g.gy && p.gz === g.gz && p.t === g.t && (!edgePiece(g.t) || p.rot === g.rot));
   const x = g.gx * 4, z = g.gz * 4;
-  B_.ok = !same && canPay(PIECES[g.t].cost) && !W.inCity(x, z, 6) && !W.inAirport(x, z) && Math.hypot(x - b.x, z - b.z) > b.r + 1.5;
+  B_.ok = !same && canPay(PIECES[g.t].cost) && !W.inCity(x, z, 6) && ['grass', 'junk', 'rock', 'waste'].includes(W.region(x, z)) && Math.hypot(x - b.x, z - b.z) > b.r + 1.5;
   B_.ghost = g;
   if (IN.hit.fire) {
     if (B_.ok) { pay(PIECES[g.t].cost); SV.pieces.push(g); addPiece(g); sfx('build'); if (SV.quest === 4) SV.quest = 5; save(); UI.buildBar(); }
-    else UI.toast(same ? 'そこには もう ある' : !canPay(PIECES[g.t].cost) ? 'ざいりょうが たりない (' + costText(PIECES[g.t].cost) + ')' : 'ここには たてられない');
+    else UI.toast(same ? 'すでに置いてある' : !canPay(PIECES[g.t].cost) ? '素材が足りない　' + costText(PIECES[g.t].cost) : 'ここには建てられない');
   }
   if (IN.hit.sub) {
     const p = same || SV.pieces.slice().reverse().find(q => q.gx === g.gx && q.gy === g.gy && q.gz === g.gz);
@@ -518,41 +512,6 @@ function updTurrets(dt) {
 }
 
 // ---------- しごと ----------
-function startJob(type) {
-  if (G.job) return UI.toast('いまの しごとを さきに おわらせよう');
-  if (type === 'deliver') {
-    const a = pick(W.corners); let b = pick(W.corners); for (let i = 0; i < 20 && Math.hypot(a.x - b.x, a.z - b.z) < 120; i++) b = pick(W.corners);
-    const d = Math.hypot(a.x - b.x, a.z - b.z);
-    G.job = { type, stage: 0, a, b, pay: Math.round(120 + d * .9), t: 0, limit: 25 + d / 5, name: 'はいたつ' };
-    UI.toast('[box] にもつを うけとりに いこう (あおい ひかり)');
-  } else if (type === 'bounty') {
-    if (!SV.mechs.length) return UI.toast('メカを もってから うけよう');
-    const tier = Math.min(6, 1 + Math.floor(SV.rank / 2)), e = spawnEnemyMech(rnd(-320, 320), rnd(300, 560), tier, true);
-    e.ai.keep = true; G.job = { type, target: e, pay: 700 + 300 * SV.rank, name: 'おたずねもの たいじ' };
-    UI.toast('[target] みなみの こうやに おたずねものが いる！');
-  } else if (type === 'dealer') {
-    if (!G.groups.length) spawnGroup(true);
-    const g = G.groups[0]; if (!g) return UI.toast('いまは やみしょうにんの じょうほうが ない');
-    G.job = { type, group: g, pay: 400 + 100 * SV.rank, name: 'やみしょうにん たいじ' };
-    UI.toast('[dealer] マンションの うらろじに やみしょうにんが いる！');
-  }
-  save();
-}
-function jobDone(payAmt, name) {
-  SV.money += payAmt; SV.jobs++; addXp(30); G.job = null; if (SV.quest === 3) SV.quest = 4;
-  UI.toast('[check] ' + name + ' かんりょう！ [money]+' + payAmt); sfx('coin'); save();
-}
-function updJob(dt) {
-  const j = G.job; if (!j) return;
-  const b = body();
-  if (j.type === 'deliver') {
-    j.t += dt; const p = j.stage ? j.b : j.a;
-    if (Math.hypot(b.x - p.x, b.z - p.z) < 5 + b.r) {
-      if (!j.stage) { j.stage = 1; j.t = 0; UI.toast('[box] にもつを うけとった！ とどけさきへ いそげ'); sfx('ui'); }
-      else jobDone(Math.round(j.pay * (j.t < j.limit ? 1.5 : 1)), j.t < j.limit ? 'はいたつ (スピード ボーナス！)' : 'はいたつ');
-    }
-  }
-}
 function spawnGroup(force) {
   const used = G.groups.map(g => g.alley), h = P.human;
   const cand = W.alleys.filter(a => !used.includes(a) && (force || Math.hypot(a.x - h.x, a.z - h.z) > 70));
@@ -563,53 +522,15 @@ function spawnGroup(force) {
   for (const m of g.members) m.y = .2;
   G.groups.push(g);
 }
-function spawnTick() {
-  const b = body(), reg = W.region(b.x, b.z);
-  // 遠くの てきは けす
-  for (const e of ents.slice()) if (e.team === 1 && !e.group && !(e.ai && e.ai.keep) && Math.hypot(e.x - b.x, e.z - b.z) > 430) ents.splice(ents.indexOf(e), 1);
-  if (G.groups.length < 3 && G.groupT <= 0) { spawnGroup(false); G.groupT = 20; }
-  if (!SV.mechs.length || reg === 'city' || reg === 'airport') return;
-  const wild = ents.filter(e => e.team === 1 && !e.group && !e.boss).length;
-  const rk = Math.floor(SV.rank / 3), far = Math.hypot(b.x, b.z) > 480 ? 1 : 0;
-  const cfg = { grass: [2, 0], junk: [2, 0], rock: [3, 0], waste: [Math.min(9, 5 + SV.rank / 2), 1] }[reg];
-  if (wild >= cfg[0]) return;
-  for (let i = 0; i < 8; i++) {
-    const an = rnd(6.28), d = rnd(110, 170), x = b.x + Math.sin(an) * d, z = b.z + Math.cos(an) * d;
-    if (W.inCity(x, z, 30) || W.inAirport(x, z) || Math.abs(x) > W.size - 20 || Math.abs(z) > W.size - 20) continue;
-    const tier = Math.min(6, cfg[1] + rk + far);
-    if (reg === 'junk' || Math.random() < .3) spawnDrone(x, z, tier); else spawnEnemyMech(x, z, tier, false);
-    return;
-  }
-}
-
 // ---------- プレイヤー ----------
 function interact() {
   const pr = G.prompt; if (pr && pr.act) pr.act();
 }
-function findPrompt() {
-  const b = body(); G.prompt = null;
-  if (G.build.on) return;
-  for (const f of W.facilities) if (Math.hypot(f.x - b.x, f.z - b.z) < f.r + b.r) { G.prompt = { text: 'E: ' + f.icon + ' ' + f.name, act: () => UI.open(f.id) }; return; }
-  for (const p of G.usePieces) {
-    if (Math.hypot(p.gx * 4 - b.x, p.gz * 4 - b.z) > 2.6 + b.r || Math.abs(p.gy * 3 - b.y) > 2) continue;
-    if (PIECES[p.t].use === 'pad') { G.prompt = { text: 'E: [wrench] こうぼう (じぶんの きち)', act: () => UI.open('workshop') }; return; }
-    if (P.state === 'foot') { G.prompt = { text: 'E: [bed] ねる (あさまで やすむ)', act: () => sleep(p) }; return; }
-  }
-  if (P.state === 'foot') {
-    const m = P.mech;
-    if (m && !m.hidden && Math.hypot(m.x - b.x, m.z - b.z) < m.r + 2.5) { G.prompt = { text: 'E: [mech] ' + m.name + ' に のる', act: enterMech }; return; }
-    for (const p of G.planes) if (!p.hidden && Math.hypot(p.x - b.x, p.z - b.z) < 6 && Math.abs(p.y - b.y) < 4) { G.prompt = { text: 'E: [plane] ' + p.name + ' に のる', act: () => enterPlane(p) }; return; }
-  } else G.prompt = { text: P.state === 'plane' && b.y > 4 ? 'E: とびおりる (パラシュート)' : 'E: おりる', act: () => exitVehicle(false) };
-}
-function sleep(p) {
-  SV.time = .27; P.human.hp = P.human.maxhp; SV.bed = { x: p.gx * 4 + 1.6, y: p.gy * 3, z: p.gz * 4 }; save();
-  UI.toast('[bed] ぐっすり ねた。あさに なった！ (やられたら ここに もどる)'); sfx('coin');
-}
 function useKit() {
   const b = body();
-  if (SV.kits <= 0) return UI.toast('リペアキットが ない。[food]しょくどうで かえる');
-  if (b.hp >= b.maxhp) return UI.toast('たいりょくは まんたん');
-  SV.kits--; b.hp = Math.min(b.maxhp, b.hp + b.maxhp * .5); sfx('coin'); UI.toast('[kit] かいふくした (のこり ' + SV.kits + ')');
+  if (SV.kits <= 0) return UI.toast('リペアキットがない');
+  if (b.hp >= b.maxhp) return UI.toast('体力は満タン');
+  SV.kits--; b.hp = Math.min(b.maxhp, b.hp + b.maxhp * .5); sfx('coin'); UI.toast('[kit] 回復　残り ' + SV.kits);
 }
 function updPlayer(dt) {
   const b = body(), h = P.human;
@@ -617,7 +538,9 @@ function updPlayer(dt) {
     G.deadT -= dt;
     if (G.deadT <= 0) {
       h.dead = false; h.hidden = false; h.hp = h.maxhp; const s = SV.bed || { x: 0, y: .2, z: 0 }; h.x = s.x; h.y = s.y; h.z = s.z; h.vx = h.vy = h.vz = 0;
-      const loss = Math.round(SV.money * .1); SV.money -= loss; if (loss) UI.toast('[money] ちりょうひ ' + loss + ' を はらった'); save();
+      const arrest = G.wanted > 0, loss = Math.round(SV.money * (arrest ? .2 : .1)); SV.money -= loss;
+      if (arrest) { SV.loot = 0; clearPolice(); UI.toast('[police] 罰金 ' + loss + '　盗品は没収'); } else if (loss) UI.toast('[money] 治療費 ' + loss);
+      save();
     }
     return;
   }
@@ -626,6 +549,7 @@ function updPlayer(dt) {
   if (IN.hit.KeyC && !G.build.on) callMech();
   if (P.state === 'plane') return;
   cam.yaw -= IN.mdx * .0026; cam.pitch = clamp(cam.pitch - IN.mdy * .0026, -1.25, 1.3); IN.mdx = IN.mdy = 0;
+  if (P.state === 'car') { updCar(b, dt); return; }
   const f = (IN.k.KeyW ? 1 : 0) - (IN.k.KeyS ? 1 : 0) + IN.sy, s = (IN.k.KeyD ? 1 : 0) - (IN.k.KeyA ? 1 : 0) + IN.sx;
   const sn = Math.sin(cam.yaw), cs = Math.cos(cam.yaw);
   let mx = sn * f - cs * s, mz = cs * f + sn * s; const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
@@ -636,21 +560,22 @@ function updPlayer(dt) {
   if (b.chute && b.vy < -4) b.vy = -4;
   control(b, inp, dt);
   // かいふく
-  if (G.t - G.lastHurt > 7 && b.hp < b.maxhp) b.hp = Math.min(b.maxhp, b.hp + b.maxhp * .03 * dt);
+  if (G.t - G.lastHurt > 7 && b.hp < b.maxhp && (SV.hunger > 0 || b !== h)) b.hp = Math.min(b.maxhp, b.hp + b.maxhp * .03 * dt);
 }
 
 // ---------- 1 コマ すすめる ----------
 function update(dt) {
-  G.t += dt; SV.time = (SV.time + dt / 600) % 1;
+  G.t += dt; const t0 = SV.time; SV.time = (SV.time + dt / 600) % 1; if (SV.time < t0) G.dayN++;
   if (G.hitT > 0) G.hitT -= dt; if (G.callCd > 0) G.callCd -= dt; if (G.lockT > 0) { G.lockT -= dt; if (G.lockT <= 0) G.lock = null; }
   if (G.lock && G.lock.dead) G.lock = null;
   G.groupT -= dt;
-  updBuild(); findPrompt(); updPlayer(dt);
+  updBuild(); findPrompt(); updPlayer(dt); lifeUpdate(dt);
   for (const e of ents.slice()) {
     if (e.dead && !e.broken) continue;
-    if (e.broken > 0) { e.broken -= dt; if (e.broken <= 0) { e.dead = false; e.hidden = false; e.hp = e.maxhp; e.parked = true; if (e.kind === 'plane') { e.x = e.spot.x; e.z = e.spot.z; e.y = 0; e.yaw = e.spot.yaw; e.pitch = 0; e.speed = 0; } else { e.x = P.human.x + 4; e.z = P.human.z; e.y = P.human.y + 40; UI.toast('[wrench] メカの しゅうりが おわった！'); } } continue; }
+    if (e.broken > 0) { e.broken -= dt; if (e.broken <= 0) { e.dead = false; e.hidden = false; e.hp = e.maxhp; e.parked = true; if (e.kind === 'plane') { e.x = e.spot.x; e.z = e.spot.z; e.y = 0; e.yaw = e.spot.yaw; e.pitch = 0; e.speed = 0; } else { e.x = P.human.x + 4; e.z = P.human.z; e.y = P.human.y + 40; UI.toast('[wrench] メカの修理完了'); } } continue; }
     if (e.kind === 'plane') { updPlane(e, dt); continue; }
     if (e === body()) continue;
+    if (e.kind === 'car') { if (e.traffic) updTraffic(e, dt); continue; }
     if (e.citizen) { if (Math.hypot(e.x - cam.ex, e.z - cam.ez) < 220) updCitizen(e, dt); continue; }
     if (e.kind === 'drone') { updDrone(e, dt); continue; }
     if (e.parked || e === P.human) { if (!e.hidden) { e.vx *= .8; e.vz *= .8; physics(e, dt); for (const k of TIMERS) if (e[k] > 0) e[k] -= dt; e.spinA = 0; } continue; }
@@ -670,7 +595,7 @@ function update(dt) {
       let hit = null;
       if (s.life <= 0 || s.y <= 0 || W.pointIn(s.x, s.y, s.z)) done = true;
       else for (const e of ents) {
-        if (e.team === s.team || e.team === 2 || e.dead || e.hidden || e.parked) continue;
+        if (e.team === s.team || (e.team === 2 && (e.kind !== 'human' || e.down)) || e.dead || e.hidden || e.parked) continue;
         const dx = e.x - s.x, dz = e.z - s.z, rr = e.r + s.size;
         if (dx * dx + dz * dz < rr * rr && s.y > e.y - .2 && s.y < e.y + e.h + .2) { hit = e; done = true; break; }
       }
@@ -696,40 +621,29 @@ function update(dt) {
       if (Math.hypot(base.x - b.x, base.z - b.z) < 160 && !W.inCity(b.x, b.z)) {
         const n = 2 + Math.min(4, Math.floor(SV.rank / 2)), an = rnd(6.28);
         for (let i = 0; i < n; i++) { const e = spawnEnemyMech(base.x + Math.sin(an + i * .3) * 110, base.z + Math.cos(an + i * .3) * 110, Math.min(6, Math.floor(SV.rank / 3) + 1), false); e.ai.aggro = true; }
-        UI.toast('[warn] しゅうげきだ！ ならずものが きちに むかってくる！'); sfx('boom', 0);
+        UI.toast('[warn] 襲撃！ ならず者が基地に向かってくる'); sfx('boom', 0);
       }
     }
   }
   // チュートリアル
-  if (SV.quest === 0 && SV.mats.scrap >= 20) { SV.quest = 1; UI.toast('[scrap] スクラップが あつまった！ ひろばの [wrench]こうぼうへ'); }
+  if (SV.quest === 0 && SV.mats.scrap >= 20) { SV.quest = 1; UI.toast('[scrap] スクラップがそろった'); }
   if (SV.quest <= 1 && SV.mechs.length) SV.quest = 2;
   for (const k in IN.hit) IN.hit[k] = false; IN.wheel = 0;
 }
-function questInfo() {
-  const b = body();
-  switch (SV.quest) {
-    case 0: return { text: 'きたの スクラップおきばで スクラップを 20こ あつめよう (F で たたく)  ' + SV.mats.scrap + '/20', x: 0, z: -222 };
-    case 1: return { text: 'ひろばの [wrench]こうぼうで じぶんの メカを つくろう', x: W.facilities[0].x, z: W.facilities[0].z };
-    case 2: return P.mech ? { text: 'メカに ちかづいて E で のろう (C で よびだせる)', x: P.mech.x, z: P.mech.z } : null;
-    case 3: return { text: 'ひろばの [jobs]しごと あんないで しごとを うけて おかねを かせごう', x: W.facilities[3].x, z: W.facilities[3].z };
-    case 4: return { text: 'まちの そとで B を おして じぶんの きちを たてよう', x: b.x, z: b.z, none: true };
-    default: return null;
-  }
-}
-
 // ---------- カメラと 描画 ----------
 function updateCamera(dt) {
   if (G.title) {
     G.pvAng += dt * .12; cam.tx = 0; cam.ty = 4.5; cam.tz = 0; cam.ex = Math.sin(G.pvAng) * 13.5; cam.ey = 2.6; cam.ez = Math.cos(G.pvAng) * 13.5; cam.shadowR = 90; return;
   }
   if (G.preview) {
-    G.pvAng += dt * .5; const s = G.preview.size || 1, d = 9 * s + 4, sr = W.showroom, h = 2.4 * s;
+    G.pvAng += dt * .5; const s = G.preview.human ? .4 : G.preview.size || 1, d = 9 * s + (G.preview.human ? .8 : 4), sr = W.showroom, h = 2.4 * s;
     cam.tx = sr.x - Math.cos(G.pvAng) * d * .38; cam.ty = h; cam.tz = sr.z + Math.sin(G.pvAng) * d * .38;
     cam.ex = sr.x + Math.sin(G.pvAng) * d; cam.ey = h + 2 * s; cam.ez = sr.z + Math.cos(G.pvAng) * d; cam.shadowR = 40; return;
   }
   const b = body(), cy = Math.cos(cam.pitch), dx = Math.sin(cam.yaw) * cy, dy = Math.sin(cam.pitch), dz = Math.cos(cam.yaw) * cy;
   let dist, h, side;
   if (P.state === 'plane') { dist = 17; h = 3.6; side = 0; }
+  else if (P.state === 'car') { dist = 9.5; h = 2.5; side = 0; }
   else if (b.kind === 'mech') { const z = b.spec.size; dist = 7.5 * z + 3.5; h = b.h * .82; side = 1.5 * z; }
   else { dist = 4.4; h = 1.65; side = .65; }
   const tx = b.x - Math.cos(cam.yaw) * side, ty = b.y + h, tz = b.z + Math.sin(cam.yaw) * side;
@@ -760,12 +674,12 @@ function environment() {
   };
 }
 function drawEnt(e) {
-  if (e.kind === 'mech') drawMech(e); else if (e.kind === 'human') drawHuman(e); else if (e.kind === 'plane') drawPlane(e); else drawDrone(e);
+  if (e.kind === 'mech') drawMech(e); else if (e.kind === 'human') drawHuman(e); else if (e.kind === 'plane') drawPlane(e); else if (e.kind === 'car') drawCar(e); else drawDrone(e);
 }
 function render(dt) {
   updateCamera(dt);
   R.begin();
-  const cx = cam.tx, cz = cam.tz;
+  const cx = cam.tx, cz = cam.tz, env = environment(); NIGHT = env.night > .5 ? 1 : 0;
   for (const e of ents) {
     if (e.hidden || e.dead) continue;
     const d = Math.hypot(e.x - cx, e.z - cz); if (d > (e.kind === 'human' ? 170 : 420)) continue;
@@ -774,6 +688,12 @@ function render(dt) {
   for (const n of W.nodes) if (n.hp > 0 && Math.hypot(n.x - cx, n.z - cz) < 240) drawNode(n);
   for (const p of SV.pieces) if (Math.hypot(p.gx * 4 - cx, p.gz * 4 - cz) < 380) drawPiece(p, 0);
   for (const t of G.turrets) drawTurret(t);
+  for (const hs of W.houses) {
+    if (Math.abs(hs.x - cx) > 70 || Math.abs(hs.z - cz) > 70) continue;
+    for (const l of hs.loot) if (l.t <= 0) drawLoot(l, G.t);
+    if (hs.sale) { B(hs.door.x + 2.4, .8, hs.door.z + hs.f * 1.5, .1, 1.6, .1, 0xf0f0f0); B(hs.door.x + 2.4, 1.5, hs.door.z + hs.f * 1.5, 1.3, .7, .08, 0xd03030, .3); }
+  }
+  if (env.night > .3) { R.glow(1); for (const l of W.lamps) if (Math.abs(l.x - cx) < 130 && Math.abs(l.z - cz) < 130) S(l.x, 5.6, l.z, 2.2, 2.2, 2.2, 0xffe2a0, .16 * env.night); R.glow(0); }
   for (const g of G.groups) { const a = g.alley; if (Math.hypot(a.x - cx, a.z - cz) < 150) { B(a.x + 1.4, .7, a.z, 1.6, 1, 1, 0x6a4a2a); B(a.x + 1.4, 1.35, a.z, 1.2, .3, .7, 0x303038); S(a.x + 1.4, 2.4, a.z, .3, .3, .3, 0xb060ff, 1); } }
   R.glow(1);
   for (const f of W.facilities) if (Math.hypot(f.x - cx, f.z - cz) < 200) C(f.x, f.y + .1, f.z, f.r * 2, .12, f.r * 2, f.col, .35 + Math.sin(G.t * 3) * .1);
@@ -798,17 +718,13 @@ function render(dt) {
   }
   R.glow(0);
   G.beacons.length = 0;
-  const q = questInfo(); if (q && !q.none) G.beacons.push({ x: q.x, z: q.z, col: 0xffd040, label: 'もくひょう' });
-  const j = G.job;
-  if (j) {
-    if (j.type === 'deliver') { const p = j.stage ? j.b : j.a; G.beacons.push({ x: p.x, z: p.z, col: j.stage ? 0x60ff80 : 0x40a0ff, label: j.stage ? 'とどけさき' : 'にもつ' }); }
-    else if (j.type === 'bounty' && !j.target.dead) G.beacons.push({ x: j.target.x, z: j.target.z, col: 0xff4040, label: 'おたずねもの' });
-    else if (j.type === 'dealer') G.beacons.push({ x: j.group.alley.x, z: j.group.alley.z, col: 0xb060ff, label: 'やみしょうにん' });
-  }
+  const q = questInfo(); if (q && !q.none && !G.job) G.beacons.push({ x: q.x, z: q.z, col: 0xffd040, label: '目標' });
+  for (const p of jobPoints()) G.beacons.push({ x: p.x, z: p.z, col: p.col || 0x40c0ff, label: p.label });
   for (const b of G.beacons) drawBeacon(b.x, 0, b.z, b.col, G.t);
   if (G.build.ghost) drawPiece(G.build.ghost, G.build.ok ? 1 : 2);
-  if (G.preview) { const pv = G.pv || (G.pv = baseEnt('mech', 0, W.showroom.x, W.showroom.z)); pv.spec = G.preview; pv.st = mechStats(G.preview); pv.load = SV.load; pv.walk = G.t * 2; pv.aimYaw = pv.yaw = 0; drawMech(pv); }
-  R.render(cam, environment());
+  if (G.preview) { const pv = G.pv || (G.pv = baseEnt('mech', 0, W.showroom.x, W.showroom.z)); pv.walk = G.t * 2; pv.aimYaw = pv.yaw = 0; pv.load = SV.load; if (!G.preview.human) { pv.spec = G.preview; pv.st = mechStats(G.preview); }
+    if (G.preview.human) { const hm = G.pvH || (G.pvH = mkHuman(0, W.showroom.x, W.showroom.z)); hm.fit = SV.outfit; hm.walk = G.t * 3; drawHuman(hm); } else drawMech(pv); }
+  R.render(cam, env);
 }
 
 // ---------- 効果音 (ブラウザの シンセ) ----------
@@ -830,12 +746,12 @@ function sfx(name, dist) {
 // ---------- はじめる ----------
 function startGame() {
   ents = []; shots = []; fx = []; beams = []; G.planes = []; G.turrets = []; G.usePieces = []; G.groups = []; G.job = null;
-  P.human = mkHuman(0, 0, 0); P.human.load = SV.load; P.human.y = .2; P.state = 'foot'; P.mech = null; P.plane = null;
+  P.human = mkHuman(0, 0, 0); P.human.load = SV.load; P.human.y = .2; P.state = 'foot'; P.mech = null; P.plane = null; P.human.fit = SV.outfit;
   if (SV.bed) { P.human.x = SV.bed.x; P.human.y = SV.bed.y; P.human.z = SV.bed.z; }
   ents.push(P.human);
   if (SV.mechs.length) spawnPlayerMech(P.human.x + 5, P.human.z + 3);
   W.planeSpots.forEach((s, i) => { if (i < 2 || SV.jet) mkPlane(s, i === 2); });
   for (const p of SV.pieces) addPiece(p);
-  for (let i = 0; i < 16; i++) spawnCitizen();
+  lifeStart();
   G.running = true;
 }
