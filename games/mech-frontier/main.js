@@ -1,0 +1,166 @@
+/* MECH FRONTIER の入口: 入力・メインループ・タイトル・自動の画質調整 */
+'use strict';
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const cv = $('game');
+  const touch = 'ontouchstart' in window && navigator.maxTouchPoints > 0;
+  let demo = [];
+
+  function fail(msg) { $('err').textContent = msg; $('err').classList.remove('hidden'); }
+  window.addEventListener('error', (e) => fail('エラー: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
+
+  if (!R.init(cv)) { $('title').querySelector('.tBtns').classList.add('hidden'); fail('この ブラウザは WebGL2 に たいおうしていないため あそべません。あたらしい Chrome / Safari / Edge で ひらいてください。'); return; }
+  const had = load();
+  R.shadowQ = SV.q.shadow;
+  W.build(); UI.init();
+  startGame(); G.running = false; G.title = true; P.human.hidden = true;
+  [[45, 0, 0], [12, -6, 3], [2, 6, 2], [22, -1, 7], [27, 3, -6]].forEach(([f, x, z], i) => { const m = mkMech(FRAMES[f], 2, x, z); m.parked = true; m.citizen = true; m.yaw = m.aimYaw = i * 1.3; m.load = { main: 'mg', sub: i === 1 ? 'tower' : null, melee: 'sword' }; ents.push(m); demo.push(m); });
+  $('btnCont').classList.toggle('hidden', !had);
+  $('btnNew').textContent = had ? 'さいしょから' : 'はじめる';
+
+  function begin(fresh) {
+    for (const p of SV.pieces) if (p.boxes) for (const b of p.boxes) W.removeBox(b);
+    if (fresh) { SV = freshSave(); save(); R.shadowQ = SV.q.shadow; }
+    demo = [];
+    startGame(); G.title = false;
+    $('title').classList.add('hidden'); $('hud').classList.remove('hidden'); if (touch) $('touch').classList.remove('hidden');
+    try { sfx('ui'); if (AC && AC.state === 'suspended') AC.resume(); } catch (e) { /* 音なしで つづける */ }
+    if (!touch && cv.requestPointerLock) cv.requestPointerLock();
+    if (!had || fresh) UI.toast('ようこそ！ まずは きたの スクラップおきばへ。きいろい ひかりが めじるし');
+  }
+  $('btnNew').onclick = function () { if (had && !this.dataset.sure) { this.dataset.sure = 1; this.textContent = 'ほんとうに さいしょから (データは きえる)'; return; } begin(true); };
+  $('btnCont').onclick = () => begin(false);
+  $('btnPause').onclick = () => UI.open('pause');
+
+  // ---------- キーボードと マウス ----------
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
+    if (!G.running) return;
+    if (e.code === 'Escape') { if (G.menu) UI.close(); else UI.open('pause'); return; }
+    if (G.menu) { if (e.code === 'KeyE' && !e.repeat) UI.close(); else UI.key(e.code); return; }
+    if (!e.repeat) IN.hit[e.code] = true;
+    IN.k[e.code] = true;
+  });
+  window.addEventListener('keyup', (e) => { IN.k[e.code] = false; });
+  window.addEventListener('blur', () => { IN.k = {}; IN.fire = IN.sub = false; });
+  cv.addEventListener('mousedown', (e) => {
+    if (!G.running || G.menu) return;
+    if (!touch && document.pointerLockElement !== cv) { cv.requestPointerLock(); return; }
+    if (e.button === 0) { IN.fire = true; IN.hit.fire = true; } else if (e.button === 2) { IN.sub = true; IN.hit.sub = true; }
+  });
+  window.addEventListener('mouseup', (e) => { if (e.button === 0) IN.fire = false; else if (e.button === 2) IN.sub = false; });
+  window.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.addEventListener('mousemove', (e) => { if (document.pointerLockElement === cv && !G.menu) { IN.mdx += e.movementX; IN.mdy += e.movementY; } });
+  window.addEventListener('wheel', (e) => { if (G.running && !G.menu) IN.wheel = e.deltaY > 0 ? 1 : -1; }, { passive: true });
+  document.addEventListener('pointerlockchange', () => {
+    const locked = document.pointerLockElement === cv;
+    $('clickHint').classList.toggle('hidden', locked || touch || !G.running || G.menu);
+    if (!locked) { IN.fire = IN.sub = false; if (G.running && !G.menu && !touch) UI.open('pause'); }
+  });
+  const closeMenu = UI.close;
+  UI.close = () => { closeMenu(); if (!touch && G.running && cv.requestPointerLock) { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => $('clickHint').classList.remove('hidden')); } };
+  $('mClose').onclick = UI.close;
+
+  // ---------- タッチ ----------
+  if (touch) {
+    let stickId = null, lookId = null, sx0 = 0, sy0 = 0, lx = 0, ly = 0;
+    const knob = $('stick').firstElementChild;
+    cv.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.clientX < innerWidth * .4 && stickId === null) { stickId = t.identifier; sx0 = t.clientX; sy0 = t.clientY; $('stick').style.left = sx0 - 60 + 'px'; $('stick').style.top = sy0 - 60 + 'px'; $('stick').classList.add('on'); }
+        else if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
+      }
+    }, { passive: false });
+    cv.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === stickId) { let dx = (t.clientX - sx0) / 50, dy = (t.clientY - sy0) / 50; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } IN.sx = dx; IN.sy = -dy; knob.style.transform = `translate(${dx * 36}px,${dy * 36}px)`; }
+        else if (t.identifier === lookId) { IN.mdx += (t.clientX - lx) * 2.2; IN.mdy += (t.clientY - ly) * 2.2; lx = t.clientX; ly = t.clientY; }
+      }
+    }, { passive: false });
+    const end = (e) => { for (const t of e.changedTouches) { if (t.identifier === stickId) { stickId = null; IN.sx = IN.sy = 0; knob.style.transform = ''; $('stick').classList.remove('on'); } else if (t.identifier === lookId) lookId = null; } };
+    cv.addEventListener('touchend', end); cv.addEventListener('touchcancel', end);
+    document.querySelectorAll('#touch [data-k]').forEach((b) => {
+      const k = b.dataset.k;
+      const down = (e) => { e.preventDefault(); if (k === 'fire') { IN.fire = true; IN.hit.fire = true; } else if (k === 'sub') { IN.sub = true; IN.hit.sub = true; } else { IN.k[k] = true; IN.hit[k] = true; } };
+      const up = (e) => { e.preventDefault(); if (k === 'fire') IN.fire = false; else if (k === 'sub') IN.sub = false; else IN.k[k] = false; };
+      b.addEventListener('touchstart', down, { passive: false }); b.addEventListener('touchend', up, { passive: false }); b.addEventListener('touchcancel', up, { passive: false });
+    });
+  }
+
+  // ---------- メインループ ----------
+  let last = performance.now(), ft = 16, tuneT = 0, saveT = 0;
+  function step(dt) {
+    if (G.running && !G.menu) update(dt); else { for (const k in IN.hit) IN.hit[k] = false; IN.mdx = IN.mdy = 0; IN.wheel = 0; }
+    render(dt);
+    if (G.running) UI.hud(dt);
+  }
+  function frame(t) {
+    requestAnimationFrame(frame);
+    const raw = (t - last) / 1000; last = t;
+    const dt = Math.min(.05, Math.max(.001, raw));
+    step(dt);
+    // おそい たんまつでは 解像度を 下げ、それでも おそければ 影を 1 だん 下げる
+    ft = ft * .93 + raw * 1000 * .07; tuneT += raw;
+    if (tuneT > 1.2 && SV.q.auto && document.hasFocus()) {
+      tuneT = 0;
+      if (ft > 24 && R.res > .55) R.res = Math.max(.55, R.res - .1);
+      else if (ft > 30 && R.shadowQ > 0) R.shadowQ--;
+      else if (ft < 17.5 && R.res < 1) R.res = Math.min(1, R.res + .05);
+    }
+    saveT += raw; if (saveT > 20 && G.running) { saveT = 0; save(); }
+    if ($('dbg')) $('dbg').textContent = `${Math.round(1000 / ft)}fps  draw ${R.stats.draws}  inst ${R.stats.inst}  x${R.res.toFixed(2)}`;
+  }
+
+  // ---------- 動作テスト (?test=1) と 画面確認 (?shot=なまえ) ----------
+  const qs = new URLSearchParams(location.search);
+  function debugSetup(name) {
+    begin(true); SV.money = 99999; SV.mats = { scrap: 999, iron: 999, core: 999, rare: 99 }; for (const w of WLIST) SV.own[w.id] = 1; SV.quest = 5; SV.time = .42;
+    const give = (i) => { const f = FRAMES[i]; SV.mechs.push(Object.assign({ fid: f.id }, f)); SV.active = SV.mechs.length - 1; spawnPlayerMech(P.human.x + 4, P.human.z); enterMech(); };
+    const h = P.human;
+    if (name === 'mech') { h.x = 30; h.z = 330; give(2); SV.load.main = 'gatling'; SV.load.sub = 'tower'; SV.load.melee = 'saber'; for (let i = 0; i < 4; i++) spawnEnemyMech(30 + i * 9 - 14, 372 + i * 3, 2, false).yaw = Math.PI; cam.yaw = 0; cam.pitch = -.05; }
+    else if (name === 'ball') { h.x = -40; h.z = 300; give(13); P.mech.mode = 2; SV.load.main = 'mg'; cam.yaw = .5; }
+    else if (name === 'titan') { h.x = 60; h.z = 300; give(48); P.mech.mode = 1; cam.yaw = 2.6; cam.pitch = -.1; spawnEnemyMech(40, 270, 3, false); }
+    else if (name === 'night') { SV.time = .9; h.x = 28; h.z = 60; cam.yaw = Math.PI; cam.pitch = .15; }
+    else if (name === 'plane') { enterPlane(G.planes[0]); const p = P.plane; p.y = 90; p.x = -120; p.z = 150; p.yaw = -.6; p.speed = 55; p.thr = 1; p.pitch = -.12; }
+    else if (name === 'base') {
+      h.x = -52; h.z = 262; cam.yaw = -2.3; cam.pitch = -.12;
+      const put = (t, gx, gy, gz, rot, col) => { const p = { t, gx: gx - 20, gy, gz: gz + 58, rot, col }; SV.pieces.push(p); addPiece(p); };
+      for (let x = 0; x < 3; x++) for (let z = 0; z < 2; z++) { put(0, x, 0, z, 0, 2); put(5, x, 1, z, 0, 4); }
+      for (let x = 0; x < 3; x++) { put(x === 1 ? 2 : 3, x, 0, 0, 0, 0); put(1, x, 0, 1, 2, 0); }
+      for (let z = 0; z < 2; z++) { put(1, 0, 0, z, 3, 0); put(3, 2, 0, z, 1, 0); }
+      put(7, 0, 0, 1, 0, 0); put(8, -1, 0, 0, 0, 0); put(9, 4, 0, 0, 0, 0); put(10, 4, 0, 2, 0, 0); put(6, -1, 0, 1, 0, 1);
+      G.build.on = true; UI.buildBar();
+    } else if (name === 'alley') { spawnGroup(true); const a = G.groups[0].alley; h.x = a.x; h.z = a.z + 12; cam.yaw = Math.PI; cam.pitch = -.05; SV.time = .5; }
+    else if (name.startsWith('menu')) { give(11); UI.open(name.split('-')[1] || 'workshop'); if (name.split('-')[2]) { UI.tab = name.split('-')[2]; UI.redraw(); } }
+    else if (name === 'city') { cam.yaw = 2.2; cam.pitch = .12; }
+    for (let i = 0; i < 40; i++) step(.016);
+  }
+  function selfTest() {
+    const log = []; const run = (label, fn) => { try { fn(); log.push('OK   ' + label); } catch (e) { log.push('FAIL ' + label + ': ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n')); } };
+    const sim = (n, keys) => { for (let i = 0; i < n; i++) { IN.k = {}; for (const k of keys) IN.k[k] = true; if (i % 37 === 0) for (const k of ['Space', 'ShiftLeft', 'KeyQ', 'KeyF', 'KeyR']) IN.hit[k] = true; IN.fire = i % 50 < 30; IN.sub = i % 80 < 20; IN.mdx = Math.sin(i * .05) * 6; step(.016); } };
+    run('あるく・うつ', () => { debugSetup('city'); sim(400, ['KeyW']); });
+    run('ざいりょうを ほる', () => { const n = W.nodes[0]; P.human.x = n.x + 1; P.human.z = n.z; const s0 = SV.mats.scrap; for (let i = 0; i < 6; i++) { melee(P.human, false); P.human.mcd = 0; } if (SV.mats.scrap <= s0) throw new Error('スクラップが ふえない'); });
+    for (let i = 0; i < FRAMES.length; i++) run('メカ ' + FRAMES[i].name, () => {
+      debugSetup('city'); const f = FRAMES[i]; SV.mechs.push(Object.assign({ fid: f.id }, f)); SV.active = 0; P.human.x = 0; P.human.z = 330; spawnPlayerMech(4, 330); enterMech();
+      SV.load.main = WLIST.filter(w => w.kind === 'gun')[i % 12].id; SV.load.sub = i % 3 ? WLIST.filter(w => w.kind !== 'melee')[i % 15].id : null; if (SV.load.sub === SV.load.main) SV.load.sub = 'shield'; SV.load.melee = WLIST.filter(w => w.kind === 'melee')[i % 6].id;
+      spawnEnemyMech(10, 360, i % 7, i % 9 === 0); spawnDrone(-10, 350, 1); sim(260, ['KeyW', 'KeyD']); if (!isFinite(P.mech.x + P.mech.y + P.mech.z)) throw new Error('位置が こわれた');
+    });
+    run('ひこうき', () => { debugSetup('plane'); sim(500, ['KeyW']); exitVehicle(false); sim(200, []); if (!isFinite(P.human.y)) throw new Error('位置が こわれた'); });
+    run('りりく', () => { debugSetup('city'); const p = G.planes[0]; enterPlane(p); for (let i = 0; i < 900; i++) { IN.k = { KeyW: true }; IN.mdy = i > 400 ? -1 : 0; step(.016); } if (p.y < 5) throw new Error('とびたてない y=' + p.y.toFixed(1) + ' v=' + p.speed.toFixed(1)); });
+    run('たてる', () => { debugSetup('base'); sim(120, ['KeyS']); const p = SV.pieces[0]; removePiece(p); });
+    run('しごと', () => { debugSetup('city'); SV.mechs.push(Object.assign({}, FRAMES[0])); for (const j of ['deliver', 'bounty', 'dealer']) { startJob(j); sim(60, ['KeyW']); if (!G.job) throw new Error(j + ' が はじまらない'); if (j === 'deliver') { P.human.x = G.job.a.x; P.human.z = G.job.a.z; sim(5, []); P.human.x = G.job.b.x; P.human.z = G.job.b.z; sim(5, []); if (G.job) throw new Error('はいたつが おわらない'); } else if (j === 'bounty') { hurt(G.job.target, 1e9, P.human); if (G.job) throw new Error('たいじが おわらない'); } else { for (const m of G.job.group.members.slice()) hurt(m, 1e9, P.human); if (G.job) throw new Error('やみしょうにんが おわらない'); } } });
+    run('やられる・ふっかつ', () => { debugSetup('city'); hurt(P.human, 1e9, null); sim(260, []); if (P.human.dead || P.human.hp <= 0) throw new Error('ふっかつ しない'); });
+    run('メカが こわれる', () => { debugSetup('mech'); hurt(P.mech, 1e9, null); if (P.state !== 'foot') throw new Error('だっしゅつ しない'); for (let i = 0; i < 2700; i++) step(.016); if (P.mech.dead) throw new Error('しゅうり されない'); });
+    run('メニュー', () => { debugSetup('city'); for (const id of ['workshop', 'mechshop', 'weapons', 'jobs', 'factory', 'food', 'mats', 'airport', 'pause']) { UI.open(id); document.querySelectorAll('#mTabs .tab').forEach(t => t.click()); document.querySelectorAll('#mBody .opt').forEach((b, i) => { if (i < 6) b.click(); }); UI.close(); } });
+    run('じさく', () => { debugSetup('city'); SV.mechs = []; UI.open('workshop'); UI.tab = 'custom'; UI.redraw(); document.querySelector('#mBody .btn.big').click(); if (SV.mechs.length !== 1 || !P.mech) throw new Error('メカが できない'); UI.close(); });
+    run('よる・ながい じかん', () => { debugSetup('mech'); for (let i = 0; i < 3000; i++) { IN.k = { KeyW: true }; IN.fire = true; step(.033); } });
+    const pre = document.createElement('pre'); pre.id = 'testOut'; pre.textContent = log.filter(l => l.startsWith('FAIL')).length + ' FAIL / ' + log.length + '\n' + log.filter(l => l.startsWith('FAIL')).join('\n'); document.body.appendChild(pre);
+    document.title = 'TEST ' + log.filter(l => l.startsWith('FAIL')).length + ' FAIL';
+  }
+  if (qs.get('test')) selfTest(); else if (qs.get('shot')) { debugSetup(qs.get('shot')); const t = qs.get('time'); if (t) SV.time = +t; }
+  if (qs.get('dbg')) { const d = document.createElement('div'); d.id = 'dbg'; document.body.appendChild(d); }
+  step(.016);   // 読みこみ直後にも 1 コマ 描いておく (サムネイル用)
+  requestAnimationFrame(frame);
+})();

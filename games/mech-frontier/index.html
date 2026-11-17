@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>MECH FRONTIER ― ロボと くらす みらいの まち</title>
+<meta name="description" content="ちょっと未来の街でロボットに乗って自由にくらす 3D ゲーム。素材を集めて自分でメカを組み立て、50 種類のメカやぶきをそろえ、しごとでかせいで家や基地を建て、飛行機で空も飛べる。終わりはなし。">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="err" class="hidden"></div>
+
+<!-- ============ タイトル ============ -->
+<div id="title">
+  <h1><span>MECH</span> FRONTIER</h1>
+  <p class="sub">ロボと くらす みらいの まち</p>
+  <div class="tBtns">
+    <button id="btnCont" class="btn big hidden">つづきから</button>
+    <button id="btnNew" class="btn big">はじめる</button>
+  </div>
+  <p class="tHelp">W A S D で うごく ・ マウスで みる ・ E で のる / はなす ・ Esc で あそびかた<br>セーブは じどう。データは この たんまつの ブラウザにだけ のこります。</p>
+</div>
+
+<!-- ============ あそんでいる ときの 画面 ============ -->
+<div id="hud" class="hidden">
+  <div id="vig"></div>
+  <div id="cross"></div>
+  <div id="labels"></div>
+  <div id="topL">
+    <div class="pill" data-ic="money"><b id="money">0</b></div>
+    <div class="pill mats"><span data-ic="scrap"><b id="m_scrap">0</b></span><span data-ic="iron"><b id="m_iron">0</b></span><span data-ic="core"><b id="m_core">0</b></span><span data-ic="rare"><b id="m_rare">0</b></span><span data-ic="kit"><b id="kits">0</b></span></div>
+    <div class="pill" data-ic="star">ランク <b id="rank">1</b><div class="bar xp"><i id="xpBar"></i></div></div>
+  </div>
+  <div id="quest" class="hidden"><span id="qText"></span><span id="qNav"><i id="qArrow"></i><b id="qDist"></b></span></div>
+  <div id="lock" class="hidden"><b id="lockName"></b><div class="bar en"><i id="lockBar"></i></div></div>
+  <div id="topR"><canvas id="map" width="170" height="170"></canvas><div id="clock"></div><button id="btnPause" class="btn small">メニュー (Esc)</button></div>
+  <div id="toasts"></div>
+  <div id="gains"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="clickHint" class="hidden">がめんを クリックすると そうさ できる</div>
+  <div id="botL">
+    <div id="vehRow" class="hidden"><small id="vehName"></small><div class="bar veh"><i id="vhBar"></i></div></div>
+    <div><small data-ic="heart">パイロット</small><div class="bar hp"><i id="hpBar"></i></div></div>
+    <div id="weap"></div>
+  </div>
+  <div id="buildbar" class="hidden"></div>
+  <div id="touch" class="hidden">
+    <div id="stick"><i></i></div>
+    <div id="tbtns">
+      <button data-k="KeyE" class="tb">E</button><button data-k="KeyR" class="tb">へんけい</button><button data-k="KeyC" class="tb">よぶ</button>
+      <button data-k="KeyQ" class="tb">かいてん</button><button data-k="ShiftLeft" class="tb">ダッシュ</button><button data-k="KeyF" class="tb">きる</button>
+      <button data-k="sub" class="tb">サブ</button><button data-k="Space" class="tb">ジャンプ</button><button data-k="fire" class="tb big">うつ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ メニュー ============ -->
+<div id="menu" class="hidden">
+  <header><h2 id="mTitle"></h2><div id="mWallet"></div><button id="mClose" class="btn small">とじる (Esc)</button></header>
+  <nav id="mTabs"></nav>
+  <main id="mBody"></main>
+</div>
+
+<script src="gl.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="models.js"></script>
+<script src="game.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

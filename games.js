@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'mech-frontier', genre: 'sandbox', players: '1P', date: '2026-11-17',
+    ja: {
+      title: 'MECH FRONTIER ― ロボと くらす みらいの まち',
+      desc: 'ちょっと未来の街でロボットに乗って自由にくらす 3D ゲーム。素材を集めて自分でメカを組み立て、50 種類のメカやぶきをそろえ、しごとでかせいで家や基地を建て、飛行機で空も飛べる。終わりはなし。',
+    },
+    en: {
+      title: 'Mech Frontier',
+      desc: 'An open-ended 3D life sim in a near-future city: gather scrap to build your own mech, collect fifty frames and their weapons, work jobs, build a house or base, and fly planes. It never ends.',
+    },
+  },
+  {
     slug: 'snow-haunt', genre: 'sandbox', players: '1P', date: '2026-11-17',
     ja: {
       title: 'SNOW HAUNT ― ゆきオバケの おばけやしき',
