@@ -32,9 +32,9 @@ const View = {
     const aw = this.W - 12, ah = bot - top - 8;
     // まだ ひろげていない ゆきの ばしょは 1れつ ちょっとだけ 見せる
     const cols = Sim.s ? EXPAND[Sim.s.expand].cols : MAP_W;
-    const wT = Math.min(MAP_W, cols + 1.4) + 1.9, hT = MAP_H + 1.25;
+    const wT = Math.min(MAP_W, cols + 1.4) + 3.05, hT = GATE_Y + 1.7;
     this.ts = Math.max(12, Math.floor(Math.min(aw / wT, ah / hT)));
-    this.ox = Math.round(6 + (aw - this.ts * wT) / 2 + this.ts * 1.75);
+    this.ox = Math.round(6 + (aw - this.ts * wT) / 2 + this.ts * 2.95);
     this.oy = Math.round(top + 4 + (ah - this.ts * hT) / 2 + this.ts * 0.95);
   },
   toCell(sx, sy) { return { x: Math.floor((sx - this.ox) / this.ts), y: Math.floor((sy - this.oy) / this.ts) }; },
@@ -44,7 +44,7 @@ const View = {
   /* ------------------------------ 描く ------------------------------ */
   draw(t, dt) {
     const g = this.g, s = Sim.s, n = Sim.n, ts = this.ts;
-    const dark = Game.mode === 'day' ? 0.16 : 0.62;
+    const dark = Game.mode === 'day' ? 0.08 : 0.55;
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.sky(g, t);
     const cols = EXPAND[s.expand].cols;
@@ -55,8 +55,10 @@ const View = {
       else if (c === CELL.WALL) drawWall(g, px, py, ts, x, y);
       else drawFloor(g, px, py, ts, x, y);
     }
+    this.park(g, t);
     this.outside(g, t);
     this.frame(g, cols);
+    this.rails(g);
     if (Game.mode === 'day') this.pathPreview(g, t);
     if (Game.mode === 'day') this.cursor(g);
 
@@ -69,6 +71,19 @@ const View = {
       list.push({ y: gy + 0.1, f: () => this.ghost(g, gh, t) });
     }
     if (n) for (const gu of n.guests) list.push({ y: gu.y + 0.2, f: () => drawGuest(g, this.px(gu.x), this.py(gu.y + 0.2), ts, gu, t) });
+    list.push({ y: BOOTH.y1, f: () => this.booth(g, t) });
+    for (const dc of s.deco) list.push({ y: dc.y + 0.8, f: () => drawDeco(g, this.px(dc.x + 0.5), this.py(dc.y + 0.5), ts, dc.type, dc._anim || 0, t, dc.x * 5 + dc.y) });
+    const co = n && n.coaster, tr = Sim.track;
+    if (tr) {
+      const pos = co ? co.pos : 0, i = Math.floor(pos) % tr.length, j = (i + 1) % tr.length, f = pos - Math.floor(pos);
+      const cx = lerp(tr[i].x, tr[j].x, f) + 0.5, cy = lerp(tr[i].y, tr[j].y, f) + 0.5;
+      list.push({ y: cy + 0.3, f: () => drawCar(g, this.px(cx), this.py(cy + 0.25), ts, Math.atan2(tr[j].y - tr[i].y, tr[j].x - tr[i].x), co ? co.load : 0, t) });
+    }
+    list.push({ y: GATE_Y + 0.5, f: () => this.gate(g, t) });
+    const desk = Sim.deskGhost();
+    if (desk) list.push({ y: OUT.deskY + 0.1, f: () => drawGhost(g, this.px(OUT.staff), this.py(OUT.deskY + 0.1), ts, desk.type, { t, seed: desk.id }) });
+    const p = Sim.p;
+    if (p) list.push({ y: p.y + 0.2, f: () => drawOwner(g, this.px(p.x), this.py(p.y + 0.2), ts, s.costume, { t, face: p.face, moving: p.moving, walk: p.walk, pose: p.pose }) });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.f();
 
@@ -84,7 +99,13 @@ const View = {
         g.globalAlpha = a; this.text(g, f.text, this.px(f.x), this.py(f.y), Math.max(11, ts * 0.36) * f.size, f.color);
       }
       g.globalAlpha = 1;
+      this.queueAlert(g, t);
     }
+    if (p && Game.mode !== 'title') {
+      const hx = this.px(p.x), hy = this.py(p.y + 0.2) - ts * 1.2 + Math.sin(t * 5) * 2;
+      poly(g, [hx - ts * 0.12, hy - ts * 0.14, hx + ts * 0.12, hy - ts * 0.14, hx, hy + ts * 0.04], '#ffe24a', INK, 1);
+    }
+    if (p && p.bub) this.bubble(g, p.bub.text, this.px(p.x), this.py(p.y + 0.2) - ts * 1.3, '#fff8d8', '#6a3a00');
     for (const gh of s.ghosts) {
       if (gh.x < 0) continue;
       if (gh.bub) this.bubble(g, gh.bub.text, this.px(gh.x + 0.5 + (gh._ox || 0)), this.py(gh.y - 0.45 + (gh._oy || 0)), '#fff4f4', '#c03050');
@@ -122,21 +143,100 @@ const View = {
 
   /* やしきの 外: いりぐちと でぐちを むすぶ ゆきみち と かんばん */
   outside(g) {
-    const ts = this.ts, x0 = this.px(-1.6);
+    const ts = this.ts, X = (x) => this.px(x), Y = (y) => this.py(y), w = ts * 0.62;
     g.fillStyle = 'rgba(150,165,200,.45)';
-    g.fillRect(x0, this.py(ENTRANCE.y + 0.18), ts * 1.6, ts * 0.64);
-    g.fillRect(x0, this.py(EXIT.y + 0.18), ts * 1.6, ts * 0.64);
-    g.fillRect(x0 - ts * 0.05, this.py(ENTRANCE.y + 0.18), ts * 0.6, this.py(EXIT.y + 2) - this.py(ENTRANCE.y + 0.18));
+    g.fillRect(X(OUT.lane) - w / 2, Y(ENTRANCE.y + 0.5) - w / 2, X(0) - X(OUT.lane) + w / 2, w);
+    g.fillRect(X(OUT.lane) - w / 2, Y(ENTRANCE.y + 0.5) - w / 2, w, Y(GATE_Y + 0.8) - Y(ENTRANCE.y + 0.5));
+    g.fillRect(X(OUT.exit) - w / 2, Y(EXIT.y + 0.5) - w / 2, X(0) - X(OUT.exit) + w / 2, w);
+    g.fillRect(X(OUT.exit) - w / 2, Y(EXIT.y + 0.5) - w / 2, w, Y(GATE_Y + 0.8) - Y(EXIT.y + 0.5));
+    g.fillStyle = 'rgba(150,165,200,.3)';
+    g.fillRect(X(OUT.staff) - w / 2, Y(OUT.deskY) - w / 2, X(BOOTH.x0) - X(OUT.staff) + w / 2, w);
     for (const [d, label, col] of [[ENTRANCE, 'いりぐち', '#4fb071'], [EXIT, 'でぐち', '#e08a3a']]) {
-      const sx = this.px(-0.95), sy = this.py(d.y - 0.15);
+      const sx = X(-0.5), sy = Y(d.y - 0.15);
       line(g, sx, sy, sx, sy + ts * 0.5, '#5a4030', Math.max(2, ts * 0.08));
-      const fs = Math.max(9, ts * 0.28);
-      g.font = `900 ${fs}px ${FONT}`;
-      const w = g.measureText(label).width + fs * 0.7;
-      g.fillStyle = col; g.strokeStyle = '#fff'; g.lineWidth = 2;
-      rr(g, sx - w / 2, sy - fs * 1.2, w, fs * 1.5, fs * 0.4); g.fill(); g.stroke();
-      g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, sx, sy - fs * 0.45);
+      this.sign(g, label, sx, sy, col);
     }
+  },
+  sign(g, label, sx, sy, col) {
+    const fs = Math.max(9, this.ts * 0.28);
+    g.font = `900 ${fs}px ${FONT}`;
+    const w = g.measureText(label).width + fs * 0.7;
+    g.fillStyle = col; g.strokeStyle = '#fff'; g.lineWidth = 2;
+    rr(g, sx - w / 2, sy - fs * 1.2, w, fs * 1.5, fs * 0.4); g.fill(); g.stroke();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, sx, sy - fs * 0.45);
+  },
+
+  /* やしきの 下の ひろば */
+  park(g, t) {
+    const ts = this.ts, x0 = this.px(PARK_X0), x1 = this.px(MAP_W), y0 = this.py(PARK_Y0) + ts * 0.15, y1 = this.py(PARK_Y1 + 1);
+    g.fillStyle = 'rgba(255,255,255,.35)'; rr(g, x0, y0, x1 - x0, y1 - y0, ts * 0.3); g.fill();
+    if (Game.mode === 'day' && (UI.tool === 'deco' || UI.tool === 'rail')) {
+      g.strokeStyle = 'rgba(120,110,200,.25)'; g.lineWidth = 1;
+      for (let y = PARK_Y0; y <= PARK_Y1; y++) for (let x = PARK_X0; x < MAP_W; x++) if (Sim.isPark(x, y)) g.strokeRect(this.px(x) + 2, this.py(y) + 2, ts - 4, ts - 4);
+    }
+    // さく
+    const fy = this.py(PARK_Y1 + 1) + ts * 0.05;
+    for (let x = PARK_X0; x < MAP_W; x++) {
+      if (x === -2 || x === -1) continue;
+      const px = this.px(x);
+      rect(g, px, fy - ts * 0.18, ts, ts * 0.06, '#c8a0e0'); rect(g, px, fy - ts * 0.34, ts, ts * 0.06, '#c8a0e0');
+      for (const k of [0.2, 0.8]) { rr(g, px + ts * k - ts * 0.06, fy - ts * 0.45, ts * 0.12, ts * 0.45, ts * 0.05); g.fillStyle = '#ffffff'; g.fill(); g.strokeStyle = '#a080c0'; g.lineWidth = 1; g.stroke(); }
+    }
+  },
+
+  /* ひろばの いりぐちの ゲート。パークの なまえ いり */
+  gate(g, t) {
+    const ts = this.ts, cx = this.px((OUT.lane + OUT.exit) / 2), y = this.py(GATE_Y + 0.3), hw = ts * 1.05;
+    for (const sx of [-1, 1]) { rr(g, cx + sx * hw - ts * 0.12, y - ts * 1.25, ts * 0.24, ts * 1.25, ts * 0.06); g.fillStyle = '#b48aff'; g.fill(); g.strokeStyle = INK; g.lineWidth = 1.2; g.stroke(); circ(g, cx + sx * hw, y - ts * 1.3, ts * 0.14, '#ffd860', INK, 1); }
+    const name = Sim.s.park, fs = Math.max(9, ts * 0.26);
+    g.font = `900 ${fs}px ${FONT}`;
+    const w = Math.max(hw * 2 + ts * 0.4, g.measureText(name).width + fs * 1.2);
+    rr(g, cx - w / 2, y - ts * 1.45, w, fs * 1.7, fs * 0.6); g.fillStyle = '#fff4fb'; g.fill(); g.strokeStyle = '#b48aff'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = '#6a3aa8'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(name, cx, y - ts * 1.45 + fs * 0.88);
+    for (let i = 0; i < 5; i++) { const on = Math.sin(t * 4 + i * 1.3) > 0; circ(g, cx - w / 2 + (i + 0.5) * w / 5, y - ts * 1.45 + fs * 1.7, ts * 0.05, on ? '#ffe060' : '#c8b0e0'); }
+  },
+
+  /* コースターの レール */
+  rails(g) {
+    const s = Sim.s, ts = this.ts, st = s.deco.find((d) => d.type === 'station');
+    const isR = (x, y) => Sim.railAt(x, y) || (st && st.x === x && st.y === y);
+    const ok = !!Sim.track;
+    for (const r of s.rails.concat(st ? [st] : [])) {
+      const cx = this.px(r.x + 0.5), cy = this.py(r.y + 0.5);
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        if (!isR(r.x + dx, r.y + dy)) continue;
+        const ex = cx + dx * ts * 0.5, ey = cy + dy * ts * 0.5;
+        for (let i = 1; i <= 2; i++) { const tx = lerp(cx, ex, i / 2.5), ty = lerp(cy, ey, i / 2.5); line(g, tx - dy * ts * 0.22, ty - dx * ts * 0.22, tx + dy * ts * 0.22, ty + dx * ts * 0.22, '#8a6a4a', Math.max(2, ts * 0.08)); }
+        for (const side of [-1, 1]) line(g, cx - dy * side * ts * 0.15, cy - dx * side * ts * 0.15, ex - dy * side * ts * 0.15, ey - dx * side * ts * 0.15, ok ? '#a8a0c0' : '#e08080', Math.max(1.5, ts * 0.06));
+      }
+      if (!s.rails.length || r === st) continue;
+      circ(g, cx, cy, ts * 0.06, ok ? '#a8a0c0' : '#e08080');
+    }
+    if (Game.mode === 'day' && st && !ok && s.rails.length) this.text(g, 'レールが 1しゅう つながっていないよ', this.px(st.x + 0.5), this.py(st.y - 0.2), Math.max(10, ts * 0.26), '#ffb0b0');
+  },
+
+  /* うけつけの カウンター。ねだんの かんばんつき */
+  booth(g) {
+    const X = (x) => this.px(x), Y = (y) => this.py(y), ts = this.ts;
+    const x0 = X(BOOTH.x0), x1 = X(BOOTH.x1), y0 = Y(BOOTH.y0), y1 = Y(BOOTH.y1), lip = ts * 0.22;
+    g.fillStyle = 'rgba(0,0,0,.2)'; g.fillRect(x0 + 2, y1 - 2, x1 - x0, lip * 0.6);
+    g.fillStyle = '#a8703a'; g.fillRect(x0, y0, x1 - x0, y1 - y0 - lip);
+    g.fillStyle = '#7a4a22'; g.fillRect(x0, y1 - lip, x1 - x0, lip);
+    g.strokeStyle = INK; g.lineWidth = 1.2; g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    g.fillStyle = '#c8905a'; g.fillRect(x0 + 2, y0 + 2, x1 - x0 - 4, ts * 0.08);
+    const cx = (x0 + x1) / 2;
+    this.sign(g, 'うけつけ', cx, y0 - ts * 0.12, '#6a5acd');
+    const fs = Math.max(9, ts * 0.26);
+    circ(g, cx - fs * 0.7, (y0 + y1) / 2 - lip / 2, fs * 0.45, '#ffd23a', '#a07010', 1);
+    this.text(g, String(Sim.s.price), cx + fs * 0.35, (y0 + y1) / 2 - lip / 2, fs, '#fff');
+  },
+
+  /* だれも うけつけて いないのに おきゃくさんが まっていたら しらせる */
+  queueAlert(g, t) {
+    const n = Sim.n, q = n.queue.length;
+    if (!q || Sim.deskGhost() || Game.mode === 'title') return;
+    if (Sim.atDesk()) { this.text(g, `まち ${q}人`, this.px(OUT.lane), this.py(BOOTH.y0 - 0.55), Math.max(10, this.ts * 0.28), '#ffe680'); return; }
+    if (Math.sin(t * 8) > -0.3) this.bubble(g, `うけつけ まち ${q}人!`, this.px((BOOTH.x0 + BOOTH.x1) / 2), this.py(BOOTH.y0 - 0.35), '#ffecec', '#c02030');
   },
 
   frame(g, cols) {
@@ -165,8 +265,8 @@ const View = {
       g.setLineDash([6, 6]); g.strokeStyle = 'rgba(80,100,150,.6)'; g.lineWidth = 2;
       g.strokeRect(x0 + w + b + 3, y0 + 3, (MAP_W - cols) * ts - b - 6, h - 6); g.setLineDash([]);
       const right = Math.min(this.W, x0 + MAP_W * ts), cx = (x0 + w + b + right) / 2, fs = Math.max(10, ts * 0.3);
-      if (right - x0 - w > ts * 3.2) this.text(g, '🔒 ひろげられる', cx, y0 + h / 2, fs, '#4a5a88', true);
-      else { this.text(g, '🔒', cx, y0 + h / 2 - fs * 1.4, fs, '#4a5a88', true); this.text(g, 'ひろげ', cx, y0 + h / 2, fs * 0.85, '#4a5a88', true); this.text(g, 'られる', cx, y0 + h / 2 + fs * 1.1, fs * 0.85, '#4a5a88', true); }
+      if (right - x0 - w > ts * 3.2) this.text(g, 'ひろげられる', cx, y0 + h / 2, fs, '#4a5a88', true);
+      else { this.text(g, 'ひろげ', cx, y0 + h / 2, fs * 0.85, '#4a5a88', true); this.text(g, 'られる', cx, y0 + h / 2 + fs * 1.1, fs * 0.85, '#4a5a88', true); }
     }
   },
 
@@ -229,7 +329,12 @@ const View = {
         g.fillStyle = i < r ? (r === 5 ? '#ffe24a' : '#ffc04a') : 'rgba(30,20,60,.55)';
         g.fillText('★', sx, sy);
       }
-      if (gu.reporter) this.text(g, '📺', x - w / 2 - ts * 0.25, y + h / 2, Math.max(9, ts * 0.28));
+    }
+    if (gu.st === 'come') {
+      const w = ts * 0.6, h = Math.max(3, ts * 0.09), f = clamp(gu.pat / Sim.n.patience, 0, 1);
+      g.fillStyle = 'rgba(20,14,40,.7)'; g.fillRect(x - w / 2 - 1, y + ts * 0.25 - 1, w + 2, h + 2);
+      g.fillStyle = f > 0.5 ? '#8ad0ff' : f > 0.25 ? '#ffb030' : '#ff4a4a';
+      g.fillRect(x - w / 2, y + ts * 0.25, w * f, h);
     }
     if (gu.bub) this.bubble(g, gu.bub.text, x, y - ts * 0.3, '#ffffff', '#2a2440');
   },
@@ -279,6 +384,7 @@ const View = {
       hole(this.px(gh.x + 0.5 + (gh._ox || 0)), this.py(gh.y + 0.3 + (gh._oy || 0)), ts * (scare ? 1.6 : 1.1), scare ? 0.8 : 0.5);
     }
     if (n) for (const gu of n.guests) hole(this.px(gu.x), this.py(gu.y - 0.2), ts * 0.85, 0.4);
+    if (Sim.p) hole(this.px(Sim.p.x), this.py(Sim.p.y - 0.2), ts * 1.4, 0.7);
     for (const dd of [ENTRANCE, EXIT]) hole(this.px(0.3), this.py(dd.y + 0.5), ts * 1.5, 0.7);
     // やしきの 中だけに かける
     const b = Math.max(3, ts * 0.16);
@@ -308,8 +414,3 @@ const View = {
 };
 
 const FONT = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Meiryo", sans-serif';
-function rr(g, x, y, w, h, r) {
-  g.beginPath();
-  g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
-  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
-}

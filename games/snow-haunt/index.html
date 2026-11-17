@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>SNOW HAUNT ― ゆきオバケの おばけやしき</title>
-<meta name="description" content="ネズミの冒険の 雪山に すむ ゆきオバケたちを やとって、おばけやしきを けいえいする。ろうかを ひいて しかけを おき、おきゃくさんが にげださない ぎりぎりまで こわがらせて ★5を めざす。スマホ対応。">
+<title>SNOW HAUNT ― ゆきオバケの テーマパーク</title>
+<meta name="description" content="ネズミの冒険の 雪山に すむ ゆきオバケたちと、ふるい ゆうえんちを こわくて かわいい テーマパークに する けいえいゲーム。おばけやしき、ロボット、ジェットコースター、ホテルを つくって、じぶんでも かそうして おどかす。スマホ対応。">
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -13,10 +13,10 @@
 <!-- ================= タイトル ================= -->
 <div id="title" class="screen">
   <div class="tcard">
-    <p class="kicker">ゆきの山頂に、おばけやしきが オープン!</p>
+    <p class="kicker">ふるびた ゆうえんちを、オバケの テーマパークに!</p>
     <h1>SNOW HAUNT</h1>
-    <p class="sub">ゆきオバケの おばけやしき</p>
-    <p class="lead">ネズミの冒険の 雪山に すむ ゆきオバケたちと、おばけやしきを けいえいしよう。ひるは ろうかを ひいて、ゆきだるまや こおりの ひつぎなどの しかけと オバケを おく。よるに なると ハムスターや うさぎの おきゃくさんが やってくる。こわくないと つまらないし、こわがらせすぎると にげだして しまう。にげださない ぎりぎりの「こわかった!」を ねらって、ゆきやま いちの おばけやしきを めざそう。</p>
+    <p class="sub">ゆきオバケの テーマパーク</p>
+    <p class="lead">ネズミの冒険の 雪山に すむ ゆきオバケたちと、ふるい ゆうえんちを テーマパークに しよう。おばけやしきに しかけと オバケと ロボットを おき、ひろばには かざりや おみせ、じぶんで レールを ひく ジェットコースター、ホラーホテルも つくれる。よるは あなたも かそうして カウンターで うけつけしたり、「ばあ!」と おどかしたり。こわくないと つまらないし、こわがらせすぎると にげだして しまう。ゆきやま いちの テーマパークを めざそう。</p>
     <div class="tbtns">
       <button class="btn primary" id="btnNew">はじめから</button>
       <button class="btn" id="btnCont">つづきから</button>
@@ -27,44 +27,71 @@
   </div>
 </div>
 
+<!-- ================= なまえを きめる ================= -->
+<div id="setup" class="screen hide">
+  <div class="tcard">
+    <h2>テーマパークの なまえを きめよう</h2>
+    <label class="field col"><span>なまえ (12もじまで)</span><input id="inPark" maxlength="12" value="ゆきやま ゴーストランド"></label>
+    <p class="mini">あとから メニューで かえられるよ。</p>
+    <div class="tbtns">
+      <button class="btn" id="btnBack">もどる</button>
+      <button class="btn primary" id="btnStart">これで はじめる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= オープニング ================= -->
+<div id="movie" class="hide">
+  <button id="mvSkip" class="btn small">スキップ</button>
+  <div class="mvbox"><b id="mvWho"></b><p id="mvText"></p><small>タップで つぎへ</small></div>
+</div>
+
 <!-- ================= 遊んでいる間の表示 ================= -->
 <div id="hud" class="hide">
   <div id="top">
-    <div class="box namebox"><b>👻 ゆきオバケやしき</b><span id="hDay"></span></div>
-    <div class="box money"><span class="emo">🪙</span><b id="hMoney"></b></div>
+    <div class="box namebox"><b id="hName"></b><span id="hDay"></span></div>
+    <div class="box money"><i class="coin big"></i><b id="hMoney"></b></div>
     <div class="box starbox" title="ひょうばん"><span id="hStars" class="starsy"></span><div class="rep"><i id="hRep"></i></div></div>
-    <div class="box btns"><button id="bSound" class="emo" title="おと"></button><button id="bMenu" class="emo" title="メニュー">⚙️</button></div>
+    <div class="box btns"><button id="bSound" title="おと"></button><button id="bMenu" title="メニュー">メニュー</button></div>
   </div>
   <div id="banner"></div>
 
   <div id="pick" class="hide"></div>
 
   <div id="dayBar" class="bar">
-    <button data-tool="floor"><i>🧱</i><span>ろうか</span></button>
-    <button data-tool="prop"><i>🕯️</i><span>しかけ</span></button>
-    <button data-tool="ghost"><i>👻</i><span>オバケ</span></button>
-    <button data-tool="erase"><i>🧹</i><span>けす</span></button>
-    <button id="bPrice"><i>🎟️</i><span>ねだん</span></button>
-    <button id="bExpand"><i>🏚️</i><span>ひろげる</span></button>
-    <button id="bOpen" class="open"><i>🌙</i><span class="lg">よるを はじめる</span><span class="sm">よるへ</span></button>
+    <button data-tool="floor"><img data-icon="floor"><span>ろうか</span></button>
+    <button data-tool="prop"><img data-icon="prop"><span>しかけ</span></button>
+    <button data-tool="ghost"><img data-icon="ghost"><span>なかま</span></button>
+    <button data-tool="deco"><img data-icon="deco"><span>ひろば</span></button>
+    <button data-tool="rail"><img data-icon="rail"><span>レール</span></button>
+    <button id="bCostume"><img data-icon="costume"><span>かそう</span></button>
+    <button data-tool="erase"><img data-icon="erase"><span>けす</span></button>
+    <button id="bExpand"><img data-icon="expand"><span>ひろげる</span></button>
+    <button id="bOpen" class="open"><img data-icon="night"><span class="lg">よるを はじめる</span><span class="sm">よるへ</span></button>
   </div>
 
   <div id="nightBar" class="bar hide">
     <div class="nstat"><b id="nClock"></b><span id="nGuests"></span></div>
     <div class="nstat faces"><span id="nFaces"></span></div>
     <div class="speeds">
-      <button data-sp="0" title="とめる (スペース)">⏸</button>
-      <button data-sp="1" title="ふつう">▶</button>
-      <button data-sp="2" title="はやい">▶▶</button>
-      <button data-sp="3" title="とても はやい">▶▶▶</button>
+      <button data-sp="0" title="とめる (P)">とめる</button>
+      <button data-sp="1" title="ふつう">×1</button>
+      <button data-sp="2" title="はやい">×2</button>
+      <button data-sp="3" title="とても はやい">×3</button>
     </div>
+    <div class="keyhint">うごく: やじるし / WASD ・ ばあ! と うけつけ: スペース</div>
+  </div>
+
+  <div id="ctrl" class="hide">
+    <div id="pad"><div id="knob"></div></div>
+    <button id="act">ばあ!</button>
   </div>
 </div>
 
 <!-- ================= 小窓 ================= -->
 <div id="modal" class="modal hide">
   <div class="mcard">
-    <div class="mhead"><h2 id="mTitle"></h2><button id="mClose" title="とじる">✕</button></div>
+    <div class="mhead"><h2 id="mTitle"></h2><button id="mClose" title="とじる">×</button></div>
     <div id="mBody"></div>
     <div id="mFoot" class="mfoot"></div>
   </div>
@@ -78,6 +105,7 @@
 <script src="sim.js"></script>
 <script src="render.js"></script>
 <script src="ui.js"></script>
+<script src="movie.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

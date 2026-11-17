@@ -27,12 +27,12 @@ const GAMES = [
   {
     slug: 'snow-haunt', genre: 'sandbox', players: '1P', date: '2026-11-17',
     ja: {
-      title: 'SNOW HAUNT ― ゆきオバケの おばけやしき',
-      desc: 'ネズミの冒険の 雪山に すむ ゆきオバケたちを やとって、おばけやしきを けいえいする。ろうかを ひいて しかけを おき、おきゃくさんが にげださない ぎりぎりまで こわがらせて ★5を めざす。スマホ対応。',
+      title: 'SNOW HAUNT ― ゆきオバケの テーマパーク',
+      desc: 'ネズミの冒険の 雪山に すむ ゆきオバケたちと、ふるい ゆうえんちを こわくて かわいい テーマパークに する けいえいゲーム。おばけやしき、ロボット、ジェットコースター、ホテルを つくって、じぶんでも かそうして おどかす。スマホ対応。',
     },
     en: {
       title: 'Snow Haunt',
-      desc: 'Hire the snow ghosts from Mouse Quest and run a haunted house: lay out the corridors, set up scares, and frighten guests right up to the point of running away to earn five stars. Plays on phones.',
+      desc: 'Turn an abandoned amusement park into a spooky theme park with the snow ghosts from Mouse Quest: build a haunted house, chasing robots, a roller coaster on rails you lay yourself and a horror hotel, then dress up and scare guests yourself. Plays on phones.',
     },
   },
   {

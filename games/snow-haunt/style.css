@@ -7,25 +7,27 @@
   --ink3: #a8a4c0;
   --paper: #f8f8ff;
   --line: #dcdcf0;
-  --main: #6a5acd;
-  --main2: #4e3fb0;
+  --main: #9a72e8;
+  --main2: #7a4fd0;
+  --pink: #ff8ab8;
   --gold: #e0a020;
   --good: #2fa060;
   --bad: #e0504a;
   --font: "Hiragino Maru Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Meiryo", sans-serif;
-  --emoji: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
 body {
-  background: #1a1838; color: var(--ink); font-family: var(--font); font-size: 14px;
+  background: #2a2458; color: var(--ink); font-family: var(--font); font-size: 14px;
   user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
 #game { position: absolute; inset: 0; display: block; touch-action: none; }
 .hide { display: none !important; }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { opacity: 0.45; cursor: default; }
-.emo { font-family: var(--emoji); }
+.coin { display: inline-block; width: 0.95em; height: 0.95em; border-radius: 50%; vertical-align: -0.12em; margin: 0 1px;
+  background: radial-gradient(circle at 35% 30%, #fff6b0, #ffd23a 45%, #d89a10); box-shadow: inset 0 0 0 1px #b07a08; }
+.coin.big { width: 18px; height: 18px; }
 .good { color: var(--good); } .bad { color: var(--bad); } .muted { color: var(--ink3); }
 .mini { font-size: 12px; color: var(--ink2); line-height: 1.6; }
 .center { text-align: center; }
@@ -50,9 +52,15 @@ button:disabled { opacity: 0.45; cursor: default; }
 .kicker { margin: 0; color: var(--ink2); font-size: 13px; font-weight: 700; }
 .tcard h1 {
   margin: 6px 0 0; font-size: clamp(42px, 11vw, 68px); line-height: 1; letter-spacing: 0.05em; font-weight: 900;
-  color: var(--main2); text-shadow: 0 4px 0 #c8e8ff, 0 8px 18px rgba(80, 60, 200, 0.3);
+  color: var(--main2); text-shadow: 0 4px 0 #ffd0e4, 0 8px 18px rgba(200, 80, 160, 0.3);
 }
-.tcard .sub { margin: 8px 0 14px; font-size: 18px; font-weight: 900; color: #3a9ad0; letter-spacing: 0.12em; }
+.tcard .sub { margin: 8px 0 14px; font-size: 18px; font-weight: 900; color: #e0609a; letter-spacing: 0.12em; }
+.tcard h2 { margin: 0 0 12px; color: var(--main2); font-size: 20px; }
+.field { display: flex; align-items: center; gap: 10px; }
+.field.col { flex-direction: column; align-items: stretch; gap: 4px; }
+.field > span { font-weight: 800; font-size: 13px; color: var(--ink2); }
+.field input { padding: 9px 12px; border-radius: 12px; border: 2px solid var(--line); background: #fff; font-weight: 700; font-size: 16px; font-family: var(--font); color: var(--ink); user-select: text; -webkit-user-select: text; }
+#setup .tbtns { margin-top: 12px; }
 .lead { margin: 0 0 18px; line-height: 1.85; font-size: 14px; }
 .tbtns { display: flex; gap: 10px; flex-wrap: wrap; }
 .tbtns .btn { flex: 1 1 140px; padding: 13px 16px; font-size: 15px; }
@@ -70,7 +78,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   padding: 5px 11px; display: flex; align-items: center; gap: 7px; box-shadow: 0 3px 10px rgba(10, 6, 40, 0.3);
   font-weight: 800; white-space: nowrap;
 }
-.namebox b { color: var(--main2); }
+.namebox b { color: var(--main2); max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
 .namebox span { color: var(--ink2); font-size: 12px; }
 .money b { color: #c98a10; font-size: 16px; font-variant-numeric: tabular-nums; }
 .money b.neg { color: var(--bad); }
@@ -80,7 +88,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .rep { width: 100%; height: 4px; border-radius: 2px; background: #e6e4f2; overflow: hidden; }
 .rep i { display: block; height: 100%; background: #f0a020; }
 .btns { padding: 2px; gap: 2px; }
-.btns button { background: transparent; border: 0; border-radius: 9px; padding: 2px 9px; font-size: 16px; }
+.btns button { background: transparent; border: 0; border-radius: 9px; padding: 3px 8px; font-size: 12px; font-weight: 800; color: var(--ink2); }
 .btns button:hover { background: #eeeefa; }
 
 #banner {
@@ -106,9 +114,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 #dayBar button:hover { background: #eeeefa; }
 #dayBar button.on { background: var(--main); }
 #dayBar button.on span { color: #fff; }
-#dayBar i { font-style: normal; font-size: 22px; line-height: 1.1; font-family: var(--emoji); }
+#dayBar img { width: 28px; height: 28px; }
 #dayBar span { font-size: 11px; font-weight: 800; color: var(--ink2); white-space: nowrap; }
-#dayBar .open { background: linear-gradient(#5a4ac0, #3a2a90); margin-left: 4px; padding: 5px 12px 4px; }
+#dayBar .open { background: linear-gradient(#7a5ad8, #4a3aa8); margin-left: 4px; padding: 5px 12px 4px; }
 #dayBar .open span { color: #fff; }
 #dayBar .open:hover { background: linear-gradient(#6a5ad0, #4a3aa0); }
 #dayBar .open.warn { background: #9a96b0; }
@@ -117,9 +125,13 @@ button:disabled { opacity: 0.45; cursor: default; }
 .nstat { display: flex; flex-direction: column; justify-content: center; padding: 0 10px; font-weight: 800; white-space: nowrap; }
 .nstat b { font-size: 16px; color: var(--main2); font-variant-numeric: tabular-nums; }
 .nstat span { font-size: 12px; color: var(--ink2); }
-.nstat.faces span { font-size: 14px; color: var(--ink); font-family: var(--emoji), var(--font); }
+.nstat.faces span { font-size: 13px; color: var(--ink); display: flex; gap: 6px; }
+.fc { display: inline-flex; align-items: center; gap: 1px; font-weight: 900; }
+.fc img { width: 20px; height: 20px; }
+.keyhint { align-self: center; font-size: 11px; color: var(--ink3); padding: 0 6px; white-space: nowrap; }
+body.touch .keyhint { display: none; }
 .speeds { display: flex; gap: 2px; align-items: center; }
-.speeds button { background: #fff; border: 2px solid var(--line); border-radius: 10px; padding: 6px 9px; font-weight: 900; font-size: 12px; color: var(--ink2); letter-spacing: -2px; }
+.speeds button { background: #fff; border: 2px solid var(--line); border-radius: 10px; padding: 6px 8px; font-weight: 900; font-size: 12px; color: var(--ink2); white-space: nowrap; }
 .speeds button.on { background: var(--main); border-color: var(--main2); color: #fff; }
 
 /* しかけを えらぶ 帯 */
@@ -141,7 +153,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .pitem img { width: 40px; height: 40px; }
 .pitem span { font-size: 10.5px; white-space: nowrap; }
 .pitem small { font-size: 11px; color: #c98a10; }
-.pitem .kd { position: absolute; top: 2px; right: 4px; font-style: normal; font-size: 11px; font-family: var(--emoji); }
+.pitem .kdot { position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.2); }
 .pitem.on { border-color: var(--main); background: #f0eeff; box-shadow: 0 0 0 2px #d4ceff; }
 .pitem.lock img { filter: grayscale(1) brightness(0.6); }
 
@@ -175,7 +187,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 .cbtns .btn { white-space: nowrap; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .chip { background: #f0eef8; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 800; color: var(--ink2); white-space: nowrap; }
-.chip[style] { background: color-mix(in srgb, var(--c) 22%, white); color: var(--ink); }
+.chip.kd { background: color-mix(in srgb, var(--c) 25%, white); color: var(--ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, white); }
+.card.wear { border-color: var(--main); background: #f6f0ff; }
+.sub3 { margin: 10px 0 0; font-size: 14px; color: var(--main2); text-align: center; }
 .xp { height: 5px; background: #eceaf6; border-radius: 3px; overflow: hidden; margin: 4px 0 2px; }
 .xp i { display: block; height: 100%; background: #6ad08a; }
 
@@ -186,7 +200,10 @@ button:disabled { opacity: 0.45; cursor: default; }
 .how ul { margin: 0; padding-left: 1.2em; }
 .how li { margin: 3px 0; font-size: 13px; }
 .missions { list-style: none; margin: 0; padding: 0; }
-.missions li { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.missions li { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--line); font-size: 13px; align-items: baseline; }
+.missions .mk { flex: 0 0 3.4em; font-size: 10.5px; font-weight: 900; text-align: center; border-radius: 999px; }
+.missions .done .mk { background: #e2f6e8; color: var(--good); }
+.missions .now .mk { background: var(--main); color: #fff; }
 .missions li em { font-style: normal; color: #c98a10; font-weight: 800; }
 .missions li.done { color: var(--ink3); }
 .missions li.now { font-weight: 800; }
@@ -194,7 +211,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .rgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 4px 0 10px; }
 .rrow { display: flex; flex-direction: column; align-items: center; background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 6px 2px; }
-.rrow span { font-size: 24px; font-family: var(--emoji); }
+.rrow img { width: 34px; height: 34px; }
 .rrow b { font-size: 10.5px; color: var(--ink2); white-space: nowrap; }
 .rrow i { font-style: normal; font-weight: 900; font-size: 16px; }
 .money-tbl { background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 6px 12px; }
@@ -202,8 +219,36 @@ button:disabled { opacity: 0.45; cursor: default; }
 .money-tbl .sum { border-top: 2px dashed var(--line); margin-top: 3px; padding-top: 5px; font-size: 15px; font-weight: 900; }
 .tipbox { background: #fff8dc; border: 2px solid #ffe28a; border-radius: 12px; padding: 6px 10px; font-size: 12.5px; margin-top: 8px; }
 
+/* ------------------------------ よるの そうさ ------------------------------ */
+#ctrl { position: fixed; inset: 0; pointer-events: none; z-index: 11; }
+#pad {
+  display: none; position: absolute; left: 18px; bottom: 96px; width: 120px; height: 120px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22); border: 3px solid rgba(255, 255, 255, 0.6); pointer-events: auto; touch-action: none;
+}
+body.touch #pad { display: block; }
+#knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3); }
+#act {
+  position: absolute; right: 18px; bottom: 100px; width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none;
+  background: radial-gradient(circle at 35% 30%, #ffd6ec, #ff8ab8); border: 4px solid #fff; color: #7a1a4a; font-weight: 900; font-size: 20px;
+  box-shadow: 0 5px 0 #c0507a, 0 8px 18px rgba(0, 0, 0, 0.3);
+}
+#act:active { transform: translateY(3px); box-shadow: 0 2px 0 #c0507a; }
+#act.serve { background: radial-gradient(circle at 35% 30%, #fff6c0, #ffd23a); color: #6a4000; box-shadow: 0 5px 0 #c0900a, 0 8px 18px rgba(0, 0, 0, 0.3); font-size: 16px; }
+#act.cool { opacity: 0.6; }
+
+/* ------------------------------ オープニング ------------------------------ */
+#movie { position: fixed; inset: 0; z-index: 45; cursor: pointer; }
+#mvSkip { position: absolute; top: 12px; right: 12px; }
+.mvbox {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(720px, calc(100vw - 24px));
+  background: rgba(255, 255, 255, 0.94); border: 3px solid #fff; border-radius: 18px; padding: 12px 18px 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.mvbox b { display: inline-block; background: var(--main); color: #fff; border-radius: 999px; padding: 1px 12px; font-size: 13px; margin-bottom: 4px; }
+.mvbox p { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.7; min-height: 3.4em; }
+.mvbox small { display: block; text-align: right; color: var(--ink3); font-size: 11px; }
+
 /* ------------------------------ トースト ------------------------------ */
-#toasts { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(560px, calc(100vw - 24px)); }
+#toasts { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); z-index: 49; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(560px, calc(100vw - 24px)); }
 .toast {
   background: rgba(30, 24, 64, 0.94); color: #fff; padding: 8px 14px; border-radius: 12px; font-weight: 700; font-size: 13px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); transition: opacity 0.4s, transform 0.4s; text-align: center; line-height: 1.5;
@@ -216,9 +261,20 @@ button:disabled { opacity: 0.45; cursor: default; }
 /* ------------------------------ せまい画面 ------------------------------ */
 @media (max-width: 560px) {
   .namebox b { display: none; }
+  .namebox span { font-size: 11px; }
+  #top { gap: 4px; }
+  .starsy { font-size: 13px; }
+  .money b { font-size: 14px; }
+  .keyhint { display: none; }
+  #bSound { display: none; }
+  .card { flex-wrap: wrap; }
+  .cbody { flex: 1 1 calc(100% - 70px); }
+  .cbtns { flex-direction: row; flex-wrap: wrap; width: 100%; justify-content: flex-end; }
+  #act { width: 84px; height: 84px; bottom: 120px; }
+  #pad { bottom: 120px; }
   .box { padding: 4px 8px; }
   #dayBar button { min-width: 0; padding: 4px 5px 3px; flex: 1 1 0; }
-  #dayBar i { font-size: 19px; }
+  #dayBar img { width: 24px; height: 24px; }
   #dayBar span { font-size: 9.5px; }
   #dayBar .open { padding: 4px 7px 3px; }
   #dayBar .open .lg { display: none; }

@@ -23,6 +23,7 @@ function hash2(x, y) {
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Math.round(n).toLocaleString('ja-JP');
+const COIN = '<i class="coin"></i>';   // 画面の 文字に まぜる コインの しるし
 
 /* ------------------------------ トースト ------------------------------ */
 function toast(msg, kind = '') {
