@@ -380,7 +380,7 @@ const UI = {
     if (!c) return;
     const g = c.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, 120, 120);
-    drawMouse(g, 60, 104, { face: 'down', t: 0, moving: false, furKey: this.setup.fur, weapon: 'stick', swing: -1, roll: -1, cheek: 0, scale: 2.6, aim: 0 });
+    drawMouse(g, 60, 104, { face: 'down', t: 0, moving: false, furKey: this.setup.fur, weapon: 'wsword', swing: -1, roll: -1, cheek: 0, scale: 2.6, aim: 0 });
   },
   newSettings() { return { fur: this.setup.fur, keepInv: $('keepInv').checked }; },
 

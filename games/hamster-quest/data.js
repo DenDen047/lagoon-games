@@ -27,7 +27,7 @@ const ITEMS = {
   moon:     { name: '月のかけら', icon: '🌙', kind: 'mat', sell: 40, desc: '月の野原で手に入る、ほんのり光る石。' },
   dust:     { name: 'まほうの粉', icon: '✨', kind: 'mat', sell: 30, desc: 'ネコまどうしが落とす、きらきらの粉。' },
   goldseed: { name: '金のタネ', icon: '🌟', kind: 'mat', sell: 60, desc: 'とてもめずらしい金色のタネ。' },
-  seed:     { name: 'ひまわりのタネ', icon: '🌻', kind: 'food', heal: 8, sell: 2, desc: 'ハムスターの大好物。HP を 8 回復。' },
+  seed:     { name: 'ひまわりのタネ', icon: '🌻', kind: 'food', heal: 8, sell: 2, desc: 'ネズミの大好物。HP を 8 回復。' },
   acorn:    { name: 'どんぐり', icon: '🌰', kind: 'food', heal: 14, sell: 4, desc: 'たまに木から落ちる。HP を 14 回復。' },
   honey:    { name: 'はちみつ', icon: '🍯', kind: 'food', heal: 28, sell: 8, desc: 'ハチが落とす。HP を 28 回復。' },
   mushroom: { name: 'きのこ', icon: '🍄', kind: 'food', heal: 16, sell: 8, desc: '谷に生えている。HP を 16 回復。' },
@@ -133,7 +133,7 @@ const BOOKS = {
   fire: { name: 'ほのおの本', icon: '📕', desc: 'ファイアの魔法がつかえるようになる。' },
   wind: { name: 'かぜの本', icon: '📗', desc: 'かぜの魔法がつかえるようになる。' },
   heal: { name: 'いやしの本', icon: '📘', desc: 'いやしの魔法がつかえるようになる。', price: 400 },
-  star: { name: '星の魔法の本', icon: '📙', desc: 'ハムスターの町の宝。ほしふるの魔法がつかえる。' },
+  star: { name: '星の魔法の本', icon: '📙', desc: 'ネズミの町の宝。ほしふるの魔法がつかえる。' },
 };
 
 /* -------------------------------- 魔物 --------------------------------
@@ -365,7 +365,7 @@ const BUILDS = {
     desc: '物をしまっておける。ベルトから入れられ、前にベルトがあれば 中身を ひとつずつ だす。' },
   bed:     { name: 'わらのベッド', icon: '🛏️', w: 2, h: 1, cost: { grass: 10, plank: 4 }, desc: 'ねむると回復して、たおれたときに ここで目をさます。' },
   field:   { name: '畑', icon: '🌱', w: 1, h: 1, cost: { wood: 1, seed: 1 }, flat: true, desc: 'ひまわりが育つ。さいたら しらべて タネを とる。' },
-  fence:   { name: '柵', icon: '🚧', w: 1, h: 1, cost: { wood: 1 }, desc: '魔物も ハムスターも 通れない。' },
+  fence:   { name: '柵', icon: '🚧', w: 1, h: 1, cost: { wood: 1 }, desc: '魔物も ネズミも 通れない。' },
   floor:   { name: '木の床', icon: '🟫', w: 1, h: 1, cost: { plank: 1 }, flat: true, desc: 'かざりの床。' },
   lamp:    { name: 'ランプ', icon: '🏮', w: 1, h: 1, cost: { wood: 2, grass: 1 }, desc: 'あかりの柱。' },
 };

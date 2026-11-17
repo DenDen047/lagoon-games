@@ -113,8 +113,8 @@ const Game = {
     return {
       ver: 1, name,
       lv: 1, exp: 0, hp: 30, mp: 10, coins: 10,
-      inv: [], owned: new Set(['paw', 'cheek', 'stick']),
-      eq: { weapon: 'stick', staff: null, body: null, hat: null },
+      inv: [], owned: new Set(['paw', 'cheek', 'stick', 'wsword']),
+      eq: { weapon: 'wsword', staff: null, body: null, hat: null },
       books: { fire: false, wind: false, heal: false, star: false },
       spell: 'bolt',
       flags: { thorns: false, guide: false, bridge: false, chests: {}, warps: { home: true }, reqs: {}, elder: 0, bosses: {}, towers: {}, ending: false },

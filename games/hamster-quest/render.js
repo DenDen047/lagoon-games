@@ -116,6 +116,12 @@ const R = {
     for (const it of G.bitems || []) if (m.kind === 'over') drawBeltItem(g, it);
     for (const fx of G.marks) this.drawMark(g, fx);
 
+    /* 日なたの影。外にいるときだけ、木や家や みんなの影が 右下へのびる */
+    let sunWant = m.kind === 'tower' ? 0 : G.region === 'moon' ? 0.35 : 1;
+    sunWant *= 1 - this.fogK * 0.6;
+    this.sunK = lerp(this.sunK, sunWant, 0.05);
+    if (this.sunK > 0.03) this.drawCast(g, G, m, x0, y0, x1, y1, st);
+
     /* 奥から手前へ */
     const list = [];
     for (let ty = Math.max(0, y0 - 1); ty <= Math.min(m.h - 1, y1 + 3); ty++) {
@@ -159,6 +165,7 @@ const R = {
     /* 城壁の上にいるときは、ハムスターを手前にもう一度描く (家や木にかくれない) */
     if (G.p.high) this.drawPlayer(g, G);
     for (const fx of G.zaps) this.drawZap(g, fx);
+    if (this.sunK > 0.03) this.drawClouds(g);
     if (Build.active && Build.ghost) drawGhost(g, Build.ghost, this.t);
     FX.draw(g);
     this.drawPrompt(g, G);
@@ -166,6 +173,7 @@ const R = {
 
     /* ここからは画面の座標 */
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.drawSun(g);
     this.drawFog(g, G);
     this.drawWeather(g, G);
     this.drawStick(g);
@@ -181,6 +189,100 @@ const R = {
       g.fillStyle = `rgba(10,6,14,${this.fade})`;
       g.fillRect(0, 0, this.W, this.H);
     }
+  },
+
+  /* ------------------------------ 太陽と影 ------------------------------
+     日は左上から さす。影は 絵を地面へたおして (右下へのばして) 黒くぬったもの。
+     いったん べつの紙に まっ黒で描いてから 一度にうすく重ねるので、影どうしが重なっても こくならない。 */
+  sunK: 0, castCv: null, casting: false,
+  drawCast(g, G, m, x0, y0, x1, y1, st) {
+    const W = this.canvas.width, H = this.canvas.height;
+    const cv = this.castCv || (this.castCv = document.createElement('canvas'));
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    const c = cv.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H);
+    const base = g.getTransform();
+    const LEAN = 0.62, FLAT = 0.3;
+    const cast = (fx, fy, fn) => {
+      c.setTransform(base); c.translate(fx, fy); c.transform(1, 0, -LEAN, -FLAT, 0, 0); c.translate(-fx, -fy);
+      fn();
+    };
+    this.casting = true;
+    for (let ty = Math.max(0, y0 - 3); ty <= Math.min(m.h - 1, y1 + 1); ty++) {
+      for (let tx = Math.max(0, x0 - 4); tx <= Math.min(m.w - 1, x1); tx++) {
+        const n = m.nodes.get(ty * m.w + tx);
+        if (n) cast(tx * TILE + 16, ty * TILE + 26, () => drawNode(c, n, this.t));
+      }
+    }
+    for (const s of m.structs) {
+      if (s.flat || ['stairsDown', 'stairsUp', 'torch', 'stakes', 'exit', 'warp'].includes(s.kind)) continue;
+      if (!this.inView(s.x * TILE - 200, s.y * TILE - 120, s.w * TILE + 200, s.h * TILE + 160, 0)) continue;
+      cast((s.x + s.w / 2) * TILE, (s.y + s.h) * TILE, () => drawStruct(c, s, this.t, st));
+    }
+    const near = (o) => this.inView(o.x - 60, o.y - 60, 120, 120, 0);
+    for (const n of G.npcs) if (n.map === m.id && near(n)) cast(n.x, n.y, () => this.drawNpc(c, n));
+    for (const e of G.mobs) if (near(e)) cast(e.x, e.y, () => drawMob(c, e, this.t));
+    for (const cr of G.critters || []) if (near(cr)) cast(cr.x, cr.y, () => drawCritter(c, cr, this.t, {}));
+    for (const pet of G.pets) if ((!pet.home || m.kind === 'over') && near(pet)) cast(pet.x, pet.y, () => drawCritter(c, pet, this.t, { pet: true, moving: pet.moving }));
+    if (G.boss) cast(G.boss.x, G.boss.y, () => drawBoss(c, G.boss, this.t));
+    if (!G.p.high) cast(G.p.x, G.p.y, () => this.drawPlayer(c, G));
+    this.casting = false;
+    /* 色をすてて まっ黒に */
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalCompositeOperation = 'source-in';
+    c.fillStyle = G.region === 'snow' ? '#1a2a50' : '#1e2a10'; c.fillRect(0, 0, W, H);
+    /* 街灯の光や 足もとの影のような うすい所は 影にしない (自分と重ねて うすい所を消す) */
+    c.globalCompositeOperation = 'destination-in';
+    c.drawImage(cv, 0, 0); c.drawImage(cv, 0, 0);
+    c.globalCompositeOperation = 'source-over';
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = 0.24 * this.sunK; g.drawImage(cv, 0, 0);
+    g.restore();
+  },
+
+  /* 雲の影が ゆっくり 地面をながれていく */
+  drawClouds(g) {
+    const k = this.sunK, CELL = 620, dx = this.t * 16, dy = this.t * 5;
+    const cx0 = Math.floor((this.cam.x - dx - 300) / CELL), cx1 = Math.floor((this.cam.x + this.vw - dx + 300) / CELL);
+    const cy0 = Math.floor((this.cam.y - dy - 200) / CELL), cy1 = Math.floor((this.cam.y + this.vh - dy + 200) / CELL);
+    g.beginPath();
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+      const h = hash2(cx, cy, 913);
+      if (h > 0.42) continue;
+      const bx = cx * CELL + dx + h * 400, by = cy * CELL + dy + hash2(cx, cy, 57) * 380;
+      for (let j = 0; j < 5; j++) {
+        const a = hash2(cx * 7 + j, cy, 31), b = hash2(cx, cy * 7 + j, 44);
+        const ex = bx + (j - 2) * 62 + a * 30, ey = by + (b - 0.5) * 50, rx = 70 + a * 60, ry = 40 + b * 26;
+        g.moveTo(ex + rx, ey); g.ellipse(ex, ey, rx, ry, 0, 0, TAU);
+      }
+    }
+    g.fillStyle = `rgba(20,36,60,${0.11 * k})`; g.fill('nonzero');
+  },
+
+  /* 左上の 日の光。ひかりの すじが ゆらゆら */
+  drawSun(g) {
+    const k = this.sunK;
+    if (k < 0.03) return;
+    const W = this.W, H = this.H, ox = -W * 0.08, oy = -H * 0.18, R0 = Math.hypot(W, H);
+    const gr = g.createRadialGradient(ox, oy, 0, ox, oy, R0 * 1.05);
+    gr.addColorStop(0, `rgba(255,236,170,${0.34 * k})`);
+    gr.addColorStop(0.35, `rgba(255,226,160,${0.12 * k})`);
+    gr.addColorStop(0.75, 'rgba(255,220,160,0)');
+    gr.addColorStop(1, `rgba(40,30,90,${0.12 * k})`);
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) {
+      const a = 0.42 + i * 0.13 + Math.sin(this.t * 0.15 + i * 2.1) * 0.025;
+      const w = 0.018 + (i % 3) * 0.01;
+      const al = 0.05 * k * (0.55 + 0.45 * Math.sin(this.t * 0.4 + i * 1.7));
+      const lg = g.createLinearGradient(ox, oy, ox + Math.cos(a) * R0, oy + Math.sin(a) * R0);
+      lg.addColorStop(0, `rgba(255,240,190,${al})`); lg.addColorStop(1, 'rgba(255,240,190,0)');
+      g.beginPath(); g.moveTo(ox, oy);
+      g.lineTo(ox + Math.cos(a - w) * R0, oy + Math.sin(a - w) * R0);
+      g.lineTo(ox + Math.cos(a + w) * R0, oy + Math.sin(a + w) * R0);
+      g.closePath(); g.fillStyle = lg; g.fill();
+    }
+    g.restore();
   },
 
   inView(x, y, w, h, pad) {
@@ -246,13 +348,13 @@ const R = {
       });
       return;
     }
-    const f = FURS[n.fur] || FURS.cream;
-    drawHamster(g, n.x, n.y, {
-      face: n.face, t: this.t + n.seed, moving: n.moving, fur: f[0], belly: f[1], body: n.body, hat: n.hat,
-      bag: n.bag || 'cheek', weapon: n.weapon || null, swing: n.swing >= 0 ? n.swing : -1, aim: n.aim || 0, roll: -1, cheek: 0, seed: n.seed,
+    /* 町の人も 主人公と同じ ネズミ */
+    drawMouse(g, n.x, n.y, {
+      face: n.face, t: this.t + n.seed, moving: n.moving, furKey: n.fur || 'cream', body: n.body, hat: n.hat,
+      bag: n.bag || 'none', weapon: n.weapon || null, swing: n.swing >= 0 ? n.swing : -1, aim: n.aim || 0, roll: -1, cheek: 0, seed: n.seed,
       beard: n.beard, apron: n.apron, glasses: n.glasses, scale: n.scale || 1,
     });
-    if (n.mark) {
+    if (n.mark && !this.casting) {
       const k = Math.sin(this.t * 5) * 2;
       rrect(g, n.x - 8, n.y - 46 + k, 16, 16, 5, n.mark === '!' ? '#ffd84a' : '#9fe8ff', INK, 1.4);
       g.fillStyle = INK; g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';

@@ -356,7 +356,8 @@ function drawHamster(g, x, y, o) {
     if (o.beard) poly(g, [6, -9, 12, -9, 9, -1, 5, -4], '#ffffff', 'rgba(0,0,0,.2)', 0.8);
     circ(g, 6.5, -5, 2.2, '#f2a6a6', INK, 0.9);
   }
-  drawHat(g, o.hat, view);
+  /* ネズミは目が上にあるので、ぼうしを少し上にのせる */
+  if (o.mouse) { g.save(); g.translate(0, -2.6); drawHat(g, o.hat, view); g.restore(); } else drawHat(g, o.hat, view);
   if (o.flash > 0) ell(g, 0, -13, 14, 14, `rgba(255,255,255,${o.flash * 0.6})`);
   g.restore();
 
@@ -511,6 +512,11 @@ function drawMouseBody(g, o, view, fur, belly, furD) {
     mouseWhiskers(g, 1.4, -12.6, 1, 10);
     ell(g, 0, -12, 1.35, 1, M_NOSE, INK, 0.6);
     circ(g, -0.4, -12.3, 0.35, 'rgba(255,255,255,.7)');
+    if (o.beard) {
+      g.beginPath(); g.moveTo(-3.6, -12.4); g.quadraticCurveTo(-4.2, -7.4, 0, -4.6); g.quadraticCurveTo(4.2, -7.4, 3.6, -12.4);
+      g.quadraticCurveTo(0, -10.6, -3.6, -12.4); g.closePath(); g.fillStyle = '#fbf8f2'; g.fill(); g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 0.7; g.stroke();
+      ell(g, 0, -12, 1.35, 1, M_NOSE, INK, 0.6);
+    }
     if (o.soldier) soldierHelmet(g, 0, view, o.soldier);
   } else if (view === 'back') {
     mouseEar(g, -6.9, -22.6, 5.2, fur, furD, false);
@@ -559,6 +565,7 @@ function drawMouseBody(g, o, view, fur, belly, furD) {
     mouseWhiskers(g, 11, -14, 1, 9);
     mouseWhiskers(g, 10.4, -14.2, -1, 4);
     ell(g, 12.7, -14.3, 1.25, 1.05, M_NOSE, INK, 0.6);
+    if (o.beard) poly(g, [6.4, -12.6, 11.2, -13.2, 9.6, -8.2, 6.6, -5.6, 5.2, -9], '#fbf8f2', 'rgba(0,0,0,.22)', 0.7);
     if (o.soldier) soldierHelmet(g, 3.6, view, o.soldier);
     mouseHand(g, 5.6, -7.2);
     if (o.soldier) soldierShield(g, -0.5, -8.5, 1, o.soldier);
