@@ -4,7 +4,7 @@ import * as A from './assets.js';
 import { scene, icon } from './engine.js';
 import { G, SV, save } from './state.js';
 import { RECIPES, INGREDIENTS, HERO_CLASSES } from './data.js';
-import { addBox, addInteract, setBounds, hooks } from './world.js';
+import { addBox, addInteract, setBounds, hooks, addBeam, ROOM_LIGHTS } from './world.js';
 import { Actor } from './actor.js';
 import { UI } from './ui.js';
 import { sfx } from './audio.js';
@@ -52,7 +52,9 @@ export function buildDiner() {
   base.position.set(0, -0.8, 0); dinerRoot.add(base);
   ['wall', 'wall_window_open', 'wall_decorated', 'wall'].forEach((n, i) => prop(n, -6 + i * 4, -6));
   for (const z of [-4, 0, 4]) { prop(z === 0 ? 'wall_window_open' : 'wall', -8, z, { ry: Math.PI / 2 }); prop(z === 0 ? 'wall_window_open' : 'wall', 8, z, { ry: -Math.PI / 2 }); }
-  const light = new THREE.PointLight(0xfff0d0, 7, 20, 1.5); light.position.set(0, 3.8, 0); dinerRoot.add(light);
+  addBeam(dinerRoot, new THREE.Vector3(-7.7, 2.5, 0), new THREE.Vector3(1.25, -1, 0.15), { len: 5.6 });
+  addBeam(dinerRoot, new THREE.Vector3(7.7, 2.5, 0), new THREE.Vector3(-1.25, -1, 0.15), { len: 5.6 });
+  const light = new THREE.PointLight(0xfff0d0, 7, 20, 1.5); ROOM_LIGHTS.push(light); light.userData.base = light.intensity; light.position.set(0, 3.8, 0); dinerRoot.add(light);
 
   // ---- うしろの れつ (z=-4.9) ----
   const back = -4.9;

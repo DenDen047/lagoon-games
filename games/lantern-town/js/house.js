@@ -4,7 +4,7 @@ import * as A from './assets.js';
 import { scene } from './engine.js';
 import { SV, save } from './state.js';
 import { ITEM } from './data.js';
-import { addBox, addInteract, removeInteract, clearColliders, addLamp, removeLamp, setBounds, hooks } from './world.js';
+import { addBox, addInteract, removeInteract, clearColliders, addLamp, removeLamp, setBounds, hooks, addBeam, ROOM_LIGHTS } from './world.js';
 import { sfx } from './audio.js';
 
 export const HX = 300;           // へやの 中心 (町から 遠く はなれた 場所に つくる)
@@ -47,7 +47,10 @@ export function buildHouse() {
   const mat = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.2), new THREE.MeshStandardMaterial({ color: 0x9c3b32, roughness: 1 }));
   mat.rotation.x = -Math.PI / 2; mat.position.set(0, 0.015, 4.6); houseRoot.add(mat);
   addInteract({ area: 'house', x: HX, z: 4.5, r: 1.6, label: () => (deco.on ? null : 'そとに でる'), act: () => hooks.enter('town') });
-  const light = new THREE.PointLight(0xffd9a0, 6, 16, 1.6);
+  // 窓から さしこむ 日の光
+  addBeam(houseRoot, new THREE.Vector3(0, 2.5, -4.5), new THREE.Vector3(0, -1, 1.25), { len: 5.2 });
+  addBeam(houseRoot, new THREE.Vector3(-6.0, 2.5, -2.75), new THREE.Vector3(1.3, -1, 0.1), { len: 5.4 });
+  const light = new THREE.PointLight(0xffd9a0, 6, 16, 1.6); ROOM_LIGHTS.push(light); light.userData.base = light.intensity;
   light.position.set(0, 3.6, 0.5);
   houseRoot.add(light);
   rebuildFurniture();

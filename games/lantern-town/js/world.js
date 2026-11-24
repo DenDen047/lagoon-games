@@ -1,7 +1,7 @@
 // 町・ぼち・くんれんじょう・森を つくる。ぶつかり判定と「E で使えるもの」の 登録も ここ。
 import * as THREE from 'three';
 import * as A from './assets.js';
-import { scene } from './engine.js';
+import { scene, noAO } from './engine.js';
 
 export const CS = 5;          // 街パック (City Builder Bits) は ミニチュアの大きさなので 5 倍にする
 const CY = -0.45;             // 道路の上面が 地面と そろう高さ
@@ -48,16 +48,69 @@ export function blocked(area, ax, az, bx, bz) {
   return false;
 }
 
+/** カメラと プレイヤーの あいだに 建物が あれば、どこで ぶつかるか (0〜1) を返す */
+export function cameraHit(ax, az, bx, bz, ay = 0, by = 0) {
+  let best = 1;
+  const dx = bx - ax, dz = bz - az;
+  for (const c of COL.town) {
+    if (c.tag !== 'bld') continue;
+    const hw = c.hw + 0.35, hd = c.hd + 0.35;
+    let t0 = 0, t1 = 1;
+    for (const [p, d, lo, hi] of [[ax, dx, c.x - hw, c.x + hw], [az, dz, c.z - hd, c.z + hd]]) {
+      if (Math.abs(d) < 1e-6) { if (p < lo || p > hi) { t0 = 2; break; } continue; }
+      let a = (lo - p) / d, b = (hi - p) / d;
+      if (a > b) [a, b] = [b, a];
+      t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+    }
+    // 屋根より 上を 通るなら さえぎらない
+    if (t0 <= t1 && t0 < best && ay + (by - ay) * t0 < (c.h ?? 99)) best = t0;
+  }
+  return best;
+}
+
 // ---------- E で使えるもの ----------
 export const INTERACT = [];
 export function addInteract(o) { INTERACT.push(o); return o; }
 export function removeInteract(o) { const i = INTERACT.indexOf(o); if (i >= 0) INTERACT.splice(i, 1); }
 
 // ---------- よるに 光るもの ----------
+// 電球・まわりの ぼんやりした光 (ハロー)・光の すじ (コーン)・地面の 光だまり。どれも よるの 強さ lightU.night で 明るさが かわる
 export const LAMPS = [];
+export const lightU = { night: { value: 0 }, day: { value: 1 }, sunCol: { value: new THREE.Color(0xfff0d0) } };
+const fxRoot = new THREE.Group();
+noAO.push(fxRoot);
 const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, toneMapped: false, transparent: true, opacity: 0 });
 const bulbGeo = new THREE.SphereGeometry(1, 12, 8);
-export function addLamp(area, x, y, z, { color = 0xffb35c, power = 1, bulb = 0.22 } = {}) {
+function radialTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'); const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.25, 'rgba(255,255,255,0.45)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+const RADIAL = radialTex();
+const haloMats = new Map(), poolMats = new Map();
+function haloMat(color) {
+  if (!haloMats.has(color)) haloMats.set(color, new THREE.SpriteMaterial({ map: RADIAL, color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0, fog: false }));
+  return haloMats.get(color);
+}
+function poolMat(color) {
+  if (!poolMats.has(color)) poolMats.set(color, new THREE.MeshBasicMaterial({ map: RADIAL, color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0, polygonOffset: true, polygonOffsetFactor: -2 }));
+  return poolMats.get(color);
+}
+// 光の すじ: ふちほど うすく、下に いくほど うすく なる 半透明の 円すい (加算合成)
+const VOL_VS = 'varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }';
+const VOL_FS = 'uniform vec3 col; uniform float k; varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ float e = pow(abs(dot(vN, vV)), 1.6); float a = e * pow(vUv.y, 1.3) * k; gl_FragColor = vec4(col * a, 1.0); }';
+export function volMat(color, k) {
+  return new THREE.ShaderMaterial({ uniforms: { col: { value: new THREE.Color(color) }, k }, vertexShader: VOL_VS, fragmentShader: VOL_FS,
+    blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false });
+}
+const coneK = { value: 0 };
+const coneMat = volMat(0xffc777, coneK);
+const coneGeo = new THREE.CylinderGeometry(0.25, 2.8, 4.2, 24, 1, true).translate(0, -2.1, 0);
+const poolGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+
+export function addLamp(area, x, y, z, { color = 0xffb35c, power = 1, bulb = 0.22, halo = 0, pool = 0, cone = false } = {}) {
   let mesh = null;
   if (bulb) {
     mesh = new THREE.Mesh(bulbGeo, bulbMat);
@@ -65,12 +118,74 @@ export function addLamp(area, x, y, z, { color = 0xffb35c, power = 1, bulb = 0.2
     mesh.scale.setScalar(bulb);
     scene.add(mesh);
   }
+  if (area === 'town') {
+    if (halo) { const h = new THREE.Sprite(haloMat(color)); h.position.set(x, y, z); h.scale.setScalar(halo); fxRoot.add(h); }
+    if (pool) { const p = new THREE.Mesh(poolGeo, poolMat(color)); p.position.set(x, 0.04, z); p.scale.setScalar(pool); fxRoot.add(p); }
+    if (cone) { const c = new THREE.Mesh(coneGeo, coneMat); c.position.set(x, y, z); fxRoot.add(c); }
+  }
   const l = { area, x, y, z, color, power, mesh };
   LAMPS.push(l);
   return l;
 }
-export function setBulbs(k) { bulbMat.opacity = k; }
+export function setBulbs(k) {
+  bulbMat.opacity = k;
+  coneK.value = k * 0.22;
+  for (const m of haloMats.values()) m.opacity = k * 0.55;
+  for (const m of poolMats.values()) m.opacity = k * 0.6;
+  lightU.night.value = k;
+}
 export function removeLamp(l) { const i = LAMPS.indexOf(l); if (i >= 0) LAMPS.splice(i, 1); if (l.mesh) scene.remove(l.mesh); }
+
+/** 窓から さしこむ 日の光 (家の中・お店の中)。start=窓の位置、dir=光の向き。床に 光が あたる 場所も 明るくする */
+const beamMats = [];
+const patchMat = new THREE.MeshBasicMaterial({ map: RADIAL, color: 0xfff0d0, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0, polygonOffset: true, polygonOffsetFactor: -2 });
+export const ROOM_LIGHTS = [];   // 家と お店の 天井の 明かり (よるに 明るく する)
+export function addBeam(parent, start, dir, { len = 5, r0 = 0.7, r1 = 1.1 } = {}) {
+  const k = { value: 0 };
+  const m = volMat(0xfff0d0, k);
+  beamMats.push(m);
+  const d = dir.clone().normalize();
+  const geo = new THREE.CylinderGeometry(r0, r1, len, 4, 1, true).translate(0, -len / 2, 0);
+  const b = new THREE.Mesh(geo, m);
+  b.position.copy(start);
+  b.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), d);
+  b.rotateY(Math.PI / 4);
+  parent.add(b);
+  noAO.push(b);
+  const hit = start.clone().addScaledVector(d, start.y / -d.y);
+  const p = new THREE.Mesh(poolGeo, patchMat);
+  p.position.set(hit.x, 0.03, hit.z);
+  p.scale.set(Math.abs(d.x) > Math.abs(d.z) ? 3.4 : 2.4, 1, Math.abs(d.x) > Math.abs(d.z) ? 2.4 : 3.4);
+  parent.add(p);
+  noAO.push(p);
+  return b;
+}
+export function setBeams(k, color) {
+  for (const m of beamMats) { m.uniforms.k.value = k; m.uniforms.col.value.copy(color); }
+  patchMat.opacity = k * 3.2;
+  patchMat.color.copy(color);
+}
+
+// 建物の 窓ガラス (テクスチャの 左下の マス) を よるに あたたかく 光らせる。窓ごとに ついたり 消えたり ばらつかせる
+let winMat = null;
+function windowMaterial(base) {
+  if (winMat) return winMat;
+  winMat = base.clone();
+  winMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uWin = lightU.night;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uWin;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        if (vMapUv.x < 0.25 && vMapUv.y > 0.75) {
+          vec3 cell = floor(vWPos * vec3(0.55, 0.42, 0.55));
+          float h = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+          totalEmissiveRadiance += uWin * step(0.28, h) * mix(vec3(1.0, 0.48, 0.16), vec3(1.0, 0.72, 0.38), h) * (0.7 + h * 0.6);
+        }`);
+  };
+  winMat.customProgramCacheKey = () => 'lantern-window';
+  return winMat;
+}
 
 export const SEATS = [];       // ベンチ: {x, z, yaw, area, used}
 export const DUMMIES = [];     // かかし: {x, z, obj, wob}
@@ -112,18 +227,20 @@ function grassTexture() {
 }
 
 // 建物 (正面は +z)。footprint は ベース無しの 大きさ (KayKit の元の単位)
-const BLD = { building_A: [1.21, 1.45, 0.08], building_B: [1.61, 1.30, 0], building_C: [1.21, 1.30, 0], building_D: [1.61, 1.30, 0], building_E: [2.01, 1.45, 0.08], building_F: [2.01, 1.30, 0], building_G: [2.01, 1.45, 0.08], building_H: [2.01, 1.30, 0] };
+const BLD = { building_A: [1.21, 1.45, 0.08, 1.65], building_B: [1.61, 1.30, 0, 1.65], building_C: [1.21, 1.30, 0, 2.98], building_D: [1.61, 1.30, 0, 2.97], building_E: [2.01, 1.45, 0.08, 2.35], building_F: [2.01, 1.30, 0, 2.35], building_G: [2.01, 1.45, 0.08, 2.98], building_H: [2.01, 1.30, 0, 3.05] };
 function building(name, x, z, ry) {
-  city(name, x, z, ry);
-  const [w, d, oz] = BLD[name];
+  const o = city(name, x, z, ry);
+  o.traverse((m) => { if (m.isMesh) m.material = windowMaterial(m.material); });
+  const [w, d, oz, hgt] = BLD[name];
   const front = ry === 0 ? 1 : -1;
-  addBox('town', x, z + oz * CS * front, w * CS / 2, d * CS / 2);
+  addBox('town', x, z + oz * CS * front, w * CS / 2, d * CS / 2, 'bld').h = hgt * CS + CY;
   MAP.push({ x, z: z + oz * CS * front, w: w * CS, d: d * CS, c: '#c98f63' });
   return { x, z: z + front * ((d / 2 + oz) * CS + 1.2) };
 }
 
 export function buildTown() {
   scene.add(townRoot);
+  townRoot.add(fxRoot);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 1 }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.01;
@@ -132,7 +249,7 @@ export function buildTown() {
 
   // 大通り (z=0)。真ん中に 横断歩道
   // 道路は 縁石より 路面が ひくいので、たてだけ つぶして 地面の 高さに おく
-  for (let x = -40; x <= 40; x += 10) { const r = city(x === 0 ? 'road_straight_crossing' : 'road_straight', x, 0, Math.PI / 2); r.scale.y = 1; r.position.y = 0.0; }
+  for (let x = -40; x <= 40; x += 10) { const r = city(x === 0 ? 'road_straight_crossing' : 'road_straight', x, 0, Math.PI / 2); r.scale.y = 1; r.position.y = 0.012; }
   MAP.push({ x: 0, z: 0, w: 90, d: 10, c: '#6b6f78' });
 
   // 建物。北側 (z=-10) は 正面が 南、南側 (z=10) は 正面が 北
@@ -177,7 +294,7 @@ function streetlight(x, z, ry) {
   city('streetlight', x, z, ry);
   addCircle('town', x, z, 0.35);
   const ax = -Math.cos(ry) * 0.2 * CS, az = Math.sin(ry) * 0.2 * CS;
-  addLamp('town', x + ax, 0.92 * CS + CY - 0.15, z + az, { color: 0xffc777, power: 1.4, bulb: 0.28 });
+  addLamp('town', x + ax, 0.92 * CS + CY - 0.15, z + az, { color: 0xffc777, power: 1.5, bulb: 0.28, halo: 2.6, pool: 7, cone: true });
 }
 
 function bench(x, z, yaw, name = 'halloween/bench') {
@@ -212,12 +329,12 @@ function buildPark() {
   for (const [x, z] of [[-11, 18], [11, 18], [-11, 32], [11, 32]]) {
     put('lantern_standing', x, z, { s: 1.3 });
     addCircle('town', x, z, 0.5);
-    addLamp('town', x, 0.85 * 1.3, z, { color: 0xffa040, power: 1.0, bulb: 0 });
+    addLamp('town', x, 0.85 * 1.3, z, { color: 0xffa040, power: 1.1, bulb: 0, halo: 2.2, pool: 5 });
   }
   for (const [n, x, z] of [['pumpkin_orange_jackolantern', -4, 13], ['pumpkin_yellow_jackolantern', 4, 13], ['pumpkin_orange', -5.5, 14], ['pumpkin_yellow_small', 5.6, 13.8]]) {
     put(n, x, z, { ry: Math.PI });
     addCircle('town', x, z, 0.7);
-    if (n.includes('jacko')) addLamp('town', x, 0.6, z, { color: 0xff8a2a, power: 0.6, bulb: 0 });
+    if (n.includes('jacko')) addLamp('town', x, 1.6, z, { color: 0xff8a2a, power: 0.7, bulb: 0, halo: 1.1, pool: 3.5 });
   }
   for (let i = 0; i < 6; i++) WAYPOINTS.push({ x: Math.sin(i) * 11, z: 24 + Math.cos(i) * 11 });
   // かぼちゃばたけ
@@ -288,7 +405,7 @@ function buildCemetery() {
 
   // 門までの 道
   const path = [];
-  for (let x = 41; x <= 49; x += 1.9) for (const z of [-0.95, 0.95]) path.push({ x, z, ry: Math.floor(x) % 4 * Math.PI / 2 });
+  for (let x = 46.2; x <= 49.5; x += 1.9) for (const z of [-0.95, 0.95]) path.push({ x, z, ry: Math.floor(x) % 4 * Math.PI / 2 });
   for (let x = 52; x <= 76; x += 1.9) for (const z of [-0.95, 0.95]) path.push({ x, z, ry: Math.floor(x * 3) % 4 * Math.PI / 2 });
   ['path_A', 'path_B', 'path_C'].forEach((n, k) => townRoot.add(A.instanced(n, path.filter((_, i) => i % 3 === k))));
 
@@ -316,7 +433,7 @@ function buildCemetery() {
   for (const z of [-3.6, 3.6]) for (const x of [56, 66, 76]) {
     put('post_lantern', x, z, { ry: z > 0 ? Math.PI : 0 });
     addCircle('town', x, z, 0.35);
-    addLamp('town', x, 2.75, z + (z > 0 ? -1.0 : 1.0), { color: 0x9e7bff, power: 1.1, bulb: 0 });
+    addLamp('town', x, 2.75, z + (z > 0 ? -1.0 : 1.0), { color: 0x9e7bff, power: 1.3, bulb: 0, halo: 2.4, pool: 5.5 });
   }
   for (const [n, x, z, ry] of [['tree_dead_large_decorated', 55, -17, 0.3], ['tree_dead_large', 84, 15, 2], ['tree_dead_medium', 71, -17.5, 1], ['tree_dead_small', 61, 17, 0], ['tree_dead_medium', 85, -9, 2.4], ['tree_dead_large', 53.5, 13, 1.2]]) {
     put(n, x, z, { ry }); addCircle('town', x, z, 0.6);
@@ -325,7 +442,7 @@ function buildCemetery() {
     ['ribcage', 68, 16, 1], ['bone_A', 62, -16.5, 0.4], ['bone_C', 80, -14, 2], ['skull', 85, 11, -1], ['coffin', 84, -15, 0.2], ['pumpkin_orange_jackolantern', 47, -3.3, -Math.PI / 2], ['pumpkin_yellow_jackolantern', 47, 3.3, -Math.PI / 2]]) {
     put(n, x, z, { ry, y: n.startsWith('bone') || n === 'ribcage' ? 0.15 : 0 });
     if (!n.startsWith('bone')) addCircle('town', x, z, 0.6);
-    if (n.includes('candle') || n.includes('jacko')) addLamp('town', x, 0.8, z, { color: n.includes('jacko') ? 0xff8a2a : 0xffb060, power: 0.7, bulb: 0 });
+    if (n.includes('candle') || n.includes('jacko')) addLamp('town', x, 1.5, z, { color: n.includes('jacko') ? 0xff8a2a : 0xffb060, power: 0.8, bulb: 0, halo: 1.0, pool: 3 });
   }
 }
 

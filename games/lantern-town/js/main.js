@@ -6,7 +6,7 @@ import { G, SV, setSave, loadSave, freshSave, save, maxHp } from './state.js';
 import { I, bindInput, updateInput } from './input.js';
 import { initAudio, sfx, setSound } from './audio.js';
 import { initFx, updateFx } from './fx.js';
-import { buildTown, townRoot, hooks, DOORS, DUMMIES } from './world.js';
+import { buildTown, townRoot, hooks, DOORS, DUMMIES, cameraHit } from './world.js';
 import { buildHouse, houseRoot, HX, deco, decoStart, decoEnd, decoUpdate, decoPlace, decoStore, decoRotate, setGhost, rebuildFurniture } from './house.js';
 import { buildDiner, dinerRoot, DX, updateDiner, leaveDiner } from './diner.js';
 import { Player } from './player.js';
@@ -43,6 +43,7 @@ async function boot() {
   E.setQuality(SV.opts.quality);
   spawnNpcs();
   hooks.enter = enter;
+  E.cam.clip = (ax, az, bx, bz, ay, by) => (G.area === 'town' ? cameraHit(ax, az, bx, bz, ay, by) : 1);
   hooks.shop = () => UI.openMenu('shop');
   hooks.sit = (seat) => G.player.sit(seat);
   hooks.sleep = sleep;
@@ -175,11 +176,14 @@ function frame(now) {
     E.camera.lookAt(0, 2, 12);
     E.sun.target.position.set(0, 0, 10);
     E.sun.position.set(0, 0, 10).addScaledVector(E.sunDir, 70);
+    E.rim.target.position.set(0, 0, 10);
+    E.rim.position.set(-E.sunDir.x * 40, 25, 10 - E.sunDir.z * 40);
     focusV.set(0, 0, 10);
     updateNpcs(dt);
     updateFx(dt, { night: G.night, area: 'town', focus: focusV, time: G.now });
   }
   E.render();
+  window.__afterRender?.();   // テスト用の フック
   I.endFrame();
 }
 

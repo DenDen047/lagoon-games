@@ -1,6 +1,6 @@
 // 見た目の演出: 火花・ダメージの数字・落ち葉・よるの ひかりの たま・こうげき予告の わ。
 import * as THREE from 'three';
-import { scene, camera, Q } from './engine.js';
+import { scene, camera, Q, noAO } from './engine.js';
 
 function dotTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -97,7 +97,7 @@ export function popText(pos, text, cls = '') {
   nums.push({ el, p: pos.clone(), t: 0, dx: (Math.random() - 0.5) * 0.8 });
 }
 
-export function initFx() { scene.add(sparks, leaves, wisps); }
+export function initFx() { scene.add(sparks, leaves, wisps); noAO.push(sparks, leaves, wisps); }
 
 export function updateFx(dt, { night, area, focus, time }) {
   for (let i = 0; i < N; i++) {
