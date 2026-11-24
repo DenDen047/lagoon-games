@@ -36,7 +36,7 @@ const ICONS = {
   lamp: ['#ffe27a', '<circle cx="12" cy="8" r="6.5"/><rect x="9.5" y="14.5" width="5" height="3" fill="#c8ced8"/><rect x="10" y="18.5" width="4" height="3" rx="1" fill="#c8ced8"/>'],
   turret: ['#6fb3ff', '<rect x="5" y="14" width="14" height="8" rx="1"/><rect x="8" y="8" width="8" height="6" rx="1"/><rect x="14" y="9.5" width="9" height="2.6"/>'],
   heart: ['#ff6b8a', '<path d="M12 21C5 15 2 12 2 8a5 5 0 0110-1 5 5 0 0110 1c0 4-3 7-10 13z"/>'],
-  car: ['#ffb24a', '<path d="M4 11l2-5h12l2 5h1.5a1.5 1.5 0 011.5 1.5V17h-2.2a2.8 2.8 0 01-5.6H8.8a2.8 2.8 0 01-5.6H1v-4.5A1.5 1.5 0 012.5 11zm3.4-3l-1.2 3H11V8zm5.6 0v3h5l-1.2-3z" fill-rule="evenodd"/><circle cx="6" cy="17" r="1.8"/><circle cx="18" cy="17" r="1.8"/>'],
+  car: ['#ffb24a', '<path d="M4 11l2-5h12l2 5h1.5a1.5 1.5 0 011.5 1.5V17h-2.2a2.8 2.8 0 01-5.6 0H8.8a2.8 2.8 0 01-5.6 0H1v-4.5A1.5 1.5 0 012.5 11zm3.4-3l-1.2 3H11V8zm5.6 0v3h5l-1.2-3z" fill-rule="evenodd"/><circle cx="6" cy="17" r="1.8"/><circle cx="18" cy="17" r="1.8"/>'],
   shirt: ['#ff8ac8', '<path d="M8 2l4 2.5L16 2l6 3.5-2.5 5L17 9.5V22H7V9.5L4.5 10.5 2 5.5z"/>'],
   fish: ['#5fc8ff', '<path d="M2 12c3-5 9-6 14-3l5-4-1.5 7L21 19l-5-4c-5 3-11 2-14-3z"/><circle cx="7" cy="11" r="1.2" fill="#024"/>'],
   veg: ['#ff8a3a', '<path d="M9 9c4 0 7 3 5 9-1 3-3 4-5 4s-4-1-5-4C2 12 5 9 9 9z"/><path d="M9 9c0-3 1-5 3-7M9 9C8 6 6 5 4 5M9 9c2-2 4-3 7-2" stroke="#5fd068" stroke-width="2" fill="none"/>'],
