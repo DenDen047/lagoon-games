@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'downtown-city', genre: 'sandbox', players: '1P', date: '2026-11-24',
+    ja: {
+      title: 'DOWNTOWN ― 本物みたいな街',
+      desc: 'ニューヨークやボストンのようなダウンタウンを 3D で歩ける街。信号で止まる車、歩道を歩く人、朝から夜まで変わる空。空から見下ろしたり、歩道を歩いたり、車を追いかけたりできる。',
+    },
+    en: {
+      title: 'Downtown',
+      desc: 'A 3D downtown modeled on New York and Boston: cars that stop at traffic lights, people walking the sidewalks, and a sky that changes from morning to night. Look down from above, walk the streets, or follow a car.',
+    },
+  },
+  {
     slug: 'lantern-town', genre: 'sandbox', players: '1P', date: '2026-11-24',
     ja: {
       title: 'LANTERN TOWN ― ランタンの 町で くらそう',

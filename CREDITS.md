@@ -37,7 +37,7 @@ CC0 なのでクレジットは法的には不要ですが、配布 ZIP の `ク
 |---|---|---|
 | [PeerJS 1.5.4](https://github.com/peers/peerjs) | オンライン対戦の通信 | [MIT License](https://github.com/peers/peerjs/blob/master/LICENSE) — 商用利用可、著作権表示が必要 |
 | [Mermaid 11](https://github.com/mermaid-js/mermaid) | ドキュメント内の図 | [MIT License](https://github.com/mermaid-js/mermaid/blob/master/LICENSE) |
-| [three.js 0.187.0](https://github.com/mrdoob/three.js) | mech-frontier と lantern-town の 3D 描画（本体と、モデル読みこみ・後処理などの部品）。`games/mech-frontier/lib/three/` と `games/lantern-town/lib/three/` に同梱 | [MIT License](https://github.com/mrdoob/three.js/blob/dev/LICENSE) — 商用利用可、著作権表示が必要（同じフォルダに `LICENSE` を置いてある） |
+| [three.js 0.187.0](https://github.com/mrdoob/three.js) | mech-frontier・lantern-town・downtown-city の 3D 描画（本体と、モデル読みこみ・後処理などの部品）。`games/mech-frontier/lib/three/`・`games/lantern-town/lib/three/`・`games/downtown-city/lib/three/` に同梱 | [MIT License](https://github.com/mrdoob/three.js/blob/dev/LICENSE) — 商用利用可、著作権表示が必要（同じフォルダに `LICENSE` を置いてある） |
 
 PeerJS は `games/war-zone/vendor/` と `games/paint-hide/vendor/` に同梱していて、ライセンス全文を同じ場所に置いています。
 
@@ -51,6 +51,12 @@ PeerJS は `games/war-zone/vendor/` と `games/paint-hide/vendor/` に同梱し�
 | `anims.glb` | lantern-town (全キャラの動き) | Adventurers の Knight.glb から動きだけを取り出したもの | 同上 | CC0 1.0 |
 
 2026年11月24日に GitHub の無料版を取得し、`tools/lantern-town-assets.sh` で 1 パック 1 ファイルの GLB にまとめ直しました (形と色はそのまま、使わない動きを除いただけ)。CC0 なのでクレジットは法的には不要ですが、タイトル画面に作者名を載せています。
+
+| ファイル | 使っているゲーム | 素材名・作者 | 配布元 | ライセンス |
+|---|---|---|---|---|
+| `games/downtown-city/assets/city.glb` | downtown-city (建物・道路・歩道・路面標示・植え込み) | Downtown City MegaKit (Standard = 無料版、153 部品) — Quaternius | [quaternius.com](https://quaternius.com/packs/downtowncitymegakit.html) / [itch.io](https://quaternius.itch.io/downtown-city-megakit) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — 商用利用・加工可、クレジット不要 |
+
+2026年11月24日に itch.io から無料版 `Downtown City MegaKit[Standard].zip` を取得し (同梱の `License_Standard.txt` で CC0 を確認)、`tools/downtown-city-assets.mjs` で glTF 153 個を 1 つの GLB にまとめました。テクスチャは 1024 px の WebP に縮め、元のシェーダーで汚れの位置に使っていた頂点カラーは three.js では赤いしみになるので外しています。車・人・木・街灯・信号・給水塔・看板は含まれていないので、downtown-city がプログラムで作っています。画面右下に作者名を載せています。
 
 ## 自分たちで作ったもの
 

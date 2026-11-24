@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>DOWNTOWN ― 本物みたいな街</title>
+<meta name="description" content="ニューヨークやボストンのようなダウンタウンを 3D で歩ける街。信号で止まる車、歩道を歩く人、朝から夜まで変わる空。空から見下ろしたり、歩道を歩いたり、車を追いかけたりできる。">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f14; font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif; color: #fff; }
+  #view canvas { display: block; touch-action: none; }
+  .hidden { display: none !important; }
+  #loading { position: fixed; inset: 0; display: grid; place-content: center; gap: 14px; text-align: center; background: #0b0f14; z-index: 10; }
+  #loading h1 { margin: 0; font-size: 34px; letter-spacing: .12em; }
+  #loading .bar { width: 260px; height: 6px; border-radius: 3px; background: #223; overflow: hidden; }
+  #loadBar { height: 100%; width: 0; background: #f2c14e; transition: width .2s; }
+  #hud { position: fixed; left: 12px; top: 12px; display: flex; flex-direction: column; gap: 8px; z-index: 5; user-select: none; }
+  .panel { background: rgba(10, 14, 20, .62); backdrop-filter: blur(6px); border-radius: 10px; padding: 8px 10px; }
+  .modes { display: flex; gap: 6px; }
+  .modes button { font: inherit; font-size: 14px; color: #fff; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .modes button.on { background: #f2c14e; color: #111; border-color: #f2c14e; font-weight: 700; }
+  .time { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .time input { width: 180px; accent-color: #f2c14e; }
+  #timeLabel { width: 3.2em; font-variant-numeric: tabular-nums; }
+  #help { font-size: 12px; opacity: .85; max-width: 420px; }
+  #info { position: fixed; right: 12px; bottom: 10px; font-size: 11px; opacity: .7; text-align: right; z-index: 5; }
+  #info a { color: inherit; }
+</style>
+<script type="importmap">{ "imports": { "three": "./lib/three/three.module.js", "three/addons/": "./lib/three/addons/" } }</script>
+</head>
+<body>
+<div id="view"></div>
+<div id="loading"><h1>DOWNTOWN</h1><div>街をつくっています…</div><div class="bar"><div id="loadBar"></div></div></div>
+<div id="hud">
+  <div class="panel modes">
+    <button data-mode="fly">空から</button>
+    <button data-mode="walk">歩く</button>
+    <button data-mode="follow">車を追う</button>
+  </div>
+  <div class="panel time"><span>時刻</span><input id="timeRange" type="range" min="4" max="23.5" step="0.05" /><span id="timeLabel"></span></div>
+  <div class="panel" id="help"></div>
+</div>
+<div id="info"><span id="fps"></span> ・ <span id="stats"></span><br />建物と道路: <a href="https://quaternius.com/packs/downtowncitymegakit.html" target="_blank" rel="noopener">Downtown City MegaKit</a> by Quaternius (CC0)</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
