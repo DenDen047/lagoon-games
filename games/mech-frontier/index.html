@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>MECH FRONTIER ― ロボと暮らす未来の街</title>
-<meta name="description" content="近未来の街でロボットに乗って自由に暮らす 3D ゲーム。素材を集めてメカを自作し、50 種類のメカと武器をそろえ、仕事で稼いで家を買い、服を着替え、車や飛行機に乗る。家に忍び込めば警察に追われる。終わりはない。">
+<meta name="description" content="近未来の街でロボットに乗って自由に暮らす 3D ゲーム。素材を集めてメカを自作し、50 種類のメカと武器をそろえ、警察官などの職業を選んで仕事で稼ぎ、家を買い、服を着替え、車や飛行機に乗る。家に忍び込めば警察と警察ロボットに追われる。終わりはない。">
 <link rel="stylesheet" href="style.css" />
 <script type="importmap">{ "imports": { "three": "./lib/three/three.module.js" } }</script>
 </head>
@@ -32,6 +32,7 @@
     <div class="pill" data-ic="money"><b id="money">0</b></div>
     <div class="pill mats"><span data-ic="scrap"><b id="m_scrap">0</b></span><span data-ic="iron"><b id="m_iron">0</b></span><span data-ic="core"><b id="m_core">0</b></span><span data-ic="rare"><b id="m_rare">0</b></span></div>
     <div class="pill" data-ic="star"><b id="rank">1</b><div class="bar xp"><i id="xpBar"></i></div></div>
+    <div class="pill"><b id="career"></b></div>
     <div class="pill hidden" id="lootRow" data-ic="bag"><b id="loot">0</b></div>
   </div>
   <div id="topC">

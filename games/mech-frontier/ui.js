@@ -75,6 +75,8 @@ const UI = (() => {
     $('money').textContent = yen(SV.money);
     for (const k of MAT_KEYS) $('m_' + k).textContent = SV.mats[k];
     $('rank').textContent = SV.rank; bar('xpBar', SV.xp, SV.rank * 120);
+    const cr = CAREERS.find(c => c.id === SV.career.id), ct = cr.icon + ' ' + (isPolice() ? POLICE_RANKS[policeRank()][1] : cr.name);
+    if ($('career')._t !== ct) { $('career')._t = ct; $('career').innerHTML = fmt(ct); }
     bar('hpBar', h.hp, h.maxhp); bar('fdBar', SV.hunger, 100); bar('enBar', SV.energy, 100);
     $('fdRow').classList.toggle('low', SV.hunger < 15); $('enRow').classList.toggle('low', SV.energy < 15);
     const veh = P.state !== 'foot';
@@ -162,7 +164,7 @@ const UI = (() => {
   const PAGES = {
     workshop: ['[wrench] 工房', [['own', '所持メカ'], ['custom', '自作'], ['equip', '装備'], ['craft', '武器製作']]],
     mechshop: ['[mech] メカショップ', [['shop', '購入']]], weapons: ['[gun] 武器屋', [['wshop', '購入'], ['equip', '装備']]],
-    jobs: ['[jobs] 仕事案内', [['jobs', '仕事']]], factory: ['[factory] 工場', [['factory', '働く']]], food: ['[food] 食堂', [['food', 'メニュー']]],
+    jobs: ['[jobs] 仕事案内', [['jobs', '仕事'], ['career', '職業']]], factory: ['[factory] 工場', [['factory', '働く']]], food: ['[food] 食堂', [['food', 'メニュー']]],
     mats: ['[mats] 買取・素材', [['mats', '売買']]], clothes: ['[shirt] 服屋', [['clothes', '服']]], wardrobe: ['[shirt] クローゼット', [['wardrobe', '着替え']]],
     fence: ['[bag] 裏の買取屋', [['fence', '盗品']]], police: ['[police] 警察署', [['police', '窓口']]], pier: ['[fish] 釣り場', [['fish', '釣る']]], airport: ['[plane] 空港', [['airport', '飛行機']]],
     bag: ['[bag] 持ち物', [['bag', '持ち物']]], pause: ['メニュー', [['help', '操作'], ['bag', '持ち物'], ['set', '設定']]],
@@ -215,6 +217,7 @@ const UI = (() => {
         const c = add('card' + (i === SV.active ? ' sel' : ''), `<h3>${m.name}${i === SV.active ? ' <b class="tag">使用中</b>' : ''}</h3>${statLine(m)}`);
         c.onmouseenter = () => { G.preview = m; };
         if (i !== SV.active) c.appendChild(el('button', 'btn', '乗り換える', () => { SV.active = i; swapMech(); save(); draw(); }));
+        if (m.police) { c.appendChild(el('p', 'note', '[police] 警察から借りているロボット。色は変えられない')); return; }
         c.appendChild(swatches(PAL, m.c1, (k) => { m.c1 = k; save(); draw(); G.preview = m; }));
         c.appendChild(swatches(PAL, m.c2, (k) => { m.c2 = k; save(); draw(); G.preview = m; }));
       });
@@ -228,7 +231,7 @@ const UI = (() => {
       add('h4', 'サイズ'); const row = add('opts');
       for (const z of [.8, 1, 1.2, 1.4]) row.appendChild(el('button', 'opt' + (cs.size === z ? ' sel' : ''), z === .8 ? '小' : z === 1 ? '中' : z === 1.2 ? '大' : '特大', () => { cs.size = z; draw(); }));
       add('h4', '色'); bd.appendChild(swatches(PAL, cs.c1, (k) => { cs.c1 = k; draw(); })); bd.appendChild(swatches(PAL, cs.c2, (k) => { cs.c2 = k; draw(); }));
-      const base = partsCost(cs), cost = {}; for (const k in base) cost[k] = Math.ceil(base[k] * cs.size * cs.size);
+      const base = partsCost(cs), raw = {}; for (const k in base) raw[k] = Math.ceil(base[k] * cs.size * cs.size); const cost = careerCost(raw);
       const c = add('card sel', `${statLine(cs)}<p>必要な素材　<b>${costText(cost)}</b></p>`);
       c.appendChild(el('button', 'btn big' + (canPay(cost) ? '' : ' off'), '組み立てる', () => craft(cost, () => {
         SV.mechs.push(Object.assign({ name: '自作メカ ' + (SV.mechs.filter(m => m.custom).length + 1) + '号', custom: 1 }, cs)); SV.active = SV.mechs.length - 1; swapMech();
@@ -249,7 +252,7 @@ const UI = (() => {
           const info = kind === 'gun' ? chips(['威力 ' + w.dmg + (w.n ? '×' + w.n : ''), '連射 ' + (1 / w.rate).toFixed(1), '射程 ' + w.range + 'm']) : kind === 'melee' ? chips(['威力 ' + w.dmg, 'リーチ ' + w.reach + 'm']) : chips(['防御 ' + Math.round(w.block * 100) + '%']);
           const c = add('card row', `<div><h3>${w.name}</h3>${info}</div>`);
           if (SV.own[w.id]) c.appendChild(el('span', 'tag', '所持'));
-          else if (T === 'craft') c.appendChild(el('button', 'btn' + (canPay(w.cost) ? '' : ' off'), costText(w.cost), () => craft(w.cost, () => { SV.own[w.id] = 1; ui.toast(w.name + ' を製作'); })));
+          else if (T === 'craft') { const wc = careerCost(w.cost); c.appendChild(el('button', 'btn' + (canPay(wc) ? '' : ' off'), costText(wc), () => craft(wc, () => { SV.own[w.id] = 1; ui.toast(w.name + ' を製作'); }))); }
           else c.appendChild(el('button', 'btn' + (SV.money >= w.price ? '' : ' off'), '[money]' + yen(w.price), () => buy(w.price, () => { SV.own[w.id] = 1; ui.toast(w.name + ' を購入'); })));
         }
       }
@@ -261,13 +264,19 @@ const UI = (() => {
           row.appendChild(el('button', 'opt' + (SV.load[slot] === w.id ? ' sel' : ''), w.name, () => { SV.load[slot] = w.id; save(); draw(); }));
       }
     } else if (T === 'jobs') {
-      if (G.job) { const c = add('card sel row', `<div><h3>進行中: ${G.job.name}</h3>${chips(['[money]' + yen(G.job.pay)])}</div>`); c.appendChild(el('button', 'btn danger', 'やめる', () => { if (G.job.target && !G.job.target.dead) G.job.target.ai.keep = false; G.job = null; draw(); })); }
+      if (G.job) { const c = add('card sel row', `<div><h3>進行中: ${G.job.name}</h3>${chips(['[money]' + yen(G.job.pay)])}</div>`); c.appendChild(el('button', 'btn danger', 'やめる', () => { cancelJob(); draw(); })); }
       for (const j of JOBS) {
-        const lv = SV.jobLv[j.id] || 0, payT = j.id === 'bounty' ? 700 + 300 * SV.rank : j.id === 'dealer' ? 400 + 100 * SV.rank : Math.round(j.pay * (1 + Math.min(1, lv * .05)));
+        const lv = SV.jobLv[j.id] || 0, payT = jobPay(j);
         const c = add('card row', `<div><h3>${j.icon} ${j.name}</h3><p>${j.text}</p>${chips(['[money]' + yen(payT), lv ? '経験 ' + lv + ' 回' : ''])}</div>`);
         c.appendChild(el('button', 'btn' + (G.job ? ' off' : ''), '受ける', () => { startJob(j.id); if (G.job) ui.close(); }));
       }
-      add('note', '[factory] 工場と [fish] 釣り場は、その場所で直接働ける。');
+      add('note', '[factory] 工場と [fish] 釣り場は、その場所で直接働ける。<b>職業</b>タブで職業を選ぶと、給料が上がる仕事がある。');
+    } else if (T === 'career') {
+      add('note', '職業はいつでも無料で変えられる。');
+      for (const c of CAREERS) {
+        const cur = SV.career.id === c.id, card = add('card row' + (cur ? ' sel' : ''), `<div><h3>${c.icon} ${c.name}${cur ? ' <b class="tag">今の職業</b>' : ''}</h3><p>${c.text}</p></div>`);
+        if (!cur) card.appendChild(el('button', 'btn', 'この職業にする', () => { setCareer(c.id); draw(); }));
+      }
     } else if (T === 'factory') {
       add('note', '印が<b>緑</b>に重なった瞬間に押す (スペースキーでも可)');
       timing(bd, 8, 'プレス', (hits) => { const p = 60 + hits * 45; jobDone(p, '工場の仕事', 'factory'); return `成功 ${hits}/8　給料 [money]${p}`; });
@@ -284,7 +293,8 @@ const UI = (() => {
         c.appendChild(bx);
       };
       for (const k of MAT_KEYS) rowM(MATS[k].icon, MATS[k].name, SV.mats[k], MATS[k].sell, MATS[k].buy, (n) => { SV.mats[k] -= n; }, (n) => { SV.mats[k] += n; });
-      rowM('[veg]', '野菜', SV.bag.veg, 40, 0, (n) => { SV.bag.veg -= n; }); rowM('[fish]', '魚', SV.bag.fish, 90, 0, (n) => { SV.bag.fish -= n; });
+      const fb = SV.career.id === 'farmer' ? 1.5 : 1;
+      rowM('[veg]', '野菜', SV.bag.veg, 40 * fb, 0, (n) => { SV.bag.veg -= n; }); rowM('[fish]', '魚', SV.bag.fish, 90 * fb, 0, (n) => { SV.bag.fish -= n; });
     } else if (T === 'clothes' || T === 'wardrobe') {
       G.preview = { human: 1 }; const o = SV.outfit, shop = T === 'clothes';
       for (const [slot, label, ck] of CLOTH_SLOTS) {
@@ -297,6 +307,7 @@ const UI = (() => {
         });
         if (ck) bd.appendChild(swatches(CLOTH_COLS, o[ck], (c) => { o[ck] = c; save(); draw(); }));
       }
+      if (isPolice()) add('note', '[police] 警察官のあいだは制服を着る。ここで選んだ服は、職業を変えると着られる。');
       add('h4', '靴'); bd.appendChild(swatches(CLOTH_COLS, o.shoeC, (c) => { o.shoeC = c; save(); draw(); }));
       add('h4', '肌'); bd.appendChild(swatches(SKINS, o.skin, (c) => { o.skin = c; save(); draw(); }));
     } else if (T === 'fence') {
@@ -304,18 +315,33 @@ const UI = (() => {
       c.appendChild(el('button', 'btn' + (SV.loot ? '' : ' off'), '売る', () => { if (!SV.loot) return; SV.money += SV.loot; ui.toast('[money]+' + yen(SV.loot)); SV.loot = 0; sfx('coin'); save(); draw(); }));
       add('note', '住宅街の家に入って物を盗める。住人に見つかると手配される。');
     } else if (T === 'police') {
+      if (!isPolice()) {
+        const c0 = add('card row', `<div><h3>[police] 警察官になる</h3><p>${CAREERS.find(c => c.id === 'police').text}</p></div>`);
+        c0.appendChild(el('button', 'btn', '警察官になる', () => { setCareer('police'); draw(); }));
+      } else {
+        const r = policeRank(), nx = POLICE_RANKS[r + 1];
+        add('card sel', `<h3>[star] 階級 ${POLICE_RANKS[r][1]}</h3>${chips(['解決した事件 ' + SV.career.solved + ' 件', nx ? 'あと ' + (nx[0] - SV.career.solved) + ' 件で ' + nx[1] : '最高の階級'])}`);
+        add('h4', '警察ロボット');
+        for (const pm of POLICE_MECHS) {
+          const ok = pm.rank <= r, c = add('card row' + (ok ? '' : ' lock'), `<div><h3>${pm.name}</h3>${statLine(pm)}</div>`);
+          c.onmouseenter = () => { G.preview = pm; };
+          if (ok) { const i = SV.mechs.findIndex(m => m.police && m.name === pm.name); c.appendChild(i === SV.active ? el('span', 'tag', '使用中') : el('button', 'btn', '乗り換える', () => { SV.active = i; swapMech(); save(); draw(); })); }
+          else c.appendChild(el('span', 'tag', POLICE_RANKS[pm.rank][1] + ' から'));
+        }
+        G.preview = SV.mechs[SV.active] && SV.mechs[SV.active].police ? SV.mechs[SV.active] : POLICE_MECHS[0];
+      }
       const caps = ents.filter(e => e.captive).length, fine = 600 * G.wanted;
       const c = add('card row', `<div><h3>[police] 捕まえた相手</h3>${chips([caps + ' 人', '報酬は倒すより多い'])}</div>`);
       c.appendChild(el('button', 'btn' + (caps ? '' : ' off'), '引き渡す', () => { handover(); draw(); }));
       const c2 = add('card row', `<div><h3>[star] 手配度 ${G.wanted}</h3>${chips([G.wanted ? '罰金 [money]' + yen(fine) : '手配されていない'])}</div>`);
       c2.appendChild(el('button', 'btn' + (G.wanted && SV.money >= fine ? '' : ' off'), '罰金を払う', () => { if (!G.wanted) return; buy(fine, () => { clearPolice('罰金を払って手配が解けた'); }); }));
-      add('note', '弱った闇商人や用心棒は降参する。近づいて捕まえ、ここへ連れて来ると逮捕になる。');
+      add('note', isPolice() ? '出動要請が来たら現場へ向かう。弱らせて降参させ、近づいて E で逮捕すると報酬が 1.5 倍。罪を犯して見つかるとクビになる。' : '弱った闇商人や用心棒は降参する。近づいて捕まえ、ここへ連れて来ると逮捕になる。');
     } else if (T === 'bag') {
       const food = (icon, name, key, v) => { const c = add('card row', `<div><h3>${icon} ${name}　× ${SV.bag[key]}</h3>${chips(['満腹度 +' + v])}</div>`); c.appendChild(el('button', 'btn' + (SV.bag[key] ? '' : ' off'), '食べる', () => { if (!SV.bag[key]) return; SV.bag[key]--; eat(v); save(); draw(); })); };
       food('[veg]', '野菜', 'veg', 15); food('[fish]', '魚', 'fish', 25);
       add('card row', `<div><h3>[kit] リペアキット　× ${SV.kits}</h3>${chips(['H キーで使用'])}</div>`);
       add('card row', `<div><h3>[bag] 盗品</h3>${chips(['[money]' + yen(SV.loot), '裏の買取屋で売る'])}</div>`);
-      add('card', chips(['[food] 満腹度 ' + Math.round(SV.hunger), '[bolt] 元気 ' + Math.round(SV.energy), '[jobs] 仕事 ' + SV.jobs + ' 回', '[star] ランク ' + SV.rank]));
+      add('card', chips(['[jobs] 職業 ' + CAREERS.find(c => c.id === SV.career.id).name, '[food] 満腹度 ' + Math.round(SV.hunger), '[bolt] 元気 ' + Math.round(SV.energy), '[jobs] 仕事 ' + SV.jobs + ' 回', '[star] ランク ' + SV.rank]));
     } else if (T === 'airport') {
       add('note', '滑走路とエプロンの機体に <kbd>E</kbd> で乗る。<br><kbd>W</kbd><kbd>S</kbd> 加速・減速　<kbd>マウス</kbd> 操縦　<kbd>Q</kbd> ロール　<kbd>左</kbd> 機銃　<kbd>右</kbd> 爆弾');
       const c = add('card row', `<div><h3>[plane] ジェット機</h3>${chips(['速い', '頑丈'])}</div>`);
@@ -323,7 +349,7 @@ const UI = (() => {
     } else if (T === 'help') {
       const K = [['W A S D', '移動'], ['マウス', '視点'], ['スペース', 'ジャンプ / 噴射'], ['左クリック', '射撃'], ['右クリック', 'サブ・盾'], ['F', '近接 / 採掘 / 収穫'], ['Shift', '回転ダッシュ'], ['Q', '回転斬り'], ['R', '変形'], ['E', '乗る・話す・使う'], ['C', 'メカを呼ぶ'], ['H', 'リペアキット'], ['B', '建築'], ['Esc', 'メニュー']];
       add('keys', K.map(k => `<div><kbd>${k[0]}</kbd><span>${k[1]}</span></div>`).join(''));
-      add('note', '[scrap] 素材を集めてメカを作り、[jobs] 仕事で稼ぎ、[house] 家を買い、[shirt] 服を着替える。<br>[bag] 泥棒や住人への攻撃は、目撃されると通報される。[police] 警察署からパトカーが来る。');
+      add('note', '[scrap] 素材を集めてメカを作り、[jobs] 仕事で稼ぎ、[house] 家を買い、[shirt] 服を着替える。仕事案内では職業 (警察官など) を選べる。<br>[bag] 泥棒や住人への攻撃は、目撃されると通報される。[police] 警察署からパトカーが来る。');
     } else if (T === 'set') {
       const q = SV.q, rowS = (label, val, on) => { const c = add('card row', `<div><h3>${label}</h3></div>`); c.appendChild(el('button', 'btn', val, on)); };
       rowS('影', ['なし', '標準', '高品質'][q.shadow], () => { q.shadow = (q.shadow + 1) % 3; R.shadowQ = q.shadow; save(); draw(); });

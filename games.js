@@ -17,11 +17,11 @@ const GAMES = [
     slug: 'mech-frontier', genre: 'sandbox', players: '1P', date: '2026-11-17',
     ja: {
       title: 'MECH FRONTIER ― ロボと暮らす未来の街',
-      desc: '近未来の街でロボットに乗って自由に暮らす 3D ゲーム。素材を集めてメカを自作し、50 種類のメカと武器をそろえ、仕事で稼いで家を買い、服を着替え、車や飛行機に乗る。家に忍び込めば警察に追われる。終わりはない。',
+      desc: '近未来の街でロボットに乗って自由に暮らす 3D ゲーム。素材を集めてメカを自作し、50 種類のメカと武器をそろえ、警察官などの職業を選んで仕事で稼ぎ、家を買い、服を着替え、車や飛行機に乗る。家に忍び込めば警察と警察ロボットに追われる。終わりはない。',
     },
     en: {
       title: 'Mech Frontier',
-      desc: 'An open-ended 3D life sim in a near-future city: build your own mech from scrap, collect fifty frames and their weapons, work eight kinds of jobs, buy a house, change clothes, drive cars and fly planes. Break into homes and the police come after you. It never ends.',
+      desc: 'An open-ended 3D life sim in a near-future city: build your own mech from scrap, collect fifty frames and their weapons, pick a career such as police officer, work eight kinds of jobs, buy a house, change clothes, drive cars and fly planes. Break into homes and the police and their robots come after you. It never ends.',
     },
   },
   {

@@ -1,7 +1,10 @@
 /* MECH FRONTIER のモデル: メカ・人・ひこうき・ドローンなどを 箱や球から 組み立てて描く。
    前は +Z。右は -X (R.rotY の向きに合わせている)。 */
 'use strict';
-const DK = 0x2a2e36, MID = 0x555c68;
+let DK = 0x2a2e36, MID = 0x555c68;
+/* 警察ロボットを 描く あいだだけ 黒・青・赤に 差しかえる。EYE は 目の光、ACC は 噴射などの 光。 */
+let EYE = 0, ACC = 0;
+const POL_RED = 0xff2030, POL_BLUE = 0x2a5cff;
 const B = (x, y, z, sx, sy, sz, c, em) => R.prim(0, x, y, z, sx, sy, sz, c, em);
 const S = (x, y, z, sx, sy, sz, c, em) => R.prim(1, x, y, z, sx, sy, sz, c, em);
 const C = (x, y, z, sx, sy, sz, c, em) => R.prim(2, x, y, z, sx, sy, sz, c, em);
@@ -66,7 +69,7 @@ function drawLegs(type, w, c1, c2, e) {
     C(0, .95 + bob, 0, 2.5, .45, 2.5, c1); C(0, .7 + bob, 0, 1.9, .3, 1.9, DK);
     for (let k = 0; k < 3; k++) {
       const a = k * 2.094, x = Math.sin(a) * .8, z = Math.cos(a) * .8;
-      C(x, .5 + bob, z, .5, .3, .5, 0x80f0ff, 1); R.glow(1); K(x, .1 + bob, z, .6, -.7, .6, 0x40c0ff, .5); R.glow(0);
+      C(x, .5 + bob, z, .5, .3, .5, ACC || 0x80f0ff, 1); R.glow(1); K(x, .1 + bob, z, .6, -.7, .6, ACC || 0x40c0ff, .5); R.glow(0);
     }
     return 1.25 + bob;
   }
@@ -95,11 +98,11 @@ function drawBody(type, c1, c2, e) {
       return { sh: 1.3, sy: 1, top: 2.15, hz: 0 };
     }
     case 4: B(0, 1.1, 0, 2.8, 2, 1.7, c1); B(0, 2.25, 0, 3.3, .7, 1.9, c2); B(0, .05, 0, 1.6, .5, 1.2, DK);
-      S(0, 1.2, .86, .8, .8, .3, 0x60e8ff, 1); B(0, 1.2, .86, 1.5, 1.3, .1, DK);
+      S(0, 1.2, .86, .8, .8, .3, EYE || 0x60e8ff, 1); B(0, 1.2, .86, 1.5, 1.3, .1, DK);
       for (const s of [-1, 1]) { B(s * 2, 2.3, 0, 1, 1.1, 1.5, c2); B(s * .9, 1.2, -1, .6, 1.4, .5, DK); }
       return { sh: 2, sy: 1.75, top: 2.65, hz: 0 };
     case 5: C(0, .7, 0, 2.9, .6, 2.9, c1); S(0, 1, 0, 1.7, 1.1, 1.7, c2); C(0, .35, 0, 1.6, .3, 1.6, DK);
-      for (let k = 0; k < 6; k++) S(Math.sin(k * 1.047) * 1.3, .7, Math.cos(k * 1.047) * 1.3, .22, .22, .22, 0xfff080, 1);
+      for (let k = 0; k < 6; k++) S(Math.sin(k * 1.047) * 1.3, .7, Math.cos(k * 1.047) * 1.3, .22, .22, .22, ACC ? (k % 2 ? POL_RED : POL_BLUE) : 0xfff080, 1);
       return { sh: 1.55, sy: .75, top: 1.5, hz: 0 };
     case 6: B(0, .7, .1, 1.3, 1.1, 2.7, c1); B(0, 1.3, -.2, .9, .3, 1.8, c2); B(0, .1, 0, .9, .3, 1.2, DK);
       B(0, .8, -1.6, .5, .5, 1, c1); B(0, .95, -2.4, .3, .3, .9, c2);
@@ -112,13 +115,13 @@ function drawBody(type, c1, c2, e) {
 }
 function drawHead(type, c1, c2) {
   switch (type) {
-    case 1: S(0, .3, 0, .9, .8, .9, c2); S(0, .32, .36, .3, .22, .2, 0x60f0ff, 1); break;
-    case 2: B(0, .28, 0, .8, .5, .8, DK); S(0, .28, .4, .3, .3, .2, 0xff4050, 1); B(.3, .75, -.1, .06, .6, .06, MID); break;
-    case 3: B(0, .18, 0, 1, .3, .8, c1); S(-.25, .2, .4, .16, .16, .1, 0x80ff80, 1); S(.25, .2, .4, .16, .16, .1, 0x80ff80, 1); B(0, .4, -.1, .5, .16, .5, c2); break;
-    case 4: B(0, .3, 0, .7, .55, .7, c1); B(0, .34, .36, .5, .12, .06, 0xffe060, 1);
+    case 1: S(0, .3, 0, .9, .8, .9, c2); S(0, .32, .36, .3, .22, .2, EYE || 0x60f0ff, 1); break;
+    case 2: B(0, .28, 0, .8, .5, .8, DK); S(0, .28, .4, .3, .3, .2, EYE || 0xff4050, 1); B(.3, .75, -.1, .06, .6, .06, MID); break;
+    case 3: B(0, .18, 0, 1, .3, .8, c1); S(-.25, .2, .4, .16, .16, .1, EYE || 0x80ff80, 1); S(.25, .2, .4, .16, .16, .1, EYE || 0x80ff80, 1); B(0, .4, -.1, .5, .16, .5, c2); break;
+    case 4: B(0, .3, 0, .7, .55, .7, c1); B(0, .34, .36, .5, .12, .06, EYE || 0xffe060, 1);
       for (const s of [-1, 1]) { R.push(); R.translate(s * .32, .6, 0); R.rotZ(-s * .45); K(0, .3, 0, .2, .7, .2, c2); R.pop(); } break;
     case 5: S(0, .3, .05, .95, .75, 1.15, 0x8fd8ff, .18); B(0, .05, 0, 1, .16, 1.1, c1); break;
-    default: B(0, .3, 0, .7, .55, .7, c1); B(0, .34, .36, .58, .15, .06, 0x60f0ff, 1); B(0, .62, -.1, .3, .12, .4, c2);
+    default: B(0, .3, 0, .7, .55, .7, c1); B(0, .34, .36, .58, .15, .06, EYE || 0x60f0ff, 1); B(0, .62, -.1, .3, .12, .4, c2);
   }
 }
 
@@ -182,7 +185,8 @@ function drawArm(type, side, m, e, c1, c2, s) {
 }
 
 function drawMech(e) {
-  const sp = e.spec, z = sp.size, c1 = PAL[sp.c1], c2 = PAL[sp.c2], st = e.st;
+  const sp = e.spec, z = sp.size, c1 = PAL[sp.c1], c2 = PAL[sp.c2], st = e.st, pol = sp.police;
+  if (pol) { DK = 0x101216; MID = POL_BLUE; EYE = POL_RED; ACC = POL_BLUE; }
   R.flash = e.flash > 0 ? Math.min(1, e.flash * 6) : 0;
   R.push(); R.translate(e.x, e.y, e.z); R.rotY(e.yaw + (e.spinA || 0)); R.scale(z, z, z);
   const crouch = st.kind === 'titan' && e.mode === 1 ? .35 : 0;
@@ -204,6 +208,14 @@ function drawMech(e) {
   if (!(st.kind === 'ball' && e.mode === 1)) {
     R.push(); R.translate(0, m.top, m.hz); drawHead(sp.head, c1, c2); R.pop();
     drawArm(sp.arms, 1, m, e, c1, c2, 1); drawArm(sp.arms, -1, m, e, c1, c2, 1);
+    if (pol) {      // 肩の 回転灯 (左が 赤、右が 青)
+      const fl = Math.floor(G.t * 5) % 2 === 0, lit = e.team === 1 || e === body() || e.show;
+      for (const s of [-1, 1]) {
+        const col = s > 0 ? POL_RED : POL_BLUE, on = (s > 0) === fl, x = s * m.sh, y = m.sy + .44;
+        B(x, y - .1, 0, .46, .08, .46, DK); SB(x, y + .04, 0, .38, .24, .38, col, on ? 1 : .25);
+        if (on && lit) glowS(x, y + .05, 0, 1.6, col, .35);
+      }
+    }
     if (st.kind === 'ball' && e.mode >= 2) {       // ほうだい・コマ: じゅうが 4 本 とびだす
       for (let k = 0; k < 4; k++) {
         R.push(); R.translate(0, 1, 0); R.rotY(e.mode === 3 ? k * Math.PI / 2 : (k - 1.5) * .22); R.rotX(e.mode === 3 ? 0 : -(e.aimPitch || 0));
@@ -219,6 +231,7 @@ function drawMech(e) {
   }
   if (e.thrust > 0) { R.glow(1); K(0, -.3, -.9, .8, -1.6, .8, 0x60c0ff, .7); R.glow(0); }
   R.pop(); R.flash = 0;
+  if (pol) { DK = 0x2a2e36; MID = 0x555c68; EYE = ACC = 0; }
 }
 
 const shade = (c, f) => (Math.min(255, (c >> 16 & 255) * f) << 16) | (Math.min(255, (c >> 8 & 255) * f) << 8) | Math.min(255, (c & 255) * f);
@@ -346,7 +359,7 @@ function drawCar(c) {
     B(0, .6, 0, 1.92, .3, 1.7, 0x16203c); B(0, 1.46, -.25, 1.2, .1, .3, 0x30343c);
     const on = !c.deployed || true, fl = Math.floor(c.wheel * .2 + c.x) % 2 === 0;
     B(-.36, 1.56, -.25, .44, .16, .26, 0xff3030, on && fl ? 1 : .1); B(.36, 1.56, -.25, .44, .16, .26, 0x3060ff, on && !fl ? 1 : .1);
-    if (!c.deployed) { R.glow(1); S(fl ? -.36 : .36, 1.6, -.25, 2.4, 2.4, 2.4, fl ? 0xff3030 : 0x3060ff, .35); R.glow(0); }
+    if (!c.deployed || (c.duty && c === P.car)) { R.glow(1); S(fl ? -.36 : .36, 1.6, -.25, 2.4, 2.4, 2.4, fl ? 0xff3030 : 0x3060ff, .35); R.glow(0); }
   }
   if (NIGHT) { R.glow(1); for (const sx of [-1, 1]) S(sx * .65, .6, 3.4, 1.4, .8, 2.6, 0xfff0b0, .18); R.glow(0); }
   R.pop(); R.flash = 0;

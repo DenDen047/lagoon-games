@@ -91,7 +91,7 @@ kbd { font: inherit; font-size: .85em; font-weight: 700; background: #ffffff22; 
 .opt.lock { opacity: .75; }
 .h4 { font-weight: 800; color: #8fe6ff; margin-top: 4px; }
 .card { background: #1b2434; border: 2px solid transparent; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
-.card.sel { border-color: #ffd24a; } .card.row { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+.card.sel { border-color: #ffd24a; } .card.lock { opacity: .55; } .card.row { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
 .card h3 { font-size: 16px; } .card p { font-size: 12.5px; line-height: 1.6; color: #cfd8e6; } .dim { color: #9aa6b8 !important; font-size: 11px !important; }
 .tag { background: #ffd24a; color: #201400; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 1px 7px; width: fit-content; white-space: nowrap; }
 .opts, .grid { display: flex; flex-wrap: wrap; gap: 5px; }

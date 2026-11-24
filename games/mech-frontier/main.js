@@ -145,6 +145,12 @@ function boot() {
     else if (name === 'beach') { h.x = 780; h.z = 200; h.y = .5; cam.yaw = 2.4; cam.pitch = -.1; }
     else if (name === 'farm') { h.x = -430; h.z = -330; cam.yaw = 3.4; cam.pitch = -.15; }
     else if (name === 'wanted') { h.x = 30; h.z = 26; cam.yaw = 2.6; addWanted(2); dispatch(); const pc = G.cars[G.cars.length - 1]; pc.x = 40; pc.z = 34; pc.yaw = 1.2; deploy(pc); cam.yaw = .6; }
+    else if (name === 'police' || name === 'police2') {      // 警察官になり、警察ロボットを 並べる
+      setCareer('police', true); SV.career.solved = 20; syncPoliceMechs(); const s = W.station;
+      POLICE_MECHS.forEach((pm, k) => { const m = mkMech(pm, 2, s.x - 22 + k * 11, s.z + 3); m.parked = true; m.show = true; m.yaw = m.aimYaw = 0; m.load = { main: 'ar', sub: null, melee: 'sword' }; ents.push(m); });
+      if (P.mech) { const i = ents.indexOf(P.mech); if (i >= 0) ents.splice(i, 1); }
+      h.x = s.x + (name === 'police2' ? -14 : 9); h.z = s.z + (name === 'police2' ? 13 : 24); h.y = .2; h.yaw = Math.PI; cam.yaw = Math.PI; cam.pitch = name === 'police2' ? -.15 : .02; SV.time = .45;
+    }
     else if (name === 'station') { h.x = 112; h.z = 26; cam.yaw = Math.PI; cam.pitch = .05; dispatch(); }
     else if (name === 'armor') { h.x = 6; h.z = 8; cam.yaw = 2.2; cam.pitch = -.1; SV.mechs = [Object.assign({}, ARMOR)]; SV.active = 0; spawnPlayerMech(9, 6); }
     else if (name === 'blood') { h.x = 30; h.z = 26; cam.yaw = 2.6; cam.pitch = -.25; const t = spawnThug(27, 21, 0, false, { members: [], alley: { x: 0, z: 0 } }); t.group.members.push(t); t.y = .2; SV.load.melee = 'knife'; for (let i = 0; i < 3; i++) { blood(t, 6); } hurt(t, t.maxhp * .8, h); for (let i = 0; i < 6; i++) addDecal(26 + i * .4, 1 + i * .3, 19.9, .17, 0x14141a, 0); }
@@ -185,6 +191,27 @@ function boot() {
       hurt(cs[2], 999, P.human); if (!cs[2].down) throw new Error('倒れない'); for (let i = 0; i < 260; i++) step(.033); if (G.wanted < 2) throw new Error('手配度が上がらない');
       for (let i = 0; i < 900 && !ents.some(e => e.police && e.kind === 'human'); i++) step(.033); if (!ents.some(e => e.police && e.kind === 'human')) throw new Error('パトカーが着かない');
       hurt(P.human, 1e9, null); sim(260, []); if (G.wanted || ents.some(e => e.police)) throw new Error('逮捕後も手配が残る');
+    });
+    run('職業と警察', () => {
+      debugSetup('city');
+      setCareer('courier'); if (jobPay(JOBS[0]) !== Math.round(JOBS[0].pay * 1.5)) throw new Error('配達員の給料が上がらない');
+      setCareer('mechanic'); if (careerCost({ scrap: 10 }).scrap !== 7) throw new Error('メカニックの割引がない');
+      setCareer('police'); if (!P.mech || !P.mech.spec.police) throw new Error('警察ロボットを借りられない'); if (!P.human.fit.badge) throw new Error('制服を着ていない');
+      const duty = G.cars.find(c => c.duty); if (!duty) throw new Error('パトカーがない'); enterCar(duty); if (G.report) throw new Error('自分のパトカーで通報された'); exitVehicle(false);
+      cancelJob(); startCase('thief'); const t = G.job.group.members[0], d0 = Math.hypot(t.x - P.human.x, t.z - P.human.z);
+      P.human.x = t.x + 8; P.human.z = t.z; IN.k = {}; IN.fire = IN.sub = false; for (let i = 0; i < 60; i++) step(.016); if (Math.hypot(t.x - P.human.x, t.z - P.human.z) < 9) throw new Error('泥棒が逃げない ' + d0.toFixed(0));
+      hurt(t, t.maxhp * .8, P.human); if (!t.surrender) throw new Error('泥棒が降参しない');
+      t.x = P.human.x + 1; t.z = P.human.z; step(.016); step(.016); if (!G.prompt || !/逮捕/.test(G.prompt.text)) throw new Error('逮捕できない: ' + (G.prompt && G.prompt.text));
+      const m0 = SV.money; G.prompt.act(); if (G.job) throw new Error('泥棒の事件が終わらない'); if (SV.career.solved !== 1 || SV.money <= m0) throw new Error('解決が数えられない');
+      startCase('gang'); for (const e of G.job.group.members.slice()) hurt(e, 1e9, P.human); if (G.job) throw new Error('闇商人の事件が終わらない');
+      SV.career.solved = 2; startCase('mech'); hurt(G.job.target, 1e9, P.human); if (G.job) throw new Error('暴走メカの事件が終わらない');
+      if (policeRank() !== 1 || !SV.mechs.some(m => m.name === POLICE_MECHS[1].name)) throw new Error('昇進しない');
+      G.wanted = 0; for (let i = 0; i < 200; i++) step(.033);
+      const c = ents.find(e => e.citizen && !e.resident && e.kind === 'human' && !e.down); c.x = P.human.x + 2; c.z = P.human.z; hurt(c, 10, P.human);
+      if (isPolice() || SV.mechs.some(m => m.police) || (P.mech && P.mech.spec.police) || G.cars.some(o => o.duty)) throw new Error('罪を犯してもクビにならない');
+      clearPolice(); G.wanted = 3; dispatch(); const pc = G.cars[G.cars.length - 1]; pc.x = P.human.x + 20; pc.z = P.human.z; deploy(pc);
+      if (!ents.some(e => e.police && e.kind === 'mech' && e.spec.police)) throw new Error('警察ロボットが出ない');
+      for (const id of ['police', 'jobs']) { UI.open(id); document.querySelectorAll('#mTabs .tab').forEach(b => b.click()); UI.close(); }
     });
     run('目撃者なし', () => { debugSetup('hills'); for (const e of ents.slice()) if (e.citizen) { e.x = 900; } G.report = null; const c = spawnCitizen(0); c.x = P.human.x + 2; c.z = P.human.z; hurt(c, 999, P.human); if (G.report) throw new Error('目撃者がいないのに通報された'); });
     run('捕獲', () => {

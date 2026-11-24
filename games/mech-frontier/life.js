@@ -1,18 +1,89 @@
-/* MECH FRONTIER の生活まわり: 住人・車・家と泥棒・警察 (手配度)・空腹と眠気・仕事・話しかける相手さがし */
+/* MECH FRONTIER の生活まわり: 職業・住人・車・家と泥棒・警察 (手配度)・空腹と眠気・仕事・話しかける相手さがし */
 'use strict';
+
+// ---------- 職業 ----------
+const isPolice = () => SV.career.id === 'police';
+function policeRank() { let r = 0; POLICE_RANKS.forEach(([n], i) => { if (SV.career.solved >= n) r = i; }); return r; }
+function careerLook() { return isPolice() ? Object.assign({}, OUTFIT_POLICE, { skin: SV.outfit.skin, hair: SV.outfit.hair, hairC: SV.outfit.hairC }) : SV.outfit; }
+function careerCost(c) { if (SV.career.id !== 'mechanic') return c; const o = {}; for (const k in c) o[k] = Math.ceil(c[k] * .7); return o; }
+/* 警察ロボットは 借り物。警察官の あいだだけ 持ち物に 入り、階級が 上がると 増える。 */
+function syncPoliceMechs() {
+  const cur = SV.mechs[SV.active], had = SV.mechs.filter(m => m.police);
+  SV.mechs = SV.mechs.filter(m => !m.police);
+  if (isPolice()) for (const pm of POLICE_MECHS) if (pm.rank <= policeRank()) SV.mechs.push(had.find(m => m.name === pm.name) || Object.assign({}, pm));
+  SV.active = Math.max(0, SV.mechs.indexOf(cur));
+}
+function refreshPlayerMech() {
+  if (P.mech && P.mech.spec === SV.mechs[SV.active]) return;
+  if (P.state === 'mech') exitVehicle(false);
+  spawnPlayerMech(P.human.x + 5, P.human.z + 2, P.human.y);
+}
+/* 警察署の 駐車場に 置く、警察官 専用の パトカー */
+function updDutyCar() {
+  const c = G.cars.find(o => o.duty);
+  if (isPolice() && !c) {
+    const s = W.station, d = mkCar(s.x - 13, s.z + 7, 0, false);
+    Object.assign(d, { police: true, deployed: true, duty: true, keep: true, col: 0xf4f4f0, type: 0, name: 'パトカー' });
+  } else if (!isPolice() && c) { if (c === P.car) { c.duty = false; c.police = false; } else removeCar(c); }
+}
+function cancelJob() { const j = G.job; if (j && j.target && !j.target.dead) j.target.ai.keep = false; G.job = null; }
+function setCareer(id, quiet) {
+  if (SV.career.id === id) return;
+  if (isPolice() && G.job && G.job.police) cancelJob();
+  SV.career.id = id; syncPoliceMechs();
+  if (isPolice()) SV.active = SV.mechs.reduce((b, m, i) => m.police ? i : b, SV.active);   // いちばん 強い 警察ロボットに 乗りかえる
+  refreshPlayerMech(); P.human.fit = careerLook(); updDutyCar(); G.caseT = 8;
+  const c = CAREERS.find(o => o.id === id);
+  if (!quiet) UI.toast(isPolice() ? '[police] 警察官になった　' + SV.mechs[SV.active].name + ' とパトカーを借りた' : c.icon + ' ' + c.name + ' になった');
+  sfx('coin'); save();
+}
+/* 警察官が 罪を 犯して 見つかると クビ */
+function policeCrime() { if (!isPolice()) return; setCareer('none', true); UI.toast('[police] 罪を犯したので警察官をクビになった'); }
+
+// ---------- 出動要請 (警察官の 仕事) ----------
+function startCase(kind) {
+  const b = body(), tier = Math.min(4, Math.floor(SV.rank / 3)), r = kind ? { thief: 0, gang: .5, mech: 1 }[kind] : Math.random();
+  const spot = () => { let c = pick(W.corners); for (let i = 0; i < 40 && Math.abs(Math.hypot(c.x - b.x, c.z - b.z) - 120) > 50; i++) c = pick(W.corners); return c; };
+  let j = null;
+  if (r > .7) {
+    const c = spot(), e = spawnEnemyMech(c.x, c.z, Math.min(5, 1 + tier), false); e.ai.keep = true; e.name = '暴走メカ ' + e.spec.name;
+    j = { target: e, name: '[police] 暴走メカの鎮圧', label: '暴走メカ' };
+  } else if (r > .4) {
+    const n = G.groups.length; spawnGroup(true); const g = G.groups.length > n ? G.groups[n] : G.groups[0];
+    if (g) j = { group: g, name: '[police] 闇商人の摘発', label: '闇商人' };
+  }
+  if (!j) {
+    const c = spot(), g = { alley: { x: c.x, z: c.z }, members: [] }, t = spawnThug(c.x, c.z, tier, false, g);
+    t.y = W.h(c.x, c.z) + .2; t.name = '泥棒'; t.load = { main: null, sub: null, melee: 'pipe' }; t.ai.flee = true; t.ai.keep = true; g.members.push(t);
+    j = { group: g, thief: 1, name: '[police] 泥棒の確保', label: '泥棒' };
+  }
+  Object.assign(j, { police: 1, type: 'police', t: 0, pay: 300 + 80 * policeRank() + 40 * SV.rank }); G.job = j;
+  UI.toast('[police] 出動要請: ' + j.label + '　弱らせて逮捕すると報酬 1.5 倍'); sfx('laser', 0);
+}
+/* 事件や 退治の 相手が いなくなった (倒した・逮捕した) */
+function caseDone(e) {
+  const j = G.job, arrest = !!e.arrested;
+  jobDone(Math.round(j.pay * (j.police && arrest ? 1.5 : 1)), j.name.replace(/^\[\w+\] /, '') + (arrest ? ' (逮捕)' : ''));
+}
+function arrest(e) {
+  e.arrested = true; e.captive = false; kill(e); sfx('coin');
+  UI.toast('[police] 逮捕した　護送車が警察署へ連れて行く'); save();
+}
 
 // ---------- 手配度と警察 ----------
 function addWanted(n, why) {
+  policeCrime();
   const before = G.wanted; G.wanted = Math.min(3, G.wanted + n); G.wantedT = 40;
   if (G.wanted > before) { UI.toast('[police] 手配度 ' + G.wanted + (why ? '　' + why : '')); sfx('boom', 0); }
 }
 function clearPolice(msg) {
-  G.wanted = 0; G.report = null; for (const e of ents.slice()) if (e.police) { if (e.kind === 'car') { if (e !== P.car) removeCar(e); } else ents.splice(ents.indexOf(e), 1); }
+  G.wanted = 0; G.report = null; for (const e of ents.slice()) if (e.police && !e.duty) { if (e.kind === 'car') { if (e !== P.car) removeCar(e); } else ents.splice(ents.indexOf(e), 1); }
   if (msg) UI.toast(msg);
 }
 /* 目撃者が いれば、少し たってから 通報される。min は 最低の 手配度、add は 上乗せ。 */
 function reportCrime(min, add, why, x, z, rad, delay) {
   if (rad && !ents.some(e => e.citizen && e.kind === 'human' && !e.down && Math.hypot(e.x - x, e.z - z) < rad)) return;
+  policeCrime();
   const r = G.report;
   if (r) { r.min = Math.max(r.min, min); r.add = Math.max(r.add, add); r.why = why; return; }
   G.report = { min, add, why, t: delay, max: delay }; UI.toast('[eye] 目撃された　まもなく通報される');
@@ -30,8 +101,9 @@ function dispatch() {
 function deploy(c) {
   c.deployed = true; c.parked = true; c.speed = 0; c.keep = false;
   for (let i = 0; i < c.crew; i++) spawnOfficer(c.x + Math.cos(c.yaw) * (i % 2 ? 2.4 : -2.4), c.z - Math.sin(c.yaw) * (i % 2 ? 2.4 : -2.4) + (i > 1 ? 2 : 0));
-  if (G.wanted >= 3 && !ents.some(e => e.police && e.kind === 'mech')) {
-    const m = spawnEnemyMech(c.x + Math.sin(c.yaw) * 6, c.z + Math.cos(c.yaw) * 6, 2, false); m.police = true; m.name = '警察メカ'; m.spec.c1 = 0; m.spec.c2 = 8; m.ai.aggro = true; m.ai.keep = true;
+  if (G.wanted >= 3 && !ents.some(e => e.police && e.kind === 'mech')) {      // 警察ロボット (タイタンは 出さない)
+    const pm = POLICE_MECHS[rndi(0, 3)], m = spawnEnemyMech(c.x + Math.sin(c.yaw) * 6, c.z + Math.cos(c.yaw) * 6, 2, false, pm);
+    m.police = true; m.name = '警察ロボット ' + pm.name; m.load = { main: 'ar', sub: pm.arms === 5 ? null : 'shield', melee: 'sword' }; m.ai.range = 40; m.ai.aggro = true; m.ai.keep = true;
   }
 }
 function updPoliceCar(c, dt) {
@@ -172,7 +244,7 @@ function updCar(c, dt) {
 }
 function enterCar(c) {
   if (c.traffic) { c.traffic = false; if (Math.random() < .5) reportCrime(1, 0, '車を盗んだ', c.x, c.z, 0, 9); }
-  if (c.police) { c.police = false; c.wasPolice = true; reportCrime(1, 0, 'パトカーを盗んだ', c.x, c.z, 0, 4); }
+  if (c.police && !c.duty) { c.police = false; c.wasPolice = true; reportCrime(1, 0, 'パトカーを盗んだ', c.x, c.z, 0, 4); }
   P.car = c; P.state = 'car'; P.human.hidden = true; c.parked = false; c.team = 0; sfx('ui');
 }
 
@@ -220,7 +292,7 @@ function eat(n) { SV.hunger = Math.min(100, SV.hunger + n); sfx('coin'); }
 // ---------- 仕事 ----------
 function startJob(type) {
   if (G.job) return UI.toast('先に今の仕事を終わらせよう');
-  const def = JOBS.find(j => j.id === type), mul = 1 + Math.min(1, (SV.jobLv[type] || 0) * .05);
+  const def = JOBS.find(j => j.id === type);
   const pt = (c, label) => ({ x: c.x, z: c.z, label });
   const far = (a, min) => { let b = pick(W.corners); for (let i = 0; i < 30 && Math.hypot(a.x - b.x, a.z - b.z) < min; i++) b = pick(W.corners); return b; };
   let j;
@@ -233,17 +305,30 @@ function startJob(type) {
   else if (type === 'bounty') {
     if (!SV.mechs.length) return UI.toast('メカが必要');
     const e = spawnEnemyMech(rnd(-320, 320), rnd(300, 560), Math.min(6, 1 + Math.floor(SV.rank / 2)), true);
-    e.ai.keep = true; j = { target: e, pay: 700 + 300 * SV.rank };
+    e.ai.keep = true; j = { target: e };
   } else {
     if (!G.groups.length) spawnGroup(true);
     if (!G.groups[0]) return UI.toast('今は情報がない');
-    j = { group: G.groups[0], pay: 400 + 100 * SV.rank };
+    j = { group: G.groups[0] };
   }
-  j.type = type; j.name = def.name; j.t = 0; j.pay = j.pay || Math.round(def.pay * mul); G.job = j;
+  j.type = type; j.name = def.name; j.t = 0; j.pay = jobPay(def); G.job = j;
   UI.toast(def.icon + ' ' + def.name + ' を開始'); save();
+}
+/* 仕事の 給料。経験と 職業で 上がる。 */
+function jobPay(def) {
+  const c = SV.career.id, id = def.id;
+  let p = id === 'bounty' ? 700 + 300 * SV.rank : id === 'dealer' ? 400 + 100 * SV.rank : def.pay * (1 + Math.min(1, (SV.jobLv[id] || 0) * .05));
+  if (c === 'courier' && ['deliver', 'pizza', 'taxi', 'trash'].includes(id)) p *= 1.5;
+  if (c === 'hunter' && id === 'bounty') p *= 1.5;
+  if (c === 'farmer' && id === 'farm') p *= 2;
+  return Math.round(p);
 }
 function jobDone(payAmt, name, type) {
   const t = type || (G.job && G.job.type); if (t) SV.jobLv[t] = (SV.jobLv[t] || 0) + 1;
+  if (!type && G.job && G.job.police) {      // 解決した 事件の 数で 昇進する
+    const r0 = policeRank(); SV.career.solved++; G.caseT = 25;
+    if (policeRank() > r0) { syncPoliceMechs(); const pm = POLICE_MECHS.find(m => m.rank === policeRank()); UI.toast('[star] 昇進！ ' + POLICE_RANKS[policeRank()][1] + (pm ? '　' + pm.name + ' を借りられる' : '')); }
+  }
   SV.money += payAmt; SV.jobs++; addXp(30); G.job = null; if (SV.quest === 3) SV.quest = 4;
   UI.toast('[check] ' + name + ' 完了　[money]+' + payAmt); sfx('coin'); save();
 }
@@ -251,8 +336,9 @@ function jobPoints() {     // いま 行くべき 場所
   const j = G.job; if (!j) return [];
   if (j.pts) { const first = j.pts.findIndex(q => !q.done); return j.pts.filter((p, i) => !p.done && (!(j.order || (j.first && !j.pts[0].done)) || i === first)); }
   if (j.farm) return [{ x: -430, z: -450, label: '農場' }];
-  if (j.target) return j.target.dead ? [] : [{ x: j.target.x, z: j.target.z, label: 'お尋ね者', col: 0xff4040 }];
-  return [{ x: j.group.alley.x, z: j.group.alley.z, label: '闇商人', col: 0xb060ff }];
+  if (j.target) return j.target.dead ? [] : [{ x: j.target.x, z: j.target.z, label: j.label || 'お尋ね者', col: 0xff4040 }];
+  if (j.thief) { const t = j.group.members[0]; return t ? [{ x: t.x, z: t.z, label: '泥棒', col: 0xff9040 }] : []; }
+  return [{ x: j.group.alley.x, z: j.group.alley.z, label: j.label || '闇商人', col: 0xb060ff }];
 }
 function updJob(dt) {
   const j = G.job; if (!j) return; j.t += dt;
@@ -302,7 +388,9 @@ function findPrompt() {
   const m = P.mech;
   if (m && !m.hidden && near(m, m.r + 2.5)) { G.prompt = { text: '[mech] 乗る', act: enterMech }; return; }
   for (const p of G.planes) if (!p.hidden && near(p, 6) && Math.abs(p.y - b.y) < 4) { G.prompt = { text: '[plane] 乗る', act: () => enterPlane(p) }; return; }
-  for (const e of ents) if (e.surrender && !e.captive && near(e, 2.6)) { G.prompt = { text: '[police] 捕まえる', act: () => { e.captive = true; sfx('ui'); UI.toast('[police] 捕まえた　警察署へ連れて行こう'); } }; return; }
+  for (const e of ents) if (e.surrender && !e.captive && near(e, 2.6)) {
+    G.prompt = isPolice() ? { text: '[police] 逮捕する', act: () => arrest(e) } : { text: '[police] 捕まえる', act: () => { e.captive = true; sfx('ui'); UI.toast('[police] 捕まえた　警察署へ連れて行こう'); } }; return;
+  }
   for (const c of G.cars) if (near(c, 3.4) && (!c.police || c.deployed)) { G.prompt = { text: '[car] ' + (c.traffic ? '車を奪う' : '乗る'), act: () => enterCar(c) }; return; }
   for (const e of ents) if (e.citizen && e.kind === 'human' && !e.down && !e.resident && !(e.flee > 0) && near(e, 2.2)) {
     G.prompt = { text: '話す', act: () => { e.pause = 2.5; e.yaw = Math.atan2(b.x - e.x, b.z - e.z); UI.toast('「' + pick(TALK) + '」'); } }; return;
@@ -342,6 +430,7 @@ function spawnTick() {
 
 function lifeUpdate(dt) {
   updWanted(dt); updHouses(dt);
+  if (isPolice() && !G.job && G.deadT <= 0) { G.caseT -= dt; if (G.caseT <= 0) startCase(); }
   const h0 = SV.hunger, e0 = SV.energy;
   SV.hunger = Math.max(0, SV.hunger - dt / 12); SV.energy = Math.max(0, SV.energy - dt / 15);
   if (h0 >= 15 && SV.hunger < 15) UI.toast('[food] お腹が空いた… 何か食べよう');
@@ -353,5 +442,5 @@ function lifeStart() {
   for (const hs of W.houses) { hs.res = null; for (const l of hs.loot) l.t = 0; if (SV.home === hs.id) hs.sale = 0; }
   for (let i = 0; i < 64; i++) { const e = spawnCitizen(Math.floor(Math.random() * W.walk.length)); e.far = true; }
   for (const s of W.carSpots) { const c = mkCar(s.x, s.z, s.yaw, false); c.keep = true; }
-  P.car = null;
+  P.car = null; G.caseT = 10; updDutyCar();
 }

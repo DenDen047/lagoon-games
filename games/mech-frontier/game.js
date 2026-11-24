@@ -17,7 +17,7 @@ const body = () => P.state === 'mech' ? P.mech : P.state === 'plane' ? P.plane :
 function freshSave() {
   return { v: 2, money: 200, mats: { scrap: 0, iron: 0, core: 0, rare: 0 }, mechs: [Object.assign({}, ARMOR)], active: 0, own: { pistol: 1, pipe: 1 }, load: { main: 'pistol', sub: null, melee: 'pipe' },
     pieces: [], rank: 1, xp: 0, quest: 0, kits: 1, time: .4, jet: 0, bed: null, jobs: 0, q: { shadow: 2, auto: 1, blood: 1 },
-    hunger: 100, energy: 100, loot: 0, bag: { veg: 0, fish: 0 }, outfit: baseOutfit(), home: null, jobLv: {},
+    hunger: 100, energy: 100, loot: 0, bag: { veg: 0, fish: 0 }, outfit: baseOutfit(), home: null, jobLv: {}, career: { id: 'none', solved: 0 },
     closet: { top: { 0: 1 }, bottom: { 0: 1 }, hat: { 0: 1 }, hair: { 0: 1, 1: 1, 2: 1, 3: 1 }, face: { 0: 1 } } };
 }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SV)); } catch (e) { /* ほぞんできない たんまつ */ } }
@@ -62,8 +62,8 @@ function mkMech(spec, team, x, z) {
 function mkAi(tier, range, sight) { return { aggro: false, tier, range, sight, err: Math.max(.012, .06 - tier * .007), wt: 0, wa: 0, wm: 0, st: 0, sdir: 1, burst: 1, pause: 1, bt: 0, mcd: 0 }; }
 const GUNS_BY_TIER = [['pistol', 'mg'], ['mg', 'shotgun'], ['mg', 'shotgun', 'rifle', 'grenade'], ['gatling', 'rocket', 'rifle', 'flame'], ['rocket', 'missile', 'laser', 'gatling'], ['plasma', 'laser', 'missile'], ['rail', 'plasma', 'missile']];
 const MELEE_BY_TIER = ['pipe', 'pipe', 'sword', 'sword', 'hammer', 'saber', 'gigaaxe'];
-function spawnEnemyMech(x, z, tier, boss) {
-  const lo = Math.min(38, tier * 6), spec = Object.assign({}, FRAMES[lo + rndi(0, 11)]);
+function spawnEnemyMech(x, z, tier, boss, base) {
+  const lo = Math.min(38, tier * 6), spec = Object.assign({}, base || FRAMES[lo + rndi(0, 11)]);
   if (boss) { spec.size *= 1.3; spec.c1 = 13; spec.c2 = 2; }
   const e = mkMech(spec, 1, x, z);
   e.hp = e.maxhp = Math.round(e.maxhp * (.4 + .2 * tier) * (boss ? 3 : 1)); e.dmgMul = (.28 + .11 * tier) * (boss ? 1.3 : 1);
@@ -182,7 +182,7 @@ function kill(e) {
   if (e === P.human) { G.deadT = 3; P.human.hidden = true; UI.toast(G.wanted ? '[police] 逮捕された…' : '[boom] やられた…'); return; }
   if (e === P.mech) {
     if (P.state === 'mech') exitVehicle(true);
-    e.hidden = true; e.broken = 40; UI.toast('[boom] メカ大破　修理まで 40 秒'); return;
+    e.broken = SV.career.id === 'mechanic' ? 15 : 40; e.hidden = true; UI.toast('[boom] メカ大破　修理まで ' + e.broken + ' 秒'); return;
   }
   if (e.kind === 'car') { if (P.car === e) exitVehicle(true); removeCar(e); return; }
   if (e === P.plane || e.kind === 'plane') {
@@ -192,20 +192,20 @@ function kill(e) {
   const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1);
   if (e.team !== 1) return;
   if (e.police) { addWanted(1, '警察を倒した'); return; }
-  const t = e.tier || 0; G.kills++;
+  const t = e.tier || 0, hb = SV.career.id === 'hunter' ? 1.5 : 1; G.kills++;
   if (e.kind === 'mech') {
-    const m = (60 + 50 * t) * (e.boss ? 6 : 1); SV.money += m; addXp((20 + 15 * t) * (e.boss ? 4 : 1));
+    const m = Math.round((60 + 50 * t) * (e.boss ? 6 : 1) * hb); SV.money += m; addXp((20 + 15 * t) * (e.boss ? 4 : 1));
     gainMat('scrap', rndi(3, 6) + t); if (t >= 1) gainMat('iron', rndi(1, 3)); if (Math.random() < .3 + t * .08) gainMat('core', 1 + (t > 3 ? 1 : 0));
     if (e.boss || Math.random() < .04 + t * .01) gainMat('rare', e.boss ? 2 : 1);
     UI.gain('[money]+' + m);
-  } else if (e.kind === 'drone') { SV.money += 25 + 10 * t; gainMat('scrap', 2); addXp(10); }
+  } else if (e.kind === 'drone') { SV.money += Math.round((25 + 10 * t) * hb); gainMat('scrap', 2); addXp(10); }
   else if (e.boss) { const m = Math.round((500 + 150 * SV.rank) * (e.arrested ? 1.5 : 1)); SV.money += m; gainMat('rare', 1); gainMat('core', 2); addXp(60); UI.toast('[dealer] 闇商人を' + (e.arrested ? '逮捕' : '倒した') + '　[money]+' + m); }
   else { const m = e.arrested ? 150 : 60; SV.money += m; addXp(15); UI.gain('[money]+' + m); }
   if (e.group) {
     e.group.members = e.group.members.filter(m => m !== e);
-    if (!e.group.members.length) { G.groups = G.groups.filter(g => g !== e.group); G.groupT = 60; if (G.job && G.job.group === e.group) jobDone(G.job.pay, '闇商人退治'); }
+    if (!e.group.members.length) { G.groups = G.groups.filter(g => g !== e.group); G.groupT = 60; if (G.job && G.job.group === e.group) caseDone(e); }
   }
-  if (G.job && G.job.target === e) jobDone(G.job.pay, 'お尋ね者退治');
+  if (G.job && G.job.target === e) caseDone(e);
 }
 function mine(n, amt) {
   if (n.hp <= 0) return; amt = Math.min(amt, n.hp); n.hp -= amt;
@@ -361,6 +361,13 @@ function aiThink(e, dt) {
   const inp = e.inp, t = body(), a = e.ai;
   inp.fire = inp.sub = inp.melee = inp.dash = inp.spin = inp.mode = inp.jump = inp.jumpHold = false; inp.mx = inp.mz = 0; inp.aim = null;
   const dx = t.x - e.x, dz = t.z - e.z, d = Math.hypot(dx, dz);
+  if (a.flee) {      // 泥棒: 近づくと 逃げる
+    a.st -= dt; if (a.st <= 0) { a.st = rnd(1.5, 3.5); a.sdir = -a.sdir; }
+    const ux = -dx / (d || 1), uz = -dz / (d || 1), k = d < 60 ? .8 : .25;
+    inp.mx = (ux - uz * a.sdir * .4) * k; inp.mz = (uz + ux * a.sdir * .4) * k; inp.aimYaw = Math.atan2(inp.mx, inp.mz); inp.aimPitch = 0;
+    if (d < 2.2 + t.r) inp.melee = true;
+    return inp;
+  }
   if (!a.aggro) {
     if (d < a.sight && Math.abs(t.y - e.y) < 30 && !P.human.dead) { a.aggro = true; if (a.shout) UI.toast(a.shout); if (e.group) for (const m of e.group.members) m.ai.aggro = true; }
     a.wt -= dt; if (a.wt <= 0) { a.wt = rnd(2, 6); a.wa = rnd(6.28); a.wm = a.guard ? 0 : (Math.random() < .6 ? 1 : 0); }
@@ -653,7 +660,7 @@ function update(dt) {
   }
   // チュートリアル
   if (SV.quest === 1 && SV.mats.scrap >= 20) { SV.quest = 2; UI.toast('[scrap] スクラップがそろった'); }
-  if (SV.quest <= 2 && SV.mechs.some(m => !m.armor)) SV.quest = 3;
+  if (SV.quest <= 2 && SV.mechs.some(m => !m.armor && !m.police)) SV.quest = 3;
   for (const k in IN.hit) IN.hit[k] = false; IN.wheel = 0;
 }
 // ---------- カメラと 描画 ----------
@@ -778,7 +785,7 @@ function sfx(name, dist) {
 // ---------- はじめる ----------
 function startGame() {
   ents = []; shots = []; fx = []; beams = []; G.planes = []; G.turrets = []; G.usePieces = []; G.groups = []; G.job = null; G.decals = []; G.report = null; G.build.on = false; G.build.ghost = null;
-  P.human = mkHuman(0, 0, 0); P.human.load = SV.load; P.human.y = .2; P.state = 'foot'; P.mech = null; P.plane = null; P.human.fit = SV.outfit;
+  P.human = mkHuman(0, 0, 0); P.human.load = SV.load; P.human.y = .2; P.state = 'foot'; P.mech = null; P.plane = null; P.human.fit = careerLook();
   if (SV.bed) { P.human.x = SV.bed.x; P.human.y = SV.bed.y; P.human.z = SV.bed.z; }
   ents.push(P.human);
   if (SV.mechs.length) spawnPlayerMech(P.human.x + 5, P.human.z + 3);
