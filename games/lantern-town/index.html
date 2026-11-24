@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>LANTERN TOWN ― ランタンの 町で くらそう</title>
+<meta name="description" content="あきの 小さな 町で くらす 3D ゲーム。ひるは バーガー屋で りょうりを して コインを かせぎ、かぐを かって いえを かざり、ベンチで のんびり。よるに なると ぼちで ガイコツが めを さます。たたかうかどうかは じぶんで きめよう。スマホ対応。">
+<link rel="stylesheet" href="style.css" />
+<script type="importmap">{ "imports": { "three": "./lib/three/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="labels"></div>
+<div id="nums"></div>
+<div id="err" class="hidden"></div>
+
+<div id="loading">
+  <h1 class="logo"><span>LANTERN</span> TOWN</h1>
+  <div class="lbar"><i id="loadBar"></i></div>
+  <p id="loadText">まちを つくっています…</p>
+</div>
+
+<div id="title" class="hidden">
+  <h1 class="logo"><span>LANTERN</span> TOWN</h1>
+  <p class="sub">ランタンの 町で くらそう</p>
+  <p class="pickTitle">キャラクターを えらぼう</p>
+  <div id="heroes"></div>
+  <p id="heroDesc"></p>
+  <div class="tBtns">
+    <button id="btnCont" class="btn big hidden">つづきから</button>
+    <button id="btnNew" class="btn big">はじめる</button>
+  </div>
+  <p class="credit">3D モデル: KayKit by Kay Lousberg (CC0)</p>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="topL">
+    <div class="pill"><i class="pic" data-icon="Coin_A"></i><b id="coins">0</b><i class="pic" data-icon="bone_A"></i><b id="bones">0</b></div>
+    <div class="pill"><i id="clockIcon" class="sun"></i><b id="clock"></b></div>
+    <div id="hpWrap" class="pill"><span class="hpl">HP</span><div class="bar"><i id="hpBar"></i></div><small id="hpText"></small></div>
+    <div class="pill small"><i class="pic" data-icon="food_stew"></i><b id="stew">0</b><kbd class="pc">1</kbd><span class="pc">たべる</span></div>
+  </div>
+  <div id="topR">
+    <canvas id="map" width="150" height="150"></canvas>
+    <div class="qbox"><h4>やること</h4><ul id="quests"></ul></div>
+  </div>
+  <div id="bossBar" class="hidden"><span>ガイコツ王</span><div class="bar"><i id="bossFill"></i></div></div>
+  <div id="toasts"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="clickHint" class="hidden">がめんを クリックすると そうさ できるよ</div>
+  <div id="skillBox"><div class="sk"><i id="skillCd"></i><kbd class="pc">Q</kbd></div><span id="skillName"></span></div>
+  <button id="btnMenu" class="btn small">メニュー</button>
+  <div id="decoBar" class="hidden">
+    <div class="items"></div>
+    <div class="dbtns">
+      <button class="btn" data-act="rotate">まわす <kbd class="pc">R</kbd></button>
+      <button class="btn" data-act="interact">おく <kbd class="pc">E</kbd></button>
+      <button class="btn" data-act="store">まえの かぐを しまう <kbd class="pc">X</kbd></button>
+      <button class="btn" data-act="deco">おわる <kbd class="pc">B</kbd></button>
+    </div>
+  </div>
+  <div id="touch">
+    <div id="stick"><i></i></div>
+    <div id="tbtns">
+      <button class="tb combat" data-act="attack">こうげき</button>
+      <button class="tb combat" id="tSkill" data-act="skill">わざ</button>
+      <button class="tb combat" data-act="dodge">かいひ</button>
+      <button class="tb combat" data-act="block">ガード</button>
+      <button class="tb wide" id="tInteract" data-act="interact">E</button>
+      <button class="tb" data-act="eat">たべる</button>
+      <button class="tb houseOnly" data-act="deco">もようがえ</button>
+    </div>
+  </div>
+</div>
+
+<div id="menu" class="hidden"><div id="panel"></div></div>
+<div id="fade"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

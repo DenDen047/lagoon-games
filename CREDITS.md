@@ -37,9 +37,20 @@ CC0 なのでクレジットは法的には不要ですが、配布 ZIP の `ク
 |---|---|---|
 | [PeerJS 1.5.4](https://github.com/peers/peerjs) | オンライン対戦の通信 | [MIT License](https://github.com/peers/peerjs/blob/master/LICENSE) — 商用利用可、著作権表示が必要 |
 | [Mermaid 11](https://github.com/mermaid-js/mermaid) | ドキュメント内の図 | [MIT License](https://github.com/mermaid-js/mermaid/blob/master/LICENSE) |
-| [three.js 0.187.0](https://github.com/mrdoob/three.js) | mech-frontier の 3D 描画（本体と、後処理・環境光の部品）。`games/mech-frontier/lib/three/` に同梱 | [MIT License](https://github.com/mrdoob/three.js/blob/dev/LICENSE) — 商用利用可、著作権表示が必要（同じフォルダに `LICENSE` を置いてある） |
+| [three.js 0.187.0](https://github.com/mrdoob/three.js) | mech-frontier と lantern-town の 3D 描画（本体と、モデル読みこみ・後処理などの部品）。`games/mech-frontier/lib/three/` と `games/lantern-town/lib/three/` に同梱 | [MIT License](https://github.com/mrdoob/three.js/blob/dev/LICENSE) — 商用利用可、著作権表示が必要（同じフォルダに `LICENSE` を置いてある） |
 
 PeerJS は `games/war-zone/vendor/` と `games/paint-hide/vendor/` に同梱していて、ライセンス全文を同じ場所に置いています。
+
+## 3D モデル
+
+| ファイル | 使っているゲーム | 素材名・作者 | 配布元 | ライセンス |
+|---|---|---|---|---|
+| `games/lantern-town/assets/Knight.glb` ほか 4 体 | lantern-town (主人公) | KayKit Character Pack: Adventurers 1.0 — Kay Lousberg | [GitHub](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0) / [itch.io](https://kaylousberg.itch.io/kaykit-adventurers) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — 商用利用・加工可、クレジット不要 |
+| `Skeleton_*.glb` / `skeleton-weapons.glb` / `anims-skeleton.glb` | lantern-town (敵) | KayKit Character Pack: Skeletons 1.0 — Kay Lousberg | [GitHub](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0) | CC0 1.0 |
+| `city.glb` / `halloween.glb` / `furniture.glb` / `restaurant.glb` / `prototype.glb` | lantern-town (町・ぼち・家具・バーガー屋) | KayKit City Builder / Halloween / Furniture / Restaurant / Prototype Bits 1.0 — Kay Lousberg | [GitHub の KayKit-Game-Assets](https://github.com/KayKit-Game-Assets) (無料版)。有料のまとめ売りは [Bits Bundle 1](https://kaylousberg.itch.io/bits-bundle-1) | CC0 1.0 |
+| `anims.glb` | lantern-town (全キャラの動き) | Adventurers の Knight.glb から動きだけを取り出したもの | 同上 | CC0 1.0 |
+
+2026年11月24日に GitHub の無料版を取得し、`tools/lantern-town-assets.sh` で 1 パック 1 ファイルの GLB にまとめ直しました (形と色はそのまま、使わない動きを除いただけ)。CC0 なのでクレジットは法的には不要ですが、タイトル画面に作者名を載せています。
 
 ## 自分たちで作ったもの
 

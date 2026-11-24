@@ -14,6 +14,17 @@ const GENRES = [
 
 const GAMES = [
   {
+    slug: 'lantern-town', genre: 'sandbox', players: '1P', date: '2026-11-24',
+    ja: {
+      title: 'LANTERN TOWN ― ランタンの 町で くらそう',
+      desc: 'あきの 小さな 町で くらす 3D ゲーム。ひるは バーガー屋で りょうりを して コインを かせぎ、かぐを かって いえを かざり、ベンチで のんびり。よるに なると ぼちで ガイコツが めを さます。たたかうかどうかは じぶんで きめよう。スマホ対応。',
+    },
+    en: {
+      title: 'Lantern Town',
+      desc: 'A cozy 3D life sim in a small autumn town: cook burgers for customers to earn coins, buy furniture and decorate your house, or just sit on a bench. At night skeletons rise in the cemetery and the Skeleton King waits in the crypt. Fighting is up to you. Plays on phones.',
+    },
+  },
+  {
     slug: 'mech-frontier', genre: 'sandbox', players: '1P', date: '2026-11-17',
     ja: {
       title: 'MECH FRONTIER ― ロボと暮らす未来の街',
